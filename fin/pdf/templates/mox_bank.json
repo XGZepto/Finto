@@ -1,0 +1,107 @@
+{
+  "template_id": "mox_bank",
+  "institution_id": "mox",
+  "label": "Mox Bank monthly statement (multi-currency)",
+  "version": "1.0.0",
+  "match_all": [
+    "Mox Bank statement",
+    "Activities"
+  ],
+  "default_currency": "HKD",
+  "date": {
+    "format": "auto",
+    "dayfirst": true,
+    "year_from_statement": true
+  },
+  "statement_date": "Statement date:\\s*(\\d{1,2}\\s+\\w+\\s+\\d{4})",
+  "period": "Statement period:\\s*(\\d{1,2}\\s+\\w+\\s+\\d{4})\\s*-\\s*(\\d{1,2}\\s+\\w+\\s+\\d{4})",
+  "body_start": "^Activities",
+  "sections": [
+    {
+      "name": "hkd",
+      "start": "HKD Mox Account",
+      "end": "JPY Mox Account|Important notice",
+      "currency": "HKD",
+      "account_hint": "HKD Mox Account",
+      "columns": {
+        "mode": "anchors",
+        "header": "^Activity\\b",
+        "anchors": {
+          "date": "^Activity$|^Activity date",
+          "settlement": "^Settlement",
+          "description": "(?-i:Description)",
+          "fx": "(?-i:Corresponding)",
+          "amount": "(?-i:^Amount)"
+        }
+      },
+      "amount": {
+        "mode": "signed",
+        "column": "amount",
+        "invert": false
+      },
+      "exclude": [
+        "^Page \\d+ of \\d+$",
+        "交易⽇期",
+        "對應貨幣⾦額",
+        "^Activities"
+      ],
+      "balances": [
+        {
+          "pattern": "Opening balance",
+          "kind": "opening",
+          "column": "amount"
+        },
+        {
+          "pattern": "Closing balance",
+          "kind": "closing",
+          "column": "amount"
+        }
+      ],
+      "description_column": "description",
+      "settlement_column": "settlement"
+    },
+    {
+      "name": "jpy",
+      "start": "JPY Mox Account",
+      "end": "Important notice|How to earn",
+      "currency": "JPY",
+      "account_hint": "JPY Mox Account",
+      "columns": {
+        "mode": "anchors",
+        "header": "^Activity\\b",
+        "anchors": {
+          "date": "^Activity$|^Activity date",
+          "settlement": "^Settlement",
+          "description": "(?-i:Description)",
+          "fx": "(?-i:Corresponding)",
+          "amount": "(?-i:^Amount)"
+        }
+      },
+      "amount": {
+        "mode": "signed",
+        "column": "amount",
+        "invert": false
+      },
+      "exclude": [
+        "^Page \\d+ of \\d+$",
+        "交易⽇期",
+        "對應貨幣⾦額"
+      ],
+      "balances": [
+        {
+          "pattern": "Opening balance",
+          "kind": "opening",
+          "column": "amount"
+        },
+        {
+          "pattern": "Closing balance",
+          "kind": "closing",
+          "column": "amount"
+        }
+      ],
+      "description_column": "description",
+      "settlement_column": "settlement"
+    }
+  ],
+  "source": "builtin"
+}
