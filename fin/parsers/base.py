@@ -1,0 +1,229 @@
+"""Parser contract and registry.
+
+Adding an institution means writing one class with two methods and decorating
+it with @register. Nothing else in the pipeline changes.
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from typing import Iterable, Iterator, Sequence
+
+from ..models import FileFormat, Money, ParsedTxn
+
+
+@dataclass
+class ParseContext:
+    """Everything a parser is allowed to know about where the file came from."""
+
+    path: Path
+    institution_id: str | None = None
+    account_id: str | None = None
+    default_currency: str | None = None
+    hints: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class ParseResult:
+    txns: list[ParsedTxn]
+    raw_rows: list[dict]
+    period_start: date | None = None
+    period_end: date | None = None
+    statement_date: date | None = None
+    account_id: str | None = None
+    warnings: list[str] = field(default_factory=list)
+    # (date, Money) pairs from the statement's own balance column. These are the
+    # independent check on whether we captured every row — always capture them
+    # when the source provides a balance.
+    balances: list[tuple] = field(default_factory=list)
+
+
+class StatementParser(ABC):
+    """Base class for all statement parsers."""
+
+    parser_id: str = "abstract"
+    version: str = "0.0.0"
+    institution_id: str = ""
+    file_format: FileFormat = FileFormat.CSV
+
+    @abstractmethod
+    def sniff(self, ctx: ParseContext, sample: bytes) -> float:
+        """Return confidence 0.0-1.0 that this parser handles the file.
+
+        Sample is the first ~64KB. Cheap checks only: header signatures,
+        filename patterns, magic bytes.
+        """
+
+    @abstractmethod
+    def parse(self, ctx: ParseContext) -> ParseResult:
+        """Extract transactions. Do not normalise, categorise or dedup here."""
+
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
+_REGISTRY: list[type[StatementParser]] = []
+
+
+def register(cls: type[StatementParser]) -> type[StatementParser]:
+    _REGISTRY.append(cls)
+    return cls
+
+
+def all_parsers() -> list[StatementParser]:
+    return [c() for c in _REGISTRY]
+
+
+def select_parser(ctx: ParseContext, min_confidence: float = 0.5) -> StatementParser | None:
+    """Pick the highest-confidence parser for a file, or None."""
+    sample = ctx.path.read_bytes()[:65536]
+    scored = []
+    for p in all_parsers():
+        try:
+            score = p.sniff(ctx, sample)
+        except Exception:
+            score = 0.0
+        if score > 0:
+            scored.append((score, p))
+    if not scored:
+        return None
+    scored.sort(key=lambda t: t[0], reverse=True)
+    best_score, best = scored[0]
+    return best if best_score >= min_confidence else None
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers — the fiddly bits every parser needs
+# ---------------------------------------------------------------------------
+
+_DATE_FORMATS = (
+    "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%d %b %Y", "%d %B %Y",
+    "%b %d, %Y", "%d/%m/%y", "%m/%d/%y", "%Y%m%d", "%d%b%Y",
+)
+
+
+def parse_date(value: str, dayfirst: bool = True) -> date:
+    """Parse a date string, trying regional orderings in the right priority.
+
+    `dayfirst` matters: HSBC HK and AMEX HK write 03/08/2026 as 3 August,
+    AMEX US writes it as 3 March. Pass the institution's convention.
+    """
+    v = value.strip()
+    if not v:
+        raise ValueError("empty date")
+    orders = ("%d/%m/%Y", "%m/%d/%Y") if dayfirst else ("%m/%d/%Y", "%d/%m/%Y")
+    for fmt in (*orders, *[f for f in _DATE_FORMATS if f not in orders]):
+        try:
+            return datetime.strptime(v, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"unrecognised date: {value!r}")
+
+
+_AMOUNT_CLEAN = re.compile(r"[,\s ]")
+_TRAILING_SIGN = re.compile(r"^(?P<num>[\d.,]+)\s*(?P<sign>CR|DR|\+|-)$", re.IGNORECASE)
+
+
+def parse_amount(value: str, currency: str, *, credit_positive: bool = True) -> Money:
+    """Parse an amount into signed minor units.
+
+    Handles the four notations statements actually use:
+      "1,234.56"   plain
+      "(1,234.56)" parenthesised negative
+      "1,234.56CR" trailing credit marker (HSBC HK)
+      "-1,234.56"  leading sign
+    """
+    v = value.strip()
+    if not v:
+        raise ValueError("empty amount")
+
+    negative = False
+    if v.startswith("(") and v.endswith(")"):
+        negative = True
+        v = v[1:-1]
+
+    v = _AMOUNT_CLEAN.sub("", v)
+    v = re.sub(r"^[A-Z]{3}", "", v, flags=re.IGNORECASE)  # strip "HKD1,234.00"
+    v = v.replace("$", "")
+
+    m = _TRAILING_SIGN.match(v)
+    if m:
+        v = m.group("num")
+        sign = m.group("sign").upper()
+        if sign in ("CR", "+"):
+            negative = not credit_positive
+        else:
+            negative = credit_positive or sign == "-"
+        if sign == "CR":
+            negative = False
+        elif sign == "DR":
+            negative = True
+
+    if v.startswith("-"):
+        negative = True
+        v = v[1:]
+    elif v.startswith("+"):
+        v = v[1:]
+
+    v = _AMOUNT_CLEAN.sub("", v).replace(",", "")
+    try:
+        d = Decimal(v)
+    except InvalidOperation as e:
+        raise ValueError(f"unrecognised amount: {value!r}") from e
+
+    if negative:
+        d = -d
+    return Money.from_decimal(d, currency)
+
+
+def read_csv_rows(path: Path, *, skip_preamble: bool = True) -> tuple[list[str], list[dict]]:
+    """Read a CSV, tolerating the junk preamble banks put above the header.
+
+    Finds the first row that looks like a header (>=3 non-empty cells, and a
+    following row with the same cell count) and treats everything above it as
+    preamble.
+    """
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    rows = list(csv.reader(io.StringIO(text)))
+    rows = [r for r in rows if any(c.strip() for c in r)]
+    if not rows:
+        return [], []
+
+    start = 0
+    if skip_preamble:
+        for i, row in enumerate(rows[:-1]):
+            nonempty = sum(1 for c in row if c.strip())
+            if nonempty >= 3 and len(rows[i + 1]) == len(row):
+                start = i
+                break
+
+    header = [h.strip() for h in rows[start]]
+    out = []
+    for r in rows[start + 1:]:
+        if len(r) < len(header):
+            r = r + [""] * (len(header) - len(r))
+        out.append({header[i]: r[i].strip() for i in range(len(header))})
+    return header, out
+
+
+def pick(row: dict, *names: str) -> str:
+    """Case/space-insensitive column lookup with fallbacks."""
+    lowered = {k.lower().replace(" ", "").replace("_", ""): v for k, v in row.items()}
+    for n in names:
+        key = n.lower().replace(" ", "").replace("_", "")
+        if key in lowered and lowered[key].strip():
+            return lowered[key].strip()
+    return ""
+
+
+def has_columns(header: Sequence[str], *required: str) -> bool:
+    norm = {h.lower().replace(" ", "").replace("_", "") for h in header}
+    return all(r.lower().replace(" ", "").replace("_", "") in norm for r in required)

@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# Financial data NEVER leaves this machine. Ordered most-important first.
+# ---------------------------------------------------------------------------
+
+# Databases
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Raw statements and anything derived from them
+inbox/
+statements/
+exports/
+archive/
+*.csv
+*.tsv
+*.ofx
+*.qfx
+*.xlsx
+*.xls
+*.pdf
+
+# Real account config (the .example file is committed; this one is not)
+accounts.yaml
+*.local.yaml
+.env
+.env.*
+
+# Allow fixtures — these are synthetic, hand-written, and safe to commit
+!tests/fixtures/**/*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

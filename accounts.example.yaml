@@ -1,0 +1,95 @@
+# Copy to accounts.yaml (gitignored) and fill in your real accounts.
+# Account ids are stable slugs — once chosen, don't rename them, they're
+# referenced by every transaction row.
+
+institutions:
+  - id: amex_us
+    display_name: American Express (US)
+    country: US
+    timezone: America/New_York
+  - id: amex_hk
+    display_name: American Express (HK)
+    country: HK
+  - id: hsbc_hk
+    display_name: HSBC Hong Kong
+    country: HK
+  - id: wise
+    display_name: Wise
+    country: HK
+  - id: mox
+    display_name: Mox Bank
+    country: HK
+
+accounts:
+  # --- Credit cards ---
+  - id: amex_us_main
+    institution_id: amex_us
+    display_name: AMEX US
+    account_type: credit_card
+    primary_currency: USD
+    masked_number: "****1001"
+
+  - id: amex_hk_main
+    institution_id: amex_hk
+    display_name: AMEX HK
+    account_type: credit_card
+    primary_currency: HKD
+    masked_number: "****2002"
+
+  - id: hsbc_hk_cc
+    institution_id: hsbc_hk
+    display_name: HSBC HK Credit Card
+    account_type: credit_card
+    primary_currency: HKD
+    masked_number: "****3003"
+
+  # --- Bank accounts ---
+  - id: hsbc_hk_current
+    institution_id: hsbc_hk
+    display_name: HSBC HK Current
+    account_type: checking
+    primary_currency: HKD
+
+  - id: hsbc_hk_savings
+    institution_id: hsbc_hk
+    display_name: HSBC HK Savings
+    account_type: savings
+    primary_currency: HKD
+
+  - id: mox_main
+    institution_id: mox
+    display_name: Mox Account
+    account_type: checking
+    primary_currency: HKD
+
+  # Wise holds one balance per currency. Model each as its own account and tie
+  # them together with balance_group — that's what lets the matcher recognise
+  # an in-Wise FX conversion as a transfer rather than income + spending.
+  - id: wise_hkd
+    institution_id: wise
+    display_name: Wise HKD
+    account_type: multi_currency
+    primary_currency: HKD
+    balance_group: wise_personal
+
+  - id: wise_usd
+    institution_id: wise
+    display_name: Wise USD
+    account_type: multi_currency
+    primary_currency: USD
+    balance_group: wise_personal
+
+cards:
+  # Supplementary cards post to the parent account's statement. Registering
+  # them here is what makes per-cardholder spend reporting possible.
+  - id: amex_us_main_primary
+    account_id: amex_us_main
+    cardholder_name: YOUR NAME
+    last4: "1001"
+    is_supplementary: false
+
+  - id: amex_us_main_supp1
+    account_id: amex_us_main
+    cardholder_name: SUPPLEMENTARY HOLDER NAME
+    last4: "1009"
+    is_supplementary: true
