@@ -40,7 +40,7 @@ def probe(path: Path, *, rows: int, show_layout: bool) -> bool:
 
     res = apply_template(doc, tpl)
     report = verify_extraction(res)
-    mark = "✓" if report.ok else "✗"
+    mark = {"verified": "✓", "unverified": "~", "failed": "✗"}[report.status]
     print(f"  {mark} {path.name}: {tpl.template_id} ({score:.2f}) "
           f"{len(res.rows)} rows  {report.summary()}")
 

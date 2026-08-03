@@ -101,7 +101,12 @@ class BalanceRule:
     pattern: str
     kind: str = "closing"          # "opening" | "closing"
     column: str = ""               # blank: take the last money token on the line
-    scope: str = "section"         # "section" | "document"
+    #: "document" searches the whole statement. Card issuers print the closing
+    #: balance in a summary box above the transaction table, not inside it.
+    scope: str = "section"
+    #: Rows away from the matched line to read the figure from. Mox sets the
+    #: amount above its own label, so the label matches at offset -1.
+    line_offset: int = 0
 
 
 @dataclass
@@ -119,6 +124,11 @@ class SectionSpec:
     description_column: str = ""
     #: The issuer's posting date, kept as provenance beside the activity date.
     settlement_column: str = ""
+    #: A column naming the currency of each row. HSBC files every foreign
+    #: currency sub-ledger under one heading and distinguishes them by a CCY
+    #: column, stated once and carried down until it changes. Rows are split
+    #: per currency so each reconciles against its own balances.
+    currency_column: str = ""
     exclude: list[str] = field(default_factory=list)
     balances: list[BalanceRule] = field(default_factory=list)
     # Rows matching these are structural totals, not transactions.
@@ -238,6 +248,7 @@ def _section_from_dict(s: dict) -> SectionSpec:
         amount=AmountSpec(**s.get("amount", {})),
         description_column=s.get("description_column", ""),
         settlement_column=s.get("settlement_column", ""),
+        currency_column=s.get("currency_column", ""),
         exclude=s.get("exclude", []),
         balances=[BalanceRule(**b) for b in s.get("balances", [])],
         stop_at=s.get("stop_at", []),
@@ -255,6 +266,7 @@ def _section_to_dict(s: SectionSpec) -> dict:
         "amount": s.amount.__dict__,
         "description_column": s.description_column,
         "settlement_column": s.settlement_column,
+        "currency_column": s.currency_column,
         "exclude": s.exclude,
         "balances": [b.__dict__ for b in s.balances],
         "stop_at": s.stop_at,
@@ -312,6 +324,10 @@ def apply_template(
     page_width = doc.pages[0].width if doc.pages else 612.0
 
     for spec in tpl.sections:
+        _document_balances(doc.all_lines(), spec, tpl, result, anchor,
+                           currency_override or spec.currency or tpl.default_currency)
+
+    for spec in tpl.sections:
         try:
             _apply_section(
                 lines, spec, tpl, result, page_width,
@@ -352,6 +368,7 @@ def _apply_section(
     cols = spec.columns.resolve(None, page_width) if spec.columns.mode == "fractions" else None
 
     current_date: date | None = None
+    current_currency = currency
     pending_desc: list[str] = []
     last_row: ExtractedRow | None = None
     skip_until = -1
@@ -376,8 +393,13 @@ def _apply_section(
         if any(rx.search(raw) for rx in stop_rx):
             break
 
+        if spec.currency_column and cols is not None:
+            found_ccy = _read_currency(cols.text(line, spec.currency_column))
+            if found_ccy:
+                current_currency = found_ccy
+
         matched_balance = _match_balance(
-            line, raw, balance_rules, cols, currency, spec, result, anchor, tpl
+            line, raw, balance_rules, cols, current_currency, spec, result, anchor, tpl
         )
         if matched_balance:
             pending_desc.clear()
@@ -398,12 +420,20 @@ def _apply_section(
                 continue
 
         cells = cols.cells(line)
+        amount, balance = _read_amount(cells, spec.amount, current_currency)
+
         found_date = _read_date(cells, tpl, anchor)
         if found_date is not None:
             current_date = found_date
-            pending_desc.clear()
+            # A date on a row that carries no amount opens a new entry, so any
+            # text held over belongs to something already emitted and is
+            # dropped. When the date and the amount share a row the held text
+            # is this entry's own description, wrapped above it — Mox sets a
+            # description over three rows with the figures on the middle one —
+            # so it must survive.
+            if amount is None:
+                pending_desc.clear()
 
-        amount, balance = _read_amount(cells, spec.amount, currency)
         if amount is None:
             desc = _describe(cells, spec)
             if desc:
@@ -425,8 +455,8 @@ def _apply_section(
             txn_date=current_date,
             description=description or "(no description)",
             amount=amount,
-            currency=currency,
-            section=spec.name,
+            currency=current_currency,
+            section=_section_key(spec, current_currency),
             page_no=line.page_no,
             line_no=line.line_no,
             running_balance=balance,
@@ -461,21 +491,34 @@ def _resolve_header(
 
     Returns the columns and the index of the last row consumed.
     """
-    words = list(lines[idx].words)
+    all_names = set(spec.columns.anchors)
+    words: list = []
     last = idx
-    for k in range(idx + 1, min(idx + _MAX_HEADER_ROWS, end)):
-        if any(is_money(w.text) for w in lines[k].words):
+    fallback: tuple[ColumnSet | None, int] = (None, idx)
+
+    for k in range(idx, min(idx + _MAX_HEADER_ROWS, end)):
+        if k > idx and any(is_money(w.text) for w in lines[k].words):
             break                      # a data row: the header block ended
         words.extend(lines[k].words)
         last = k
+        merged = TextLine(
+            words=sorted(words, key=lambda w: w.x0),
+            top=lines[idx].top,
+            page_no=lines[idx].page_no,
+            line_no=lines[idx].line_no,
+        )
+        # Stop at the first row that completes the header. Merging further
+        # would consume the description text wrapped above the first
+        # transaction, which sits directly beneath the headings and looks no
+        # different from them.
+        complete = spec.columns.resolve(merged, page_width, all_names)
+        if complete is not None:
+            return complete, k
+        partial = spec.columns.resolve(merged, page_width, required)
+        if partial is not None:
+            fallback = (partial, k)
 
-    merged = TextLine(
-        words=sorted(words, key=lambda w: w.x0),
-        top=lines[idx].top,
-        page_no=lines[idx].page_no,
-        line_no=lines[idx].line_no,
-    )
-    return spec.columns.resolve(merged, page_width, required), last
+    return fallback if fallback[0] is not None else (None, last)
 
 
 def _required_columns(spec: SectionSpec) -> set[str]:
@@ -526,10 +569,42 @@ def _section_bounds(lines: list[TextLine], spec: SectionSpec) -> tuple[int | Non
     return start, len(lines)
 
 
+def _document_balances(
+    lines: list[TextLine],
+    spec: SectionSpec,
+    tpl: StatementTemplate,
+    result: TemplateResult,
+    anchor: date | None,
+    currency: str,
+) -> None:
+    """Read balances the issuer prints outside the transaction table."""
+    for rule in spec.balances:
+        if rule.scope != "document":
+            continue
+        rx = re.compile(rule.pattern, re.IGNORECASE)
+        for i, line in enumerate(lines):
+            if not rx.search(line.text):
+                continue
+            target = i + rule.line_offset
+            if not 0 <= target < len(lines):
+                continue
+            tokens = [w.text for w in lines[target].words if is_money(w.text)]
+            if not tokens:
+                continue
+            try:
+                value = parse_amount(tokens[0], currency)
+            except ValueError:
+                continue
+            result.balances.append((None, value, rule.kind, spec.name))
+            break
+
+
 def _match_balance(
     line, raw, balance_rules, cols, currency, spec, result, anchor, tpl
 ) -> bool:
     for rx, rule in balance_rules:
+        if rule.scope == "document":
+            continue
         if not rx.search(raw):
             continue
         token = ""
@@ -545,9 +620,24 @@ def _match_balance(
         except ValueError:
             continue
         when = _read_date(cols.cells(line), tpl, anchor) if cols else None
-        result.balances.append((when, value, rule.kind, spec.name))
+        result.balances.append((when, value, rule.kind, _section_key(spec, currency)))
         return True
     return False
+
+
+def _section_key(spec: SectionSpec, currency: str) -> str:
+    """Reconciliation happens per currency, so the key must carry one."""
+    return f"{spec.name}:{currency}" if spec.currency_column else spec.name
+
+
+_CCY_RE = re.compile(r"^[A-Z]{3}$")
+
+
+def _read_currency(cell: str) -> str | None:
+    for token in cell.split():
+        if _CCY_RE.match(token):
+            return token
+    return None
 
 
 def _describe(cells: dict[str, str], spec: SectionSpec) -> str:

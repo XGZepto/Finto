@@ -1,0 +1,44 @@
+{
+  "template_id": "mox_credit",
+  "institution_id": "mox",
+  "label": "Mox Credit card statement",
+  "version": "1.0.0",
+  "match_all": ["Mox Credit statement", "Transaction details"],
+  "default_currency": "HKD",
+  "date": {"format": "auto", "dayfirst": true, "year_from_statement": true},
+  "period": "(\\d{1,2}\\s+\\w{3,9}\\s+\\d{4})\\s*-\\s*(\\d{1,2}\\s+\\w{3,9}\\s+\\d{4})",
+  "body_start": "Transaction details",
+  "sections": [
+    {
+      "name": "card",
+      "start": "Transaction details",
+      "end": "Repayment calculator|Rate summary|Important notice",
+      "currency": "HKD",
+      "account_hint": "Mox Credit",
+      "columns": {
+        "mode": "anchors",
+        "header": "^Activity\\b",
+        "anchors": {
+          "date": "^Activity$|^Activity date",
+          "settlement": "^Settlement",
+          "description": "(?-i:Description)",
+          "fx": "(?-i:Foreign)",
+          "amount": "(?-i:^Amount)"
+        }
+      },
+      "amount": {"mode": "signed", "column": "amount", "invert": false},
+      "description_column": "description",
+      "settlement_column": "settlement",
+      "exclude": ["^Page \\d+ of \\d+$", "交易⽇期", "外幣⾦額", "⾦額 \\(港幣\\)"],
+      "balances": [
+        {
+          "pattern": "Statement balance",
+          "kind": "closing",
+          "scope": "document",
+          "line_offset": -1
+        }
+      ]
+    }
+  ],
+  "source": "builtin"
+}

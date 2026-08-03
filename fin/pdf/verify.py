@@ -33,6 +33,8 @@ class SectionCheck:
     computed_closing: Money | None
     discrepancy: Money | None
     row_count: int
+    #: Rows whose printed running balance contradicts the arithmetic.
+    running_breaks: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -49,17 +51,23 @@ class VerificationReport:
     problems: list[str] = field(default_factory=list)
 
     @property
-    def ok(self) -> bool:
-        """True only when nothing is wrong *and* something was actually proven.
+    def status(self) -> str:
+        """One of "verified", "unverified", "failed".
 
-        An extraction with no verifiable section is not a pass. Treating it as
-        one is how an empty parse gets mistaken for a quiet month.
+        "unverified" is deliberately distinct from both. A card statement
+        prints a closing balance but no opening one, so a single file cannot
+        prove itself — the check that covers it compares consecutive statements
+        once they are in the ledger. Reporting that as a failure would train
+        the reader to ignore failures.
         """
         if self.problems:
-            return False
-        return any(c.checkable for c in self.checks) and all(
-            c.ok for c in self.checks if c.checkable
-        )
+            return "failed"
+        return "verified" if any(c.checkable for c in self.checks) else "unverified"
+
+    @property
+    def ok(self) -> bool:
+        """True when nothing contradicts the issuer's own figures."""
+        return not self.problems
 
     @property
     def verified_sections(self) -> int:
@@ -68,6 +76,12 @@ class VerificationReport:
     def summary(self) -> str:
         checkable = [c for c in self.checks if c.checkable]
         if not checkable:
+            marks = sum(1 for c in self.checks if c.opening or c.closing)
+            if marks:
+                return (
+                    "unverified — the statement prints only one balance, so it "
+                    "reconciles against the next statement, not itself"
+                )
             return "unverified (no balances printed)"
         bad = [c for c in checkable if not c.ok]
         if not bad:
@@ -102,6 +116,14 @@ def verify_extraction(result: TemplateResult) -> VerificationReport:
         )
 
         total = sum(r.amount.amount for r in rows)
+
+        # A statement that prints a running balance states the closing figure
+        # on its last row, whether or not it also labels one at the foot.
+        if closing is None:
+            trailing = [r for r in rows if r.running_balance is not None]
+            if trailing:
+                closing = trailing[-1].running_balance
+
         computed = discrepancy = None
         if opening is not None and closing is not None:
             computed = Money(amount=opening.amount + total, currency=currency)
@@ -118,10 +140,13 @@ def verify_extraction(result: TemplateResult) -> VerificationReport:
                 computed_closing=computed,
                 discrepancy=discrepancy,
                 row_count=len(rows),
+                running_breaks=_check_running_balance(rows, opening),
             )
         )
 
     for c in report.checks:
+        for brk in c.running_breaks:
+            report.problems.append(f"section {c.section!r}: {brk}")
         if c.checkable and not c.ok:
             report.problems.append(
                 f"section {c.section!r}: {c.row_count} rows give a closing balance of "
@@ -130,6 +155,45 @@ def verify_extraction(result: TemplateResult) -> VerificationReport:
                 f"double-counted"
             )
     return report
+
+
+def _check_running_balance(rows: list, opening: Money | None) -> list[str]:
+    """Follow the statement's running balance column row by row.
+
+    Much sharper than comparing opening to closing: when a row is missed, this
+    reports the exact row where the arithmetic first stops working, which is
+    where the missing transaction belongs. Rows without a printed balance are
+    carried forward, because issuers print one balance for a group of same-day
+    entries rather than one per entry.
+    """
+    printed = [r for r in rows if r.running_balance is not None]
+    if len(printed) < 2:
+        return []
+
+    running = opening.amount if opening is not None else None
+    breaks: list[str] = []
+    for row in rows:
+        if running is None:
+            # No opening figure: adopt the first printed balance as the datum.
+            if row.running_balance is not None:
+                running = row.running_balance.amount
+            continue
+        running += row.amount.amount
+        if row.running_balance is None:
+            continue
+        if running != row.running_balance.amount:
+            gap = Money(
+                amount=row.running_balance.amount - running,
+                currency=row.amount.currency,
+            )
+            breaks.append(
+                f"running balance breaks at {row.txn_date} "
+                f"{row.description[:40]!r}: statement says {_fmt(row.running_balance)}, "
+                f"the rows give {_fmt(Money(amount=running, currency=row.amount.currency))} "
+                f"({_fmt(gap)} unaccounted for)"
+            )
+            running = row.running_balance.amount   # resync and keep checking
+    return breaks[:3]
 
 
 def _fmt(m: Money | None) -> str:

@@ -1,0 +1,105 @@
+{
+  "template_id": "hsbc_hk_savings",
+  "institution_id": "hsbc_hk",
+  "label": "HSBC HK savings / HSBC One statement",
+  "version": "1.0.0",
+  "match_all": [
+    "Account Transaction History",
+    "Portfolio Summary"
+  ],
+  "default_currency": "HKD",
+  "date": {
+    "format": "auto",
+    "dayfirst": true,
+    "year_from_statement": true
+  },
+  "statement_date": "\\n\\s*(\\d{1,2}\\s+\\w{3,9}\\s+\\d{4})",
+  "body_start": "Account Transaction History",
+  "sections": [
+    {
+      "name": "hkd_savings",
+      "start": "Account Transaction History",
+      "end": "Foreign Currency Savings|Total Relationship Balance|Important Notice",
+      "currency": "HKD",
+      "account_hint": "HKD Savings",
+      "columns": {
+        "mode": "anchors",
+        "header": "(?-i:Transaction Details)",
+        "anchors": {
+          "date": "(?-i:^Date$)",
+          "description": "(?-i:Transaction)",
+          "deposit": "(?-i:Deposit)",
+          "withdrawal": "(?-i:Withdrawal)",
+          "balance": "(?-i:Balance)"
+        }
+      },
+      "amount": {
+        "mode": "debit_credit",
+        "credit_column": "deposit",
+        "debit_column": "withdrawal",
+        "balance_column": "balance"
+      },
+      "description_column": "description",
+      "exclude": [
+        "^HKD Savings$",
+        "^Page \\d+ of \\d+$"
+      ],
+      "balances": [
+        {
+          "pattern": "B/F BALANCE",
+          "kind": "opening",
+          "column": "balance"
+        },
+        {
+          "pattern": "C/F BALANCE",
+          "kind": "closing",
+          "column": "balance"
+        }
+      ]
+    },
+    {
+      "name": "fx_savings",
+      "start": "Foreign Currency Savings",
+      "end": "Total Relationship Balance|Important Notice",
+      "currency": "",
+      "account_hint": "Foreign Currency Savings",
+      "columns": {
+        "mode": "anchors",
+        "header": "(?-i:Transaction Details)",
+        "anchors": {
+          "ccy": "(?-i:^CCY$)",
+          "date": "(?-i:^Date$)",
+          "description": "(?-i:Transaction)",
+          "deposit": "(?-i:Deposit)",
+          "withdrawal": "(?-i:Withdrawal)",
+          "balance": "(?-i:Balance)"
+        }
+      },
+      "amount": {
+        "mode": "debit_credit",
+        "credit_column": "deposit",
+        "debit_column": "withdrawal",
+        "balance_column": "balance"
+      },
+      "description_column": "description",
+      "exclude": [
+        "^HKD Savings$",
+        "^Page \\d+ of \\d+$"
+      ],
+      "balances": [
+        {
+          "pattern": "B/F BALANCE",
+          "kind": "opening",
+          "column": "balance"
+        },
+        {
+          "pattern": "C/F BALANCE",
+          "kind": "closing",
+          "column": "balance"
+        }
+      ],
+      "currency_column": "ccy"
+    }
+  ],
+  "source": "builtin"
+}
