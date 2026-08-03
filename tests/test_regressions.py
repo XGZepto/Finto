@@ -113,26 +113,40 @@ def test_xlsx_is_not_claimed_by_a_csv_parser(tmp_path):
 
 
 def test_zero_txn_import_does_not_burn_the_file_hash(conn, tmp_path):
-    """An import that yields nothing must stay re-importable.
+    """A failed import must stay re-importable; a provably empty one records.
 
-    Recording the sha256 of a file we failed to read means `file_already_imported`
-    refuses it forever — so a statement you believe is in the ledger never is.
+    Two distinct outcomes for zero rows:
+    - header-only file: there is literally nothing to miss, so it imports as
+      an empty statement (allow_empty) and its hash is recorded;
+    - rows present but unreadable: nothing may be recorded, because burning
+      the sha256 would make `file_already_imported` refuse it forever — a
+      statement you believe is in the ledger never would be.
     """
     empty = tmp_path / "hsbc-empty.csv"
     empty.write_text("Date,Transaction Details,Deposit,Withdrawal,Balance\n")
 
     r = ingest_file(conn, empty, institution_id="hsbc_hk",
                     account_id="hsbc_hk_current", default_currency="HKD")
-    assert r["status"] == "error"
-    assert conn.execute("SELECT COUNT(*) FROM statement_file").fetchone()[0] == 0
+    assert r["status"] == "imported" and r["txns"] == 0
 
-    # The same path, once it actually has rows, imports normally.
-    empty.write_text(
+    broken = tmp_path / "hsbc-broken.csv"
+    broken.write_text(
+        "Date,Transaction Details,Deposit,Withdrawal,Balance\n"
+        "not-a-date,SALARY,45000.00,,88000.00\n")
+    r2 = ingest_file(conn, broken, institution_id="hsbc_hk",
+                     account_id="hsbc_hk_current", default_currency="HKD")
+    assert r2["status"] == "error"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM statement_file WHERE source_path LIKE '%broken%'"
+    ).fetchone()[0] == 0
+
+    # The same path, once it actually parses, imports normally.
+    broken.write_text(
         "Date,Transaction Details,Deposit,Withdrawal,Balance\n"
         "02/01/2025,SALARY,45000.00,,88000.00\n")
-    r2 = ingest_file(conn, empty, institution_id="hsbc_hk",
+    r3 = ingest_file(conn, broken, institution_id="hsbc_hk",
                      account_id="hsbc_hk_current", default_currency="HKD")
-    assert r2["status"] == "imported" and r2["txns"] == 1
+    assert r3["status"] == "imported" and r3["txns"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +238,20 @@ def test_card_lineage_survives_a_cycle(conn):
     conn.commit()
     roots = dbm.card_lineage_roots(conn)
     assert set(roots) == {"a", "b"}
+
+
+def test_cjk_description_normalises_to_itself():
+    """Mox FPS memos arrive in Chinese. If normalization dropped every CJK
+    character the norm would be "", and — via validate_assignment — the
+    Txn validator used to recurse until the interpreter gave up."""
+    from fin.models import normalize_description
+    assert normalize_description("阿貓的貓") == "阿貓的貓"
+    assert normalize_description("PARKNSHOP 百佳 12/03") == "PARKNSHOP 百佳"
+    t = Txn(account_id="mox_hkd", txn_date=date(2025, 11, 17),
+            booked=Money(amount=-100, currency="HKD"),
+            description_raw="阿貓的貓", statement_file_id="sf")
+    assert t.description_norm == "阿貓的貓"
+    assert t.dedup_key
 
 
 # ---------------------------------------------------------------------------

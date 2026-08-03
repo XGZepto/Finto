@@ -118,11 +118,13 @@ class PdfStatementParser(StatementParser):
                 statement_date=result.statement_date,
             )
 
-        return _to_parse_result(doc, tpl.template_id, result, warnings)
+        return _to_parse_result(doc, tpl.template_id, result, warnings,
+                                allow_empty=report.status == "verified")
 
 
 def _to_parse_result(
-    doc, template_id: str, result: TemplateResult, warnings: list[str]
+    doc, template_id: str, result: TemplateResult, warnings: list[str],
+    allow_empty: bool = False,
 ) -> ParseResult:
     txns: list[ParsedTxn] = []
     raw_rows: list[dict] = [
@@ -158,13 +160,13 @@ def _to_parse_result(
         })
 
     balances: list[tuple] = []
-    for when, money, kind, _section in result.balances:
+    for when, money, kind, _section, hint in result.balances:
         as_of = when
         if as_of is None:
             as_of = (result.period_end if kind == "closing"
                      else result.period_start or result.statement_date)
         if as_of is not None:
-            balances.append((as_of, money))
+            balances.append((as_of, money, hint))
 
     return ParseResult(
         txns=txns,
@@ -174,6 +176,7 @@ def _to_parse_result(
         period_start=result.period_start,
         period_end=result.period_end,
         statement_date=result.statement_date,
+        allow_empty=allow_empty,
     )
 
 

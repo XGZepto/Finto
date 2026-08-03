@@ -172,7 +172,7 @@ def test_card_balances_are_negated_into_a_liability():
         ],
     )
     result = apply_template(doc, tpl)
-    kinds = {kind: money.amount for _when, money, kind, _sec in result.balances}
+    kinds = {kind: money.amount for _when, money, kind, _sec, _hint in result.balances}
     assert kinds == {"opening": -917870, "closing": -2859334}
 
 
@@ -231,3 +231,73 @@ def test_stop_at_ends_a_section_before_a_restated_total():
     tpl = build({"mode": "signed", "column": "amount"}, stop_at=["PLAN SUMMARY"])
     result = apply_template(doc, tpl)
     assert amounts(result) == [("2025-01-05", -109349)]
+
+
+def test_cr_beneath_a_fx_continuation_flips_the_row():
+    """AMEX HK marks a credit card refund by ending the FX detail line under
+    the charge with CR — the amount row itself carries no marker at all."""
+    doc = make_document(statement(
+        row((0, "14 Mar"), (10, "AMZ*PRIVATE INTERNET"), right(60, "454.68")),
+        row((25, "56.94")),
+        row((0, "15 Mar"), (10, "AMZ*PRIVATE INTERNET"), right(60, "445.77")),
+        row((25, "56.94")),
+        row((25, "UNITED STATES DOLLAR CR")),
+    ))
+    result = apply_template(
+        doc, build({"mode": "cr_marker", "column": "amount",
+                    "cr_on_following_line": True},
+                   continuation="below"))
+    assert [r.amount.amount for r in result.rows] == [-45468, 44577]
+    # The FX details attach to the row above them, not the one below.
+    assert "56.94" in result.rows[0].description
+    assert "56.94" in result.rows[1].description
+    assert not result.rows[1].description.startswith("56.94")
+
+
+def test_cr_beneath_the_summary_marks_a_credit_balance():
+    """AMEX HK drops a lone CR under the New Balance column when the account
+    is in credit; the figure needs its sign flipped back to reconcile."""
+    doc = make_document("\n".join([
+        PREAMBLE,
+        row((0, "Previous Balance New Credits New Debits New Balance")),
+        row((0, "46,248.14"), (20, "51,849.99"), (40, "5,589.99"), right(60, "11.86")),
+        row((58, "CR")),
+        HEADER,
+        row((0, "05 Jan"), (10, "PURCHASE"), right(60, "10.00")),
+        row((0, "END OF SECTION")),
+    ]))
+    tpl = build(
+        {"mode": "cr_marker", "column": "amount"},
+        balances=[
+            {"pattern": "Previous Balance", "kind": "closing", "scope": "document",
+             "min_tokens": 4, "token_index": -1, "negate": True,
+             "cr_following_line": True},
+        ],
+    )
+    result = apply_template(doc, tpl)
+    # negate turns "what you owe" into our convention; the aligned CR turns
+    # it back — the account holds 11.86 in its favour.
+    assert result.balances[0][1].amount == 1186
+
+
+def test_cr_beneath_another_column_does_not_touch_the_figure():
+    """The same lone CR must not flip the Previous Balance two columns away."""
+    doc = make_document("\n".join([
+        PREAMBLE,
+        row((0, "Previous Balance New Credits New Debits New Balance")),
+        row((0, "46,248.14"), (20, "51,849.99"), (40, "5,589.99"), right(60, "11.86")),
+        row((58, "CR")),
+        HEADER,
+        row((0, "05 Jan"), (10, "PURCHASE"), right(60, "10.00")),
+        row((0, "END OF SECTION")),
+    ]))
+    tpl = build(
+        {"mode": "cr_marker", "column": "amount"},
+        balances=[
+            {"pattern": "Previous Balance", "kind": "opening", "scope": "document",
+             "min_tokens": 4, "token_index": 0, "negate": True,
+             "cr_following_line": True},
+        ],
+    )
+    result = apply_template(doc, tpl)
+    assert result.balances[0][1].amount == -4624814

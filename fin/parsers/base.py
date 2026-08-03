@@ -39,10 +39,15 @@ class ParseResult:
     statement_date: date | None = None
     account_id: str | None = None
     warnings: list[str] = field(default_factory=list)
-    # (date, Money) pairs from the statement's own balance column. These are the
-    # independent check on whether we captured every row — always capture them
-    # when the source provides a balance.
+    # (date, Money, account_hint) triples from the statement's own balance
+    # figures. These are the independent check on whether we captured every
+    # row — always capture them when the source provides a balance. The hint
+    # routes the figure to an account in consolidated (multi-account) files.
     balances: list[tuple] = field(default_factory=list)
+    #: A statement can legitimately contain no transactions (an idle account
+    #: month). Only set when the extraction was verified against the issuer's
+    #: own balances, so "no rows" is a fact, not a parser failure.
+    allow_empty: bool = False
 
 
 class StatementParser(ABC):

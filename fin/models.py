@@ -290,11 +290,16 @@ def normalize_description(raw: str) -> str:
 
     Removes embedded dates, auth/trace/reference numbers and masked card
     fragments — the fields that differ between a pending and a posted copy of
-    the same charge, and between two statements that both cover it.
+    the same charge, and between two statements that both cover it. CJK text
+    (FPS memos, Chinese merchants) is kept: dropping it would collapse every
+    Chinese description to the same empty string and break dedup.
     """
     s = raw.upper()
     s = _NOISE.sub(" ", s)
-    s = re.sub(r"[^A-Z0-9 &./-]", " ", s)
+    # HSBC card CSVs prefix every purchase with "SALES:"; the PDF statements
+    # don't, so the same charge would dedup into two rows across sources.
+    s = re.sub(r"^SALES[:\s]+", " ", s)
+    s = re.sub(r"[^A-Z0-9 &./\-㐀-䶿一-鿿]", " ", s)
     return _SPACE.sub(" ", s).strip()
 
 
@@ -348,10 +353,14 @@ class Txn(BaseModel):
 
     @model_validator(mode="after")
     def _derive(self) -> Txn:
+        # object.__setattr__ bypasses validate_assignment: with it on, assigning
+        # here would re-enter this validator, and a description that normalises
+        # to "" (an emoji-only Mox memo) would recurse forever.
         if not self.description_norm:
-            self.description_norm = normalize_description(self.description_raw)
+            object.__setattr__(
+                self, "description_norm", normalize_description(self.description_raw))
         if not self.dedup_key:
-            self.dedup_key = self.compute_dedup_key()
+            object.__setattr__(self, "dedup_key", self.compute_dedup_key())
         return self
 
     def compute_dedup_key(self) -> str:

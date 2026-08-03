@@ -111,7 +111,7 @@ accounts:
     primary_currency: CNY
     settlement_currencies: [CNY]
     balance_group: hsbc_one
-    aliases: ["RMB SAVINGS", "CNY SAVINGS", "FOREIGN CURRENCY"]
+    aliases: ["RMB SAVINGS", "CNY SAVINGS", "FOREIGN CURRENCY SAVINGS"]
 
   - id: hsbc_hk_pulse_hkd
     institution_id: hsbc_hk
@@ -175,7 +175,7 @@ accounts:
     account_type: multi_currency
     primary_currency: HKD
     balance_group: mox_personal
-    aliases: ["MOX", "MOX BANK", "MOX ACCOUNT"]
+    aliases: ["MOX", "MOX BANK", "HKD MOX ACCOUNT"]
 
   - id: mox_jpy
     institution_id: mox
@@ -183,7 +183,7 @@ accounts:
     account_type: multi_currency
     primary_currency: JPY
     balance_group: mox_personal
-    aliases: ["MOX JPY"]
+    aliases: ["MOX JPY", "JPY MOX ACCOUNT"]
 
   - id: mox_credit
     institution_id: mox
@@ -200,7 +200,7 @@ accounts:
     primary_currency: USD
     balance_group: chase_us
     masked_number: "****8076"
-    aliases: ["CHASE", "TOTAL CHECKING", "JPMORGAN"]
+    aliases: ["CHASE", "TOTAL CHECKING", "CHASE TOTAL CHECKING", "JPMORGAN"]
 
   - id: chase_savings
     institution_id: chase_us

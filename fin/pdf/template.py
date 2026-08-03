@@ -30,7 +30,7 @@ from typing import Any
 
 from ..models import Money, minor_exponent
 from ..parsers.base import parse_amount
-from .extract import PdfDocument, TextLine
+from .extract import PdfDocument, TextLine, Word
 from .layout import (
     BARE_INT_TOKEN,
     ColumnSet,
@@ -121,6 +121,10 @@ class BalanceRule:
     min_tokens: int = 0
     #: How far forward to scan for that row.
     search_ahead: int = 4
+    #: A standalone CR word level with the figure — AMEX HK drops it on the row
+    #: beneath the summary, under the New Balance column — marks a credit
+    #: balance and flips the sign `negate` would give.
+    cr_following_line: bool = False
 
 
 @dataclass
@@ -147,6 +151,10 @@ class SectionSpec:
     balances: list[BalanceRule] = field(default_factory=list)
     # Rows matching these are structural totals, not transactions.
     stop_at: list[str] = field(default_factory=list)
+    #: Where a transaction's wrapped text sits relative to its figures row:
+    #: "above" (Mox wraps the description over the figures) or "below"
+    #: (AMEX HK sets FX details under the transaction they belong to).
+    continuation: str = "above"
 
 
 @dataclass
@@ -266,6 +274,7 @@ def _section_from_dict(s: dict) -> SectionSpec:
         exclude=s.get("exclude", []),
         balances=[BalanceRule(**b) for b in s.get("balances", [])],
         stop_at=s.get("stop_at", []),
+        continuation=s.get("continuation", "above"),
     )
 
 
@@ -284,6 +293,7 @@ def _section_to_dict(s: SectionSpec) -> dict:
         "exclude": s.exclude,
         "balances": [b.__dict__ for b in s.balances],
         "stop_at": s.stop_at,
+        "continuation": s.continuation,
     }
 
 
@@ -425,22 +435,27 @@ def _apply_section(
         if cols is None:
             continue
 
-        # A lone CR beneath an amount negates the transaction just emitted.
-        if spec.amount.cr_on_following_line and last_row is not None:
-            if re.fullmatch(r"\(?\s*CR\s*\)?", raw, re.IGNORECASE):
-                last_row.amount = Money(
-                    amount=-last_row.amount.amount, currency=last_row.amount.currency
-                )
-                # A marker applies once. Section totals are credits too and
-                # carry their own CR, which would otherwise reach back and
-                # flip the last real transaction a second time.
-                last_row = None
-                continue
-
         cells = cols.cells(line)
         amount, balance = _read_amount(cells, spec.amount, current_currency)
 
         found_date, date_remainder = _split_date(cells.get("date", ""), tpl, anchor)
+
+        # A CR marker on a continuation line — AMEX HK sets "UNITED STATES
+        # DOLLAR CR" two rows beneath the charge it credits — negates the
+        # transaction just emitted. Checked only when the line is not itself
+        # a transaction row, so a dated row ending in CR is never consumed.
+        if (spec.amount.cr_on_following_line and last_row is not None
+                and amount is None and found_date is None
+                and _CR_LINE.search(raw)):
+            last_row.amount = Money(
+                amount=-last_row.amount.amount, currency=last_row.amount.currency
+            )
+            # A marker applies once. Section totals are credits too and
+            # carry their own CR, which would otherwise reach back and
+            # flip the last real transaction a second time.
+            last_row = None
+            continue
+
         if found_date is not None:
             current_date = found_date
             # A date on a row that carries no amount opens a new entry, so any
@@ -455,7 +470,15 @@ def _apply_section(
         if amount is None:
             desc = " ".join(p for p in (date_remainder, _describe(cells, spec)) if p)
             if desc:
-                pending_desc.append(desc)
+                if (spec.continuation == "below" and last_row is not None
+                        and found_date is None):
+                    # AMEX HK puts FX details under their transaction, so
+                    # trailing text belongs to the row just emitted rather
+                    # than the one to come.
+                    last_row.description = re.sub(
+                        r"\s{2,}", " ", f"{last_row.description} {desc}").strip()
+                else:
+                    pending_desc.append(desc)
             continue
 
         if current_date is None:
@@ -603,31 +626,57 @@ def _document_balances(
         for i, line in enumerate(lines):
             if not rx.search(line.text):
                 continue
-            tokens = _balance_tokens(lines, i, rule)
-            if len(tokens) <= abs(rule.token_index):
+            found = _balance_figure(lines, i, rule)
+            if found is None:
                 continue
+            words, src = found
+            if len(words) <= abs(rule.token_index):
+                continue
+            figure = words[rule.token_index]
             try:
-                value = parse_amount(tokens[rule.token_index], currency)
+                value = parse_amount(figure.text, currency)
             except ValueError:
                 continue
             if rule.negate:
                 value = Money(amount=-value.amount, currency=value.currency)
-            result.balances.append((None, value, rule.kind, _section_key(spec, currency)))
+            if rule.cr_following_line and _cr_applies(lines, src, figure):
+                value = Money(amount=-value.amount, currency=value.currency)
+            result.balances.append(
+                (None, value, rule.kind, _section_key(spec, currency), spec.account_hint))
             break
 
 
-def _balance_tokens(lines: list[TextLine], i: int, rule: BalanceRule) -> list[str]:
-    """The money tokens of the row a balance rule points at."""
+def _balance_figure(
+    lines: list[TextLine], i: int, rule: BalanceRule
+) -> tuple[list[Word], int] | None:
+    """The money words of the row a balance rule points at, and that row's index."""
     if rule.min_tokens:
         for k in range(i, min(i + rule.search_ahead + 1, len(lines))):
-            tokens = [w.text for w in lines[k].words if is_money(w.text)]
-            if len(tokens) >= rule.min_tokens:
-                return tokens
-        return []
+            words = [w for w in lines[k].words if is_money(w.text)]
+            if len(words) >= rule.min_tokens:
+                return words, k
+        return None
     target = i + rule.line_offset
     if not 0 <= target < len(lines):
-        return []
-    return [w.text for w in lines[target].words if is_money(w.text)]
+        return None
+    return [w for w in lines[target].words if is_money(w.text)], target
+
+
+_CR_WORD = re.compile(r"^\(?CR\)?$", re.IGNORECASE)
+
+
+def _cr_applies(lines: list[TextLine], src: int, figure: Word) -> bool:
+    """True when a standalone CR word sits level with the figure — on its own
+    row or the one beneath — in the figure's column. AMEX HK prints a credit
+    New Balance as the bare figure on the summary row with CR dropped onto the
+    next line, and the two are only linked by sharing an x-range."""
+    for k in (src, src + 1):
+        if k >= len(lines):
+            break
+        for w in lines[k].words:
+            if _CR_WORD.match(w.text) and figure.x0 - 6 <= w.x0 <= figure.x1 + 14:
+                return True
+    return False
 
 
 def _match_balance(
@@ -653,7 +702,8 @@ def _match_balance(
         if rule.negate:
             value = Money(amount=-value.amount, currency=value.currency)
         when = _read_date(cols.cells(line), tpl, anchor) if cols else None
-        result.balances.append((when, value, rule.kind, _section_key(spec, currency)))
+        result.balances.append(
+            (when, value, rule.kind, _section_key(spec, currency), spec.account_hint))
         return True
     return False
 
@@ -739,6 +789,10 @@ def _read_amount(
 # no boundary because a digit and a letter are both word characters. Requiring a
 # non-letter before and after keeps the match off words like "CREDIT".
 _CR_MARKER = re.compile(r"(?:^|[^A-Za-z])CR(?![A-Za-z])", re.IGNORECASE)
+
+#: A continuation line that carries nothing but, or ends with, a standalone
+#: CR marker: "CR", "(CR)", "UNITED STATES DOLLAR CR".
+_CR_LINE = re.compile(r"^(?:\(?\s*CR\s*\)?|.*?[^A-Za-z]\(?CR\)?)$", re.IGNORECASE)
 
 
 def _maybe_money(token: str, currency: str) -> Money | None:

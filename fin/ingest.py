@@ -49,6 +49,7 @@ from .models import (
     TransferLeg,
     Txn,
     TxnKind,
+    normalize_alias,
 )
 from .parsers import institutions as _institutions  # noqa: F401 (registers parsers)
 from .parsers import pdf as _pdf_parser  # noqa: F401 (registers the PDF parser)
@@ -63,6 +64,20 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _institution_of(conn, account_id: str | None) -> str | None:
+    """The account map is the authority on which institution a file belongs to;
+    parsers only guess. Feeding it into the ParseContext is also what tells
+    institution-agnostic parsers (AMEX writes US-style dates in every market)
+    which convention a specific export uses.
+    """
+    if account_id is None:
+        return None
+    row = conn.execute(
+        "SELECT institution_id FROM account WHERE id=?", (account_id,)
+    ).fetchone()
+    return row["institution_id"] if row else None
 
 
 def _format_of(path: Path) -> FileFormat:
@@ -218,7 +233,7 @@ def ingest_file(
 
     ctx = ParseContext(
         path=path,
-        institution_id=institution_id,
+        institution_id=institution_id or _institution_of(conn, account_id),
         account_id=account_id,
         default_currency=default_currency,
     )
@@ -227,25 +242,46 @@ def ingest_file(
         return {"path": str(path), "status": "error", "reason": "no parser matched"}
 
     result = parser.parse(ctx)
-    if not result.txns:
+    if not result.txns and not result.allow_empty:
         # Deliberately do NOT record the file. Recording it would burn its
         # sha256, and `file_already_imported` would then refuse the re-import
         # forever — so a statement you believe is in the ledger never would be.
+        # allow_empty is the exception: a verified extraction proves the month
+        # was genuinely idle, so it imports with zero rows like any other.
         return {"path": str(path), "status": "error",
                 "reason": f"{parser.parser_id} parsed 0 transactions — file not "
                           "recorded, so you can re-import once this is resolved",
                 "warnings": result.warnings[:10]}
 
     resolved_account = account_id or result.account_id
-    if not resolved_account:
+
+    # Consolidated statements (Chase checking+savings, HSBC One HKD+CNY, Mox
+    # HKD+JPY) carry rows for several accounts in one file. Each row's
+    # account_hint resolves to an account through the alias registry; rows
+    # whose hint resolves nothing fall back to the file's account.
+    alias_index = dbm.load_account_alias_index(conn)
+
+    def route(hint: str) -> str | None:
+        return alias_index.get(normalize_alias(hint)) if hint else None
+
+    routed = [route((p.extra or {}).get("account_hint", "")) for p in result.txns]
+    sf_account = resolved_account or next((a for a in routed if a), None)
+    if sf_account is None:
         return {"path": str(path), "status": "error",
                 "reason": "account_id unknown — pass --account"}
+
+    unrouted = [p for p, a in zip(result.txns, routed) if a is None
+                and resolved_account is None]
+    if unrouted:
+        return {"path": str(path), "status": "error",
+                "reason": f"{len(unrouted)} rows carry no resolvable account hint "
+                          f"and no --account was given — refusing to guess"}
 
     sf = StatementFile(
         source_path=str(path),
         file_sha256=digest,
-        institution_id=institution_id or parser.institution_id,
-        account_id=resolved_account,
+        institution_id=ctx.institution_id or parser.institution_id,
+        account_id=sf_account,
         file_format=_format_of(path),
         parser_id=parser.parser_id,
         parser_version=parser.version,
@@ -255,28 +291,18 @@ def ingest_file(
         row_count=len(result.txns),
     )
 
-    # The PDF parser is institution-agnostic ("generic") and leaves the
-    # institution on its ParseResult empty, so a PDF import would otherwise
-    # fail its foreign-key check against `institution`. The template that
-    # matched knows the issuer; use it. The same applies to a CSV that no
-    # institution-specific parser claimed.
-    if sf.institution_id == "generic":
-        if path.suffix.lower() == ".pdf":
-            from .pdf.extract import extract_document
-            from .pdf.registry import select_template
-            try:
-                tpl, _ = select_template(extract_document(path))
-                if tpl is not None:
-                    sf.institution_id = tpl.institution_id
-            except Exception:
-                pass
-        elif path.suffix.lower() == ".csv" and account_id:
-            # CSV fallback: use the account's institution.
-            acct = conn.execute(
-                "SELECT institution_id FROM account WHERE id=?", (account_id,)
-            ).fetchone()
-            if acct:
-                sf.institution_id = acct["institution_id"]
+    # The PDF parser is institution-agnostic ("generic"), so a PDF import
+    # without an account mapping would fail its foreign-key check against
+    # `institution`. The template that matched knows the issuer; use it.
+    if sf.institution_id == "generic" and path.suffix.lower() == ".pdf":
+        from .pdf.extract import extract_document
+        from .pdf.registry import select_template
+        try:
+            tpl, _ = select_template(extract_document(path))
+            if tpl is not None:
+                sf.institution_id = tpl.institution_id
+        except Exception:
+            pass
 
     raws = [RawRecord(statement_file_id=sf.id, line_no=i, payload=row)
             for i, row in enumerate(result.raw_rows)]
@@ -284,9 +310,9 @@ def ingest_file(
     cards = dbm.load_cards(conn)
 
     txns = [
-        to_txn(p, account_id=resolved_account, statement_file_id=sf.id,
+        to_txn(p, account_id=routed[i] or resolved_account, statement_file_id=sf.id,
                raw_record_id=raw_by_line.get(p.line_no), cards=cards)
-        for p in result.txns
+        for i, p in enumerate(result.txns)
     ]
 
     warnings = list(result.warnings)
@@ -302,9 +328,9 @@ def ingest_file(
     dbm.insert_txns(conn, txns)
 
     # Store the statement's own balance figures — the independent check that we
-    # captured every row.
-    for as_of, bal in result.balances:
-        record_balance(conn, account_id=resolved_account, as_of=as_of,
+    # captured every row. Consolidated files route each figure to its account.
+    for as_of, bal, hint in result.balances:
+        record_balance(conn, account_id=route(hint) or sf_account, as_of=as_of,
                        balance=bal, source="statement_running",
                        statement_file_id=sf.id)
     conn.commit()

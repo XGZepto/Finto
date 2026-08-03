@@ -2,7 +2,7 @@
   "template_id": "amex_hk_card",
   "institution_id": "amex_hk",
   "label": "American Express Hong Kong card statement",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "match_all": [
     "American Express",
     "STATEMENT PERIOD",
@@ -56,7 +56,8 @@
           "scope": "document",
           "min_tokens": 4,
           "token_index": 0,
-          "negate": true
+          "negate": true,
+          "cr_following_line": true
         },
         {
           "pattern": "Previous Balance\\s+New Credits",
@@ -64,14 +65,16 @@
           "scope": "document",
           "min_tokens": 4,
           "token_index": -2,
-          "negate": true
+          "negate": true,
+          "cr_following_line": true
         }
       ],
       "stop_at": [
         "^New Amex Access It Transactions",
         "AMEX ACCESS IT SUMMARY",
         "Membership\\s+Rewards"
-      ]
+      ],
+      "continuation": "below"
     },
     {
       "name": "card",
@@ -82,8 +85,16 @@
       "columns": {
         "mode": "fractions",
         "fractions": [
-          ["date", 0.0, 0.726],
-          ["amount", 0.726, 1.0]
+          [
+            "date",
+            0.0,
+            0.726
+          ],
+          [
+            "amount",
+            0.726,
+            1.0
+          ]
         ]
       },
       "amount": {
@@ -102,7 +113,8 @@
       "stop_at": [
         "AMEX ACCESS IT SUMMARY",
         "Membership\\s+Rewards"
-      ]
+      ],
+      "continuation": "below"
     }
   ],
   "source": "builtin"

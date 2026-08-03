@@ -11,7 +11,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import sqlite3
 import sys
 import tempfile
 from pathlib import Path
@@ -25,48 +24,61 @@ from fin.models import Account, Card, Institution, Party
 ROOT_DEFAULT = Path.home() / "Documents" / "Finto-Data"
 ACCOUNTS_YAML = Path("accounts.example.yaml")
 
+#: account_for return value for consolidated multi-account statements: import
+#: with no fixed account and let each row's account_hint route it.
+ROUTED = ""
+
 
 def account_for(path: Path) -> str | None:
     """Map a corpus path to its account id. CSVs name the account in the
-    filename; PDFs need it because one file can cover multiple accounts."""
+    filename; single-account PDFs need it too. Consolidated files (Chase,
+    HSBC One, Mox bank) return ROUTED — their rows carry account hints and
+    the alias registry splits them."""
     name = path.name.lower()
     parts = [p.lower() for p in path.parts]
 
-    # PDF statements
-    if "amex_hk_essential" in name: return "amex_hk_essential"
-    if "amex_hk_explorer" in name: return "amex_hk_explorer"
-    if "amex_hk_platinum" in name: return "amex_hk_platinum"
-    if "amex_us_marriott" in name: return "amex_us_marriott"
-    if "amex_us_platinum" in name: return "amex_us_platinum"
-    if "amex_us_high_yield_savings" in name: return "amex_us_savings"
-    if "chase" in parts and "checking" in name: return "chase_checking"
-    if "chase" in parts and "savings" in name: return "chase_savings"
-    if "hsbc_hk_everymile" in name: return "hsbc_hk_everymile"
-    if "hsbc_hk_pulse_dual_currency" in name: return "hsbc_hk_pulse_hkd"
-    if "hsbc_hk_pulse_0071_hkd" in name: return "hsbc_hk_pulse_hkd"
-    if "hsbc_hk_pulse_2217_rmb" in name: return "hsbc_hk_pulse_cny"
-    if "hsbc_hk_pulse_cny" in name: return "hsbc_hk_pulse_cny"
-    if "hsbc_hk_pulse_hkd" in name: return "hsbc_hk_pulse_hkd"
-    if "hsbc_hk_hsbc_one_hkd_savings" in name: return "hsbc_hk_savings_hkd"
-    if "hsbc_hk_hsbc_one_rmb_savings" in name: return "hsbc_hk_savings_cny"
-    if "hsbc_hk_savings_cny" in name: return "hsbc_hk_savings_cny"
-    if "hsbc_hk_savings_hkd" in name: return "hsbc_hk_savings_hkd"
-    if "mox_hk_credit" in name: return "mox_credit"
-    if "mox_hk_bank" in name or "mox_bank" in parts: return "mox_hkd"
-    if "mox_jpy" in name: return "mox_jpy"
+    # Consolidated multi-account statements — route by account_hint.
+    if "chase" in parts and "consolidated" in name:
+        return ROUTED
+    if "hsbc_one" in name and name.endswith(".pdf"):
+        return ROUTED
+    if "mox_hk_bank" in name and name.endswith(".pdf"):
+        return ROUTED
+
+    mapping = [
+        ("amex_hk_essential", "amex_hk_essential"),
+        ("amex_hk_explorer", "amex_hk_explorer"),
+        ("amex_hk_platinum", "amex_hk_platinum"),
+        ("amex_us_marriott", "amex_us_marriott"),
+        ("amex_us_platinum", "amex_us_platinum"),
+        ("amex_us_high_yield_savings", "amex_us_savings"),
+        ("hsbc_hk_everymile", "hsbc_hk_everymile"),
+        ("hsbc_hk_pulse_dual_currency", "hsbc_hk_pulse_hkd"),
+        ("hsbc_hk_pulse_0071_hkd", "hsbc_hk_pulse_hkd"),
+        ("hsbc_hk_pulse_2217_rmb", "hsbc_hk_pulse_cny"),
+        ("hsbc_hk_pulse_cny", "hsbc_hk_pulse_cny"),
+        ("hsbc_hk_pulse_hkd", "hsbc_hk_pulse_hkd"),
+        ("hsbc_hk_hsbc_one_hkd_savings", "hsbc_hk_savings_hkd"),
+        ("hsbc_hk_hsbc_one_rmb_savings", "hsbc_hk_savings_cny"),
+        ("hsbc_hk_savings_cny", "hsbc_hk_savings_cny"),
+        ("hsbc_hk_savings_hkd", "hsbc_hk_savings_hkd"),
+        ("mox_hk_credit", "mox_credit"),
+        ("mox_hk_bank", "mox_hkd"),
+        ("mox_jpy", "mox_jpy"),
+    ]
+    for needle, account_id in mapping:
+        if needle in name:
+            return account_id
+    if "mox_bank" in parts:
+        return "mox_hkd"
+    if "chase" in parts and "checking" in name:
+        return "chase_checking"
+    if "chase" in parts and "savings" in name:
+        return "chase_savings"
     if "wise" in parts:
         for ccy in ("eur", "gbp", "hkd", "jpy", "krw", "nzd", "usd"):
-            if f"wise_{ccy}" in name or f"_{ccy}_" in name: return f"wise_{ccy}"
-
-    # CSV transaction exports
-    if "amex_us_high_yield_savings" in name: return "amex_us_savings"
-    for acct in ("amex_hk_essential", "amex_hk_explorer", "amex_hk_platinum",
-                 "amex_us_marriott", "amex_us_platinum", "hsbc_hk_everymile",
-                 "hsbc_hk_hsbc_one_hkd_savings", "hsbc_hk_hsbc_one_rmb_savings"):
-        if acct in name:
-            return (acct
-                    .replace("hsbc_hk_hsbc_one_hkd_savings", "hsbc_hk_savings_hkd")
-                    .replace("hsbc_hk_hsbc_one_rmb_savings", "hsbc_hk_savings_cny"))
+            if f"wise_{ccy}" in name or f"_{ccy}_" in name:
+                return f"wise_{ccy}"
     return None
 
 
@@ -111,7 +123,7 @@ def main() -> int:
             print(f"  SKIP (no account map) {path.name}")
             continue
         try:
-            r = ingest_file(conn, path, account_id=acct)
+            r = ingest_file(conn, path, account_id=acct or None)
         except Exception as e:
             counts["error"] += 1
             errors.append(path.name)

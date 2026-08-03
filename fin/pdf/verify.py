@@ -102,7 +102,7 @@ def verify_extraction(result: TemplateResult) -> VerificationReport:
         sections.setdefault(row.section, []).append(row)
 
     balances: dict[str, dict[str, Money]] = {}
-    for _when, money, kind, section in result.balances:
+    for _when, money, kind, section, _hint in result.balances:
         balances.setdefault(section, {})[kind] = money
 
     names = list(dict.fromkeys([*sections.keys(), *balances.keys()]))

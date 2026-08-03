@@ -69,7 +69,8 @@ class AmexCsvParser(StatementParser):
 
     def parse(self, ctx: ParseContext) -> ParseResult:
         header, rows = read_csv_rows(ctx.path)
-        # AMEX US files are mm/dd; HK files are dd/mm.
+        # AMEX's web export uses US-style mm/dd dates in every market, HK
+        # included. The account's institution only picks the currency.
         us = (ctx.institution_id or "").endswith("_us")
         ccy = ctx.default_currency or ("USD" if us else "HKD")
 
@@ -81,7 +82,7 @@ class AmexCsvParser(StatementParser):
             if not raw_date or not raw_amt:
                 continue
             try:
-                d = parse_date(raw_date, dayfirst=not us)
+                d = parse_date(raw_date, dayfirst=False)
                 # Flip AMEX's sign convention.
                 m = parse_amount(raw_amt, ccy)
                 booked = Money(amount=-m.amount, currency=m.currency)
@@ -134,7 +135,7 @@ class AmexCsvParser(StatementParser):
             ))
 
         return ParseResult(txns=txns, raw_rows=rows, warnings=warnings,
-                           account_id=ctx.account_id)
+                           account_id=ctx.account_id, allow_empty=not rows)
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +191,19 @@ class HsbcHkCsvParser(StatementParser):
                     else:
                         continue
                 else:
-                    booked = parse_amount(pick(row, "Amount"), ccy)
+                    row_ccy = pick(row, "Billing currency") or ccy
+                    booked = parse_amount(
+                        pick(row, "Billing amount", "Amount", "Transaction amount"),
+                        row_ccy,
+                    )
+                    # Card exports carry a Credit / Debit marker; the written
+                    # sign already agrees with it, so this only pins the case
+                    # where the sign was dropped from the figures.
+                    marker = pick(row, "Credit / Debit").upper()
+                    if marker == "DEBIT":
+                        booked = Money(amount=-abs(booked.amount), currency=booked.currency)
+                    elif marker == "CREDIT":
+                        booked = Money(amount=abs(booked.amount), currency=booked.currency)
             except ValueError as e:
                 warnings.append(f"line {i}: {e}")
                 continue
@@ -200,6 +213,7 @@ class HsbcHkCsvParser(StatementParser):
                 posted_date=_maybe_date(pick(row, "Post Date", "Posting Date"), True),
                 booked=booked,
                 description_raw=desc or "(no description)",
+                merchant=pick(row, "Merchant name", "Merchant") or None,
                 counterparty=pick(row, "Payee", "Beneficiary") or None,
                 external_ref=pick(row, "Reference", "Transaction Reference") or None,
                 kind_hint=_hsbc_kind(desc),
@@ -210,10 +224,11 @@ class HsbcHkCsvParser(StatementParser):
 
             # The running balance is the bank's own figure. Capturing it is what
             # lets integrity.check_account detect rows we failed to parse.
-            balances.extend(_balance_at(row, d, ccy))
+            balances.extend(_balance_at(row, d, booked.currency))
 
         return ParseResult(txns=txns, raw_rows=rows, warnings=warnings,
-                           account_id=ctx.account_id, balances=balances)
+                           account_id=ctx.account_id, balances=balances,
+                           allow_empty=not rows)
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +323,8 @@ class WiseCsvParser(StatementParser):
             balances.extend(_balance_at(row, d, ccy))
 
         return ParseResult(txns=txns, raw_rows=rows, warnings=warnings,
-                           account_id=ctx.account_id, balances=balances)
+                           account_id=ctx.account_id, balances=balances,
+                           allow_empty=not rows)
 
 
 # ---------------------------------------------------------------------------
@@ -487,7 +503,7 @@ def _balance_at(row: dict, d: date, ccy: str) -> list[tuple]:
     if not bal:
         return []
     try:
-        return [(d, parse_amount(bal, ccy))]
+        return [(d, parse_amount(bal, ccy), "")]
     except ValueError:
         return []
 
