@@ -226,27 +226,6 @@ def test_card_lineage_survives_a_cycle(conn):
     assert set(roots) == {"a", "b"}
 
 
-def test_migration_adds_replaces_card_id(tmp_path):
-    """An existing database must pick up columns added after it was created."""
-    c = dbm.connect(tmp_path / "old.db")
-    c.executescript(
-        "CREATE TABLE institution (id TEXT PRIMARY KEY, display_name TEXT, "
-        "country TEXT, timezone TEXT);"
-        "CREATE TABLE account (id TEXT PRIMARY KEY);"
-        "CREATE TABLE card (id TEXT PRIMARY KEY, account_id TEXT, "
-        "cardholder_name TEXT, last4 TEXT, is_supplementary INTEGER, "
-        "issued_on TEXT, closed_on TEXT);")
-    c.commit()
-    assert "replaces_card_id" not in {
-        r["name"] for r in c.execute("PRAGMA table_info(card)")}
-
-    applied = dbm.migrate(c)
-    assert "card.replaces_card_id" in applied
-    assert "replaces_card_id" in {
-        r["name"] for r in c.execute("PRAGMA table_info(card)")}
-    assert dbm.migrate(c) == []   # idempotent
-
-
 # ---------------------------------------------------------------------------
 # amount parsing
 # ---------------------------------------------------------------------------

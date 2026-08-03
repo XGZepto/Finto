@@ -84,7 +84,7 @@ def write_pdf(path: Path, lines: list[str]) -> Path:
         b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
         b"<< /Length " + str(len(stream)).encode() + b" /Filter /FlateDecode >>\nstream\n"
         + stream + b"\nendstream",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>",
     ]
 
     out = bytearray(b"%PDF-1.4\n")

@@ -40,7 +40,7 @@ def db_templates(conn) -> list[StatementTemplate]:
             "SELECT body FROM pdf_template WHERE active=1 ORDER BY created_at DESC"
         ).fetchall()
     except Exception:
-        # The table is created by migration; absence just means no overrides.
+        # No pdf_template table (or a transient error) just means no overrides.
         return []
     out = []
     for r in rows:

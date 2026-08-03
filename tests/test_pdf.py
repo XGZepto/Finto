@@ -1,4 +1,9 @@
-"""PDF statement extraction."""
+"""PDF statement extraction, end to end through the template engine.
+
+These use a synthetic "test bank" template rather than a shipped issuer one:
+what is asserted here is the pipeline (selection, extraction, verification,
+ingest, integrity), not any particular bank's layout.
+"""
 
 from __future__ import annotations
 
@@ -6,30 +11,80 @@ from datetime import date
 
 import pytest
 from conftest import write_pdf
+from pdf_synth import right, row
 
 from fin.ingest import ingest_file
 from fin.parsers.base import ParseContext, select_parser
 from fin.parsers.pdf import PdfStatementParser
+from fin.pdf.template import StatementTemplate
 
+# Columns are right-aligned the way real statements set money: the header's
+# right edge and the values' right edge agree, which is what the column
+# geometry keys on.
 STATEMENT = [
     "MOX BANK LIMITED",
     "Account Statement",
     "Statement Period: 01/01/2025 to 31/01/2025",
     "Account Number: ****4455   Currency: HKD",
     "",
-    "Opening Balance                              50,000.00",
+    row((0, "Opening Balance"), right(64, "50,000.00")),
     "",
-    "Date        Description                    Amount      Balance",
-    "02/01/2025  SALARY CREDIT ACME LTD       45,000.00   95,000.00",
-    "05/01/2025  PARKNSHOP SUPERMARKET          -845.20   94,154.80",
-    "08/01/2025  FPS TRANSFER TO WISE        -20,000.00   74,154.80",
-    "15/01/2025  INSTALMENT 03/12 SONY STORE  -1,000.00   73,154.80",
-    "22/01/2025  MTR OCTOPUS RELOAD             -500.00   72,654.80",
+    row((0, "Date"), (13, "Description"),
+        right(50, "Amount"), right(64, "Balance")),
+    row((0, "02/01/2025"), (13, "SALARY CREDIT ACME LTD"),
+        right(50, "45,000.00"), right(64, "95,000.00")),
+    row((0, "05/01/2025"), (13, "PARKNSHOP SUPERMARKET"),
+        right(50, "-845.20"), right(64, "94,154.80")),
+    row((0, "08/01/2025"), (13, "FPS TRANSFER TO WISE"),
+        right(50, "-20,000.00"), right(64, "74,154.80")),
+    row((0, "15/01/2025"), (13, "INSTALMENT 03/12 SONY STORE"),
+        right(50, "-1,000.00"), right(64, "73,154.80")),
+    row((0, "22/01/2025"), (13, "MTR OCTOPUS RELOAD"),
+        right(50, "-500.00"), right(64, "72,654.80")),
     "",
-    "Closing Balance                              72,654.80",
+    row((0, "Closing Balance"), right(64, "72,654.80")),
     "Minimum Payment Due                             0.00",
     "Page 1 of 1",
 ]
+
+TEMPLATE = StatementTemplate.from_dict({
+    "template_id": "testbank",
+    "institution_id": "mox",
+    "match_all": ["MOX BANK LIMITED"],
+    "default_currency": "HKD",
+    "date": {"dayfirst": True},
+    "period": r"Statement Period: (\d{2}/\d{2}/\d{4}) to (\d{2}/\d{2}/\d{4})",
+    "sections": [{
+        "name": "main",
+        "start": "",
+        "end": "Closing Balance",
+        "currency": "HKD",
+        "columns": {
+            "mode": "anchors",
+            "header": r"(?-i:Date).*Description.*Amount",
+            "anchors": {
+                "date": r"(?-i:^Date$)",
+                "description": r"(?-i:^Description$)",
+                "amount": r"(?-i:^Amount$)",
+                "balance": r"(?-i:^Balance$)",
+            },
+        },
+        "description_column": "description",
+        "amount": {"mode": "signed", "column": "amount"},
+        "exclude": [r"^Page \d+", "Minimum Payment"],
+        "balances": [
+            {"pattern": "Opening Balance", "kind": "opening", "scope": "document"},
+            {"pattern": "Closing Balance", "kind": "closing", "scope": "document"},
+        ],
+    }],
+})
+
+
+@pytest.fixture(autouse=True)
+def testbank_template(monkeypatch):
+    """Every test here runs against the synthetic template, not shipped ones."""
+    monkeypatch.setattr(
+        "fin.pdf.registry.builtin_templates", lambda: (TEMPLATE,))
 
 
 @pytest.fixture
@@ -103,6 +158,17 @@ def test_scanned_pdf_is_rejected_with_an_explanation(tmp_path):
     assert any("no text layer" in w for w in result.warnings)
 
 
+def test_unmatched_pdf_is_refused_with_guidance(tmp_path):
+    """No template, no import. An unmatched statement that imported as an empty
+    success would look like a quiet month."""
+    pdf = write_pdf(tmp_path / "unknown-bank.pdf",
+                    ["UNKNOWN BANK", "01/01/2025  SALARY  1,000.00"])
+    ctx = ParseContext(path=pdf, default_currency="HKD")
+    result = PdfStatementParser().parse(ctx)
+    assert result.txns == []
+    assert any("no PDF template matched" in w for w in result.warnings)
+
+
 def test_pdf_imports_end_to_end(conn, statement_pdf):
     r = ingest_file(conn, statement_pdf, institution_id="mox",
                     account_id="mox_main", default_currency="HKD")
@@ -125,15 +191,14 @@ def test_pdf_balance_check_verifies_the_extraction(conn, statement_pdf):
     assert all(c["status"] == "ok" for c in checks), checks
 
 
-def test_dropped_pdf_row_is_caught_by_the_balance_check(conn, tmp_path):
-    """Remove a transaction line; the balances must stop reconciling."""
-    from fin.integrity import check_all
+def test_dropped_pdf_row_is_caught_at_ingest(conn, tmp_path):
+    """Remove a transaction line: extraction contradicts the printed balances,
+    and the import is refused with the missing amount named in the warning."""
     broken = [ln for ln in STATEMENT if "PARKNSHOP" not in ln]
     pdf = write_pdf(tmp_path / "mox-missing-row.pdf", broken)
-    ingest_file(conn, pdf, institution_id="mox", account_id="mox_main",
-                default_currency="HKD")
-    checks = [c for c in check_all(conn) if c.get("status") != "insufficient_data"]
-    assert any(c["status"] == "discrepancy" for c in checks)
-    bad = next(c for c in checks if c["status"] == "discrepancy")
-    assert abs(bad["discrepancy"]["amount"]) == 84520
-    assert bad["discrepancy"]["currency"] == "HKD"
+    r = ingest_file(conn, pdf, institution_id="mox", account_id="mox_main",
+                    default_currency="HKD")
+    assert r["status"] == "error"
+    assert any("845.20" in w for w in r["warnings"])
+    # Nothing is recorded: the statement stays re-importable once fixed.
+    assert conn.execute("SELECT COUNT(*) FROM txn").fetchone()[0] == 0

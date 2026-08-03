@@ -15,8 +15,8 @@ Living checklist for what is done and what still matters for *this* ledger
 - [x] Investment / MPF position snapshots
       (`investment_*` tables + `finto investments import`)
 - [x] Full `accounts.example.yaml` covering the real account map
-- [x] PDF ingest wired through template engine with LLM fallback and legacy
-      line-parser last resort; failed verification refuses import
+- [x] PDF ingest wired through template engine with LLM fallback; failed
+      verification refuses import (templates are the only deterministic path)
 - [x] Repo reorganised: docs/ for design reviews, lint clean, 253 tests passing
 
 ## Next (in priority order)

@@ -262,8 +262,8 @@ def ingest_file(
     # institution-specific parser claimed.
     if sf.institution_id == "generic":
         if path.suffix.lower() == ".pdf":
-            from .pdf.registry import select_template
             from .pdf.extract import extract_document
+            from .pdf.registry import select_template
             try:
                 tpl, _ = select_template(extract_document(path))
                 if tpl is not None:

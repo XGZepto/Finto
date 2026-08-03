@@ -113,15 +113,11 @@ waiting to happen.
 
 Being straight about what's missing:
 
-- **No refund→purchase linking.** A refund is currently just a positive
-  transaction. Tying it to the original charge would make per-merchant
-  net-spend accurate.
-- **No budgets or reporting tables.** Deliberate — get ingest correct first.
+- **No budgets or reporting tables.** Deliberate — ingest correctness comes
+  first.
 - **`txn.transfer_group_id` duplicates `transfer_leg`.** It's a denormalised
   cache for query speed. Two sources of truth that could drift;
   `find_violations` checks for orphans, but the cleaner fix is a view.
 - **No FX rate fetching.** The table and lookup exist; nothing populates them
   except Wise's own supplied rates. Cross-currency transfer matching stays
   weak until you load real rates.
-- **PDF extraction.** If HSBC or Mox only give you PDFs, that work is still
-  ahead.

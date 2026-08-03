@@ -38,10 +38,8 @@ def fmt_money(m: dict, width: int = 0) -> str:
 
 def cmd_init(args):
     conn = dbm.connect(args.db)
-    applied = dbm.init_db(conn)
+    dbm.init_db(conn)
     print(f"initialised {args.db}")
-    for col in applied:
-        print(f"  migrated: added {col}")
 
 
 def cmd_accounts(args):
