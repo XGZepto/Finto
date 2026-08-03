@@ -23,26 +23,37 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import uuid
-from datetime import date, datetime
+from collections.abc import Iterable, Sequence
+from datetime import date
 from pathlib import Path
-from typing import Iterable, Sequence
 
 from . import db as dbm
 from .dedup import run_dedup
 from .installments import find_installments, find_origination_pairs
-from .refunds import apply_refund_links, find_refunds
 from .integrity import (
-    check_all, find_violations, prune_orphan_transfer_groups, record_balance,
+    check_all,
+    find_violations,
+    prune_orphan_transfer_groups,
+    record_balance,
     resolve_duplicate_chains,
 )
 from .models import (
-    Account, Card, FileFormat, Money, ParsedTxn, RawRecord, StatementFile,
-    TransferGroup, TransferKind, TransferLeg, Txn, TxnKind,
+    Card,
+    FileFormat,
+    Money,
+    ParsedTxn,
+    RawRecord,
+    StatementFile,
+    TransferGroup,
+    TransferKind,
+    TransferLeg,
+    Txn,
+    TxnKind,
 )
-from .parsers.base import ParseContext, select_parser
 from .parsers import institutions as _institutions  # noqa: F401 (registers parsers)
 from .parsers import pdf as _pdf_parser  # noqa: F401 (registers the PDF parser)
+from .parsers.base import ParseContext, select_parser
+from .refunds import apply_refund_links, find_refunds
 from .transfers import find_transfers, transfer_group_id
 
 
@@ -244,6 +255,29 @@ def ingest_file(
         row_count=len(result.txns),
     )
 
+    # The PDF parser is institution-agnostic ("generic") and leaves the
+    # institution on its ParseResult empty, so a PDF import would otherwise
+    # fail its foreign-key check against `institution`. The template that
+    # matched knows the issuer; use it. The same applies to a CSV that no
+    # institution-specific parser claimed.
+    if sf.institution_id == "generic":
+        if path.suffix.lower() == ".pdf":
+            from .pdf.registry import select_template
+            from .pdf.extract import extract_document
+            try:
+                tpl, _ = select_template(extract_document(path))
+                if tpl is not None:
+                    sf.institution_id = tpl.institution_id
+            except Exception:
+                pass
+        elif path.suffix.lower() == ".csv" and account_id:
+            # CSV fallback: use the account's institution.
+            acct = conn.execute(
+                "SELECT institution_id FROM account WHERE id=?", (account_id,)
+            ).fetchone()
+            if acct:
+                sf.institution_id = acct["institution_id"]
+
     raws = [RawRecord(statement_file_id=sf.id, line_no=i, payload=row)
             for i, row in enumerate(result.raw_rows)]
     raw_by_line = {r.line_no: r.id for r in raws}
@@ -353,7 +387,14 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
     dbm.insert_duplicate_candidates(conn, report.candidates)
 
     live = [t for t in txns if t.duplicate_of_id is None]
-    tr = find_transfers(live, accounts, fx_lookup=dbm.make_fx_lookup(conn))
+    from .transfers import TransferContext
+    tr_ctx = TransferContext(
+        self_aliases=dbm.load_self_aliases(conn),
+        account_aliases=dbm.load_account_alias_index(conn),
+        person_aliases=dbm.load_person_aliases(conn),
+    )
+    tr = find_transfers(live, accounts, fx_lookup=dbm.make_fx_lookup(conn),
+                        context=tr_ctx)
     dbm.insert_transfer_groups(conn, tr.groups)
     dbm.insert_transfer_candidates(conn, tr.candidates)
 

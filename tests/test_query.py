@@ -10,7 +10,6 @@ from datetime import date
 
 import pytest
 
-from fin import db as dbm
 from fin.llm.provider import EchoProvider
 from fin.llm.query import build_context, sanitise, translate
 from fin.models import Money, Txn

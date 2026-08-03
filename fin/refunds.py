@@ -24,10 +24,9 @@ to the wrong purchase silently misattributes both categories.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import timedelta
 from difflib import SequenceMatcher
-from typing import Sequence
 
 from .models import Txn, TxnKind
 

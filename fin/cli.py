@@ -22,9 +22,9 @@ from pathlib import Path
 from . import db as dbm
 from .ingest import ingest_file, reconcile
 from .models import Account, Card, Institution, minor_exponent
-from .parsers.base import ParseContext, read_csv_rows, select_parser
 from .parsers import institutions as _reg  # noqa: F401
 from .parsers import pdf as _pdf_reg  # noqa: F401
+from .parsers.base import ParseContext, read_csv_rows, select_parser
 
 DEFAULT_DB = "finto.db"
 
@@ -46,6 +46,8 @@ def cmd_init(args):
 
 def cmd_accounts(args):
     import yaml  # lazy: only needed for this command
+
+    from .models import Party
     conn = dbm.connect(args.db)
     data = yaml.safe_load(Path(args.file).read_text())
     for i in data.get("institutions", []):
@@ -54,10 +56,45 @@ def cmd_accounts(args):
         dbm.upsert_account(conn, Account(**a))
     for c in data.get("cards", []):
         dbm.upsert_card(conn, Card(**c))
+    for p in data.get("parties", []):
+        dbm.upsert_party(conn, Party(**p))
     conn.commit()
     print(f"loaded {len(data.get('institutions', []))} institutions, "
           f"{len(data.get('accounts', []))} accounts, "
-          f"{len(data.get('cards', []))} cards")
+          f"{len(data.get('cards', []))} cards, "
+          f"{len(data.get('parties', []))} parties")
+
+
+def cmd_investments(args):
+    """Import an MPF / investment position snapshot (xlsx)."""
+    from .investment import (
+        list_snapshots,
+        parse_hsbc_mpf_position_xlsx,
+        save_snapshot,
+        snapshot_detail,
+    )
+    conn = dbm.connect(args.db)
+    if args.investments_cmd == "import":
+        snap = parse_hsbc_mpf_position_xlsx(args.file)
+        snap_id = save_snapshot(conn, snap)
+        print(f"saved {snap.scheme} snapshot {snap.as_of_date} "
+              f"total {snap.total_value} ({len(snap.holdings)} funds, "
+              f"{len(snap.subaccounts)} sub-accounts) id={snap_id}")
+    elif args.investments_cmd == "list":
+        for s in list_snapshots(conn):
+            print(f"  {s['as_of_date']}  {s['scheme']}  "
+                  f"{fmt_money(s['total'])}  {s['id'][:8]}")
+    elif args.investments_cmd == "show":
+        detail = snapshot_detail(conn, args.id)
+        if not detail:
+            print("not found")
+            return
+        print(f"{detail['scheme']} @ {detail['as_of_date']}: {fmt_money(detail['total'])}")
+        for s in detail["subaccounts"]:
+            print(f"  {s['account_id']}  {fmt_money(s['balance'])}  "
+                  f"member={s['member_no']}")
+        for h in detail["holdings"]:
+            print(f"  {fmt_money(h['market_value']):>18}  {h['instrument'][:60]}")
 
 
 def cmd_sniff(args):
@@ -325,6 +362,7 @@ def cmd_resolve(args):
                          (row["keep_txn_id"], row["dupe_txn_id"]))
         else:
             from datetime import datetime as _dt
+
             from .transfers import transfer_group_id
             # Same derivation the automatic pass uses, so confirming a pair by
             # hand and later having reconcile agree converge on one group rather
@@ -417,16 +455,23 @@ def main(argv=None):
 
     sub.add_parser("init").set_defaults(func=cmd_init)
 
-    a = sub.add_parser("accounts"); a.add_argument("action", choices=["load"])
-    a.add_argument("file"); a.set_defaults(func=cmd_accounts)
+    a = sub.add_parser("accounts")
+    a.add_argument("action", choices=["load"])
+    a.add_argument("file")
+    a.set_defaults(func=cmd_accounts)
 
-    s = sub.add_parser("sniff"); s.add_argument("file")
-    s.add_argument("--institution"); s.add_argument("--currency")
+    s = sub.add_parser("sniff")
+    s.add_argument("file")
+    s.add_argument("--institution")
+    s.add_argument("--currency")
     s.set_defaults(func=cmd_sniff)
 
-    i = sub.add_parser("import"); i.add_argument("path")
-    i.add_argument("--institution"); i.add_argument("--account")
-    i.add_argument("--currency"); i.add_argument("--dry-run", action="store_true")
+    i = sub.add_parser("import")
+    i.add_argument("path")
+    i.add_argument("--institution")
+    i.add_argument("--account")
+    i.add_argument("--currency")
+    i.add_argument("--dry-run", action="store_true")
     i.set_defaults(func=cmd_import)
 
     rc = sub.add_parser("reconcile")
@@ -436,7 +481,8 @@ def main(argv=None):
 
     cf = sub.add_parser("config")
     cf.add_argument("action", choices=["list", "get", "set"])
-    cf.add_argument("key", nargs="?"); cf.add_argument("value", nargs="?")
+    cf.add_argument("key", nargs="?")
+    cf.add_argument("value", nargs="?")
     cf.set_defaults(func=cmd_config)
 
     cg = sub.add_parser("categorize")
@@ -448,7 +494,8 @@ def main(argv=None):
 
     lm = sub.add_parser("llm")
     lm.add_argument("action", choices=["stats", "clear", "audit"])
-    lm.add_argument("--task"); lm.add_argument("--limit", type=int, default=20)
+    lm.add_argument("--task")
+    lm.add_argument("--limit", type=int, default=20)
     lm.set_defaults(func=cmd_llm)
 
     sub.add_parser("check").set_defaults(func=cmd_check)
@@ -465,18 +512,31 @@ def main(argv=None):
     fx.set_defaults(func=cmd_fx)
     sub.add_parser("reattribute").set_defaults(func=cmd_reattribute)
 
+    inv = sub.add_parser("investments")
+    inv_sub = inv.add_subparsers(dest="investments_cmd", required=True)
+    inv_imp = inv_sub.add_parser("import", help="import HSBC MPF position xlsx")
+    inv_imp.add_argument("file")
+    inv_sub.add_parser("list")
+    inv_show = inv_sub.add_parser("show")
+    inv_show.add_argument("id")
+    inv.set_defaults(func=cmd_investments)
+
     r = sub.add_parser("review")
     r.add_argument("queue", choices=["duplicates", "transfers"])
-    r.add_argument("--limit", type=int, default=20); r.set_defaults(func=cmd_review)
+    r.add_argument("--limit", type=int, default=20)
+    r.set_defaults(func=cmd_review)
 
     rs = sub.add_parser("resolve")
     rs.add_argument("queue", choices=["duplicates", "transfers"])
-    rs.add_argument("id"); rs.add_argument("action", choices=["accept", "reject"])
+    rs.add_argument("id")
+    rs.add_argument("action", choices=["accept", "reject"])
     rs.set_defaults(func=cmd_resolve)
 
     sub.add_parser("stats").set_defaults(func=cmd_stats)
 
-    e = sub.add_parser("export"); e.add_argument("out"); e.set_defaults(func=cmd_export)
+    e = sub.add_parser("export")
+    e.add_argument("out")
+    e.set_defaults(func=cmd_export)
 
     args = p.parse_args(argv)
     args.func(args)

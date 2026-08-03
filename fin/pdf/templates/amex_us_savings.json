@@ -1,0 +1,84 @@
+{
+  "template_id": "amex_us_savings",
+  "institution_id": "amex_us_bank",
+  "label": "American Express National Bank High Yield Savings statement",
+  "version": "1.0.0",
+  "match_all": [
+    "American\\s+Express\\s+National\\s+Bank",
+    "High\\s+Yield\\s+Savings\\s+Account",
+    "Statement\\s+Period:",
+    "Account\\s+Summary"
+  ],
+  "match_none": [
+    "Total\\s+New\\s+Charges",
+    "Closing\\s+Date\\s+\\d{2}/\\d{2}/\\d{2}"
+  ],
+  "default_currency": "USD",
+  "date": {
+    "format": "auto",
+    "dayfirst": false,
+    "year_from_statement": true
+  },
+  "statement_date": "Statement\\s+Period:\\s+\\w+\\s+\\d{1,2},\\s+\\d{4}\\s*-\\s*(\\w+\\s+\\d{1,2},\\s+\\d{4})",
+  "period": "Statement\\s+Period:\\s+(\\w+\\s+\\d{1,2},\\s+\\d{4})\\s*-\\s*(\\w+\\s+\\d{1,2},\\s+\\d{4})",
+  "body_start": "",
+  "body_end": "",
+  "sections": [
+    {
+      "name": "savings",
+      "start": "Account\\s+Activity",
+      "end": "Accounts\\s+offered\\s+by\\s+American\\s+Express\\s+National\\s+Bank",
+      "currency": "USD",
+      "account_hint": "AMEX High Yield Savings",
+      "columns": {
+        "mode": "anchors",
+        "header": "(?-i:Date)\\s+(?-i:Transactions)\\s+(?-i:Debits)",
+        "anchors": {
+          "date": "(?-i:^Date$)",
+          "description": "(?-i:^Transactions$)",
+          "withdrawal": "(?-i:^Debits$)",
+          "deposit": "(?-i:^Credits$)",
+          "balance": "(?-i:^Balance$)"
+        }
+      },
+      "amount": {
+        "mode": "debit_credit",
+        "credit_column": "deposit",
+        "debit_column": "withdrawal",
+        "balance_column": "balance"
+      },
+      "description_column": "description",
+      "exclude": [
+        "^(?!\\d{1,2}/\\d{1,2}/\\d{4}\\s)"
+      ],
+      "balances": [
+        {
+          "pattern": "Beginning\\s+Balance",
+          "kind": "opening",
+          "column": "balance"
+        },
+        {
+          "pattern": "Ending\\s+Balance",
+          "kind": "closing",
+          "column": "balance"
+        },
+        {
+          "pattern": "Balance\\s+Last\\s+Statement",
+          "kind": "opening",
+          "scope": "document",
+          "token_index": 0
+        },
+        {
+          "pattern": "^\\d{1,2}/\\d{1,2}/\\d{4}\\s+Ending\\s+Balance",
+          "kind": "closing",
+          "scope": "document",
+          "token_index": 0
+        }
+      ],
+      "stop_at": [
+        "Accounts\\s+offered\\s+by\\s+American\\s+Express\\s+National\\s+Bank"
+      ]
+    }
+  ],
+  "source": "builtin"
+}

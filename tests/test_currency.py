@@ -10,8 +10,6 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from fin import db as dbm
 from fin import fx as fxm
 from fin.models import Account, FxRate, Money
@@ -19,8 +17,8 @@ from fin.reporting import positions, summary, totals
 
 
 def _add(conn, account, amount, ccy, when="2025-01-15", desc="THING"):
-    from fin.models import Txn
     from fin.db import insert_txns
+    from fin.models import Txn
     conn.execute(
         "INSERT OR IGNORE INTO statement_file (id, source_path, file_sha256, "
         "institution_id, account_id, file_format, parser_id, parser_version, "

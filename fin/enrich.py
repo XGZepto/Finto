@@ -24,7 +24,7 @@ Design rules:
 from __future__ import annotations
 
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 # Common IATA codes are 3 uppercase letters; routing is written many ways.
 _ROUTE = re.compile(r"\b([A-Z]{3})\s*(?:/|-|>|\bTO\b)\s*([A-Z]{3})\b")

@@ -17,7 +17,10 @@ router = APIRouter(tags=["integrity"])
 
 @router.get("/integrity")
 def get_integrity(conn=Depends(get_conn)) -> dict:
-    checks = check_all(conn)
+    # record=False: answering the question must not write. The audit trail
+    # belongs to import and to `finto check`, which run once per statement, not
+    # to a page that may be open on a dashboard all day.
+    checks = check_all(conn, record=False)
     violations = find_violations(conn)
 
     # Accounts with no balance assertion are *unverified*, not healthy. `check`

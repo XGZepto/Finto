@@ -13,14 +13,12 @@ six months later.
 
 from __future__ import annotations
 
-import shutil
 import tempfile
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from ... import db as dbm
 from ...ingest import ingest_file, reconcile
 from ...jobs import runner
 from ...parsers.base import ParseContext, read_csv_rows, select_parser

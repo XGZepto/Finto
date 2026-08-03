@@ -1,6 +1,11 @@
-# Copy to accounts.yaml (gitignored) and fill in your real accounts.
-# Account ids are stable slugs — once chosen, don't rename them, they're
-# referenced by every transaction row.
+# Copy to accounts.yaml (gitignored) and fill in real names.
+# Account ids are stable slugs — once chosen, don't rename them.
+#
+# parties.self aliases are how the transfer matcher recognises "FPS to myself"
+# across institutions that spell your name differently. parties.person aliases
+# mark P2P counterparties so those movements are NOT auto-netted as
+# self-transfers. account.aliases are tokens that appear on the *other* leg
+# ("MOX", "AMEX") so HSBC→Mox can link even among several same-day equal amounts.
 
 institutions:
   - id: amex_us
@@ -19,58 +24,201 @@ institutions:
   - id: mox
     display_name: Mox Bank
     country: HK
+  - id: chase_us
+    display_name: JPMorgan Chase (US)
+    country: US
+    timezone: America/New_York
+
+parties:
+  # Every spelling of your own name that appears on statements / FPS.
+  - id: self
+    display_name: Me
+    kind: self
+    aliases:
+      - YIXIANG ZHOU
+      - ZEPTO ZHOU YIXIANG
+      - ZHOU YIXIANG
+  # People you send money to. Their transfers are real spend — labelled, not netted.
+  # - id: person_example
+  #   display_name: Friend Name
+  #   kind: person
+  #   aliases: ["FRIEND NAME", "FPS FRIEND"]
 
 accounts:
-  # --- Credit cards ---
-  - id: amex_us_main
+  # --- AMEX US ---
+  - id: amex_us_platinum
     institution_id: amex_us
-    display_name: AMEX US
+    display_name: AMEX US Platinum
     account_type: credit_card
     primary_currency: USD
-    masked_number: "****1001"
+    masked_number: "****62003"
+    aliases: ["AMEX", "AMERICAN EXPRESS", "PLATINUM"]
 
-  - id: amex_hk_main
+  - id: amex_us_marriott
+    institution_id: amex_us
+    display_name: AMEX US Marriott Bonvoy Brilliant
+    account_type: credit_card
+    primary_currency: USD
+    masked_number: "****53006"
+    aliases: ["MARRIOTT", "BONVOY", "BRILLIANT"]
+
+  - id: amex_us_savings
+    institution_id: amex_us
+    display_name: AMEX US High Yield Savings
+    account_type: savings
+    primary_currency: USD
+    masked_number: "****7782"
+    aliases: ["HIGH YIELD SAVINGS", "AMEX SAVINGS"]
+
+  # --- AMEX HK ---
+  - id: amex_hk_platinum
     institution_id: amex_hk
-    display_name: AMEX HK
+    display_name: AMEX HK Platinum
     account_type: credit_card
     primary_currency: HKD
-    masked_number: "****2002"
+    masked_number: "****31003"
+    aliases: ["AMEX HK", "AMEX PLATINUM"]
 
-  - id: hsbc_hk_cc
-    institution_id: hsbc_hk
-    display_name: HSBC HK Credit Card
+  - id: amex_hk_explorer
+    institution_id: amex_hk
+    display_name: AMEX HK Explorer
     account_type: credit_card
     primary_currency: HKD
-    masked_number: "****3003"
+    masked_number: "****03002"
+    aliases: ["EXPLORER"]
 
-  # --- Bank accounts ---
-  - id: hsbc_hk_current
-    institution_id: hsbc_hk
-    display_name: HSBC HK Current
-    account_type: checking
+  - id: amex_hk_essential
+    institution_id: amex_hk
+    display_name: AMEX HK Essential
+    account_type: credit_card
     primary_currency: HKD
+    masked_number: "****02009"
+    aliases: ["ESSENTIAL"]
 
-  - id: hsbc_hk_savings
+  # --- HSBC HK cash ---
+  - id: hsbc_hk_savings_hkd
     institution_id: hsbc_hk
-    display_name: HSBC HK Savings
+    display_name: HSBC One HKD Savings
     account_type: savings
     primary_currency: HKD
+    balance_group: hsbc_one
+    aliases: ["HSBC", "HSBC ONE", "HKD SAVINGS"]
 
-  - id: mox_main
-    institution_id: mox
-    display_name: Mox Account
-    account_type: checking
+  - id: hsbc_hk_savings_cny
+    institution_id: hsbc_hk
+    display_name: HSBC One RMB Savings
+    account_type: savings
+    primary_currency: CNY
+    settlement_currencies: [CNY]
+    balance_group: hsbc_one
+    aliases: ["RMB SAVINGS", "CNY SAVINGS", "FOREIGN CURRENCY"]
+
+  - id: hsbc_hk_pulse_hkd
+    institution_id: hsbc_hk
+    display_name: HSBC Pulse Dual Currency (HKD)
+    account_type: credit_card
     primary_currency: HKD
+    masked_number: "****0071"
+    settlement_currencies: [HKD]
+    balance_group: hsbc_pulse
+    aliases: ["PULSE", "HSBC PULSE"]
 
-  # Wise holds one balance per currency. Model each as its own account and tie
-  # them together with balance_group — that's what lets the matcher recognise
-  # an in-Wise FX conversion as a transfer rather than income + spending.
+  - id: hsbc_hk_pulse_cny
+    institution_id: hsbc_hk
+    display_name: HSBC Pulse Dual Currency (RMB)
+    account_type: credit_card
+    primary_currency: CNY
+    masked_number: "****2217"
+    settlement_currencies: [CNY]
+    balance_group: hsbc_pulse
+    aliases: ["PULSE RMB", "PULSE CNY"]
+
+  - id: hsbc_hk_everymile
+    institution_id: hsbc_hk
+    display_name: HSBC EveryMile
+    account_type: credit_card
+    primary_currency: HKD
+    masked_number: "****3315"
+    aliases: ["EVERYMILE"]
+
+  # --- HSBC MPF (investment) ---
+  # Unit holdings live in investment_* tables; cash contributions that leave
+  # HSBC One still land here as ordinary transfer legs when linked.
+  - id: hsbc_mpf_regular
+    institution_id: hsbc_hk
+    display_name: HSBC MPF Regular Employee
+    account_type: investment
+    primary_currency: HKD
+    balance_group: hsbc_mpf
+    notes: "Member account 65841230"
+
+  - id: hsbc_mpf_personal
+    institution_id: hsbc_hk
+    display_name: HSBC MPF Personal
+    account_type: investment
+    primary_currency: HKD
+    balance_group: hsbc_mpf
+    notes: "Member account 15921678"
+
+  - id: hsbc_mpf_tdvc
+    institution_id: hsbc_hk
+    display_name: HSBC MPF Tax Deductible Voluntary Contribution
+    account_type: investment
+    primary_currency: HKD
+    balance_group: hsbc_mpf
+    notes: "Member account 84303079"
+
+  # --- Mox ---
+  - id: mox_hkd
+    institution_id: mox
+    display_name: Mox HKD
+    account_type: multi_currency
+    primary_currency: HKD
+    balance_group: mox_personal
+    aliases: ["MOX", "MOX BANK", "MOX ACCOUNT"]
+
+  - id: mox_jpy
+    institution_id: mox
+    display_name: Mox JPY
+    account_type: multi_currency
+    primary_currency: JPY
+    balance_group: mox_personal
+    aliases: ["MOX JPY"]
+
+  - id: mox_credit
+    institution_id: mox
+    display_name: Mox Credit
+    account_type: credit_card
+    primary_currency: HKD
+    aliases: ["MOX CREDIT"]
+
+  # --- Chase US ---
+  - id: chase_checking
+    institution_id: chase_us
+    display_name: Chase Total Checking
+    account_type: checking
+    primary_currency: USD
+    balance_group: chase_us
+    masked_number: "****8076"
+    aliases: ["CHASE", "TOTAL CHECKING", "JPMORGAN"]
+
+  - id: chase_savings
+    institution_id: chase_us
+    display_name: Chase Savings
+    account_type: savings
+    primary_currency: USD
+    balance_group: chase_us
+    masked_number: "****9116"
+    aliases: ["CHASE SAVINGS"]
+
+  # --- Wise (one account per currency balance) ---
   - id: wise_hkd
     institution_id: wise
     display_name: Wise HKD
     account_type: multi_currency
     primary_currency: HKD
     balance_group: wise_personal
+    aliases: ["WISE", "TRANSFERWISE"]
 
   - id: wise_usd
     institution_id: wise
@@ -79,33 +227,107 @@ accounts:
     primary_currency: USD
     balance_group: wise_personal
 
+  - id: wise_eur
+    institution_id: wise
+    display_name: Wise EUR
+    account_type: multi_currency
+    primary_currency: EUR
+    balance_group: wise_personal
+
+  - id: wise_gbp
+    institution_id: wise
+    display_name: Wise GBP
+    account_type: multi_currency
+    primary_currency: GBP
+    balance_group: wise_personal
+
+  - id: wise_jpy
+    institution_id: wise
+    display_name: Wise JPY
+    account_type: multi_currency
+    primary_currency: JPY
+    balance_group: wise_personal
+
+  - id: wise_nzd
+    institution_id: wise
+    display_name: Wise NZD
+    account_type: multi_currency
+    primary_currency: NZD
+    balance_group: wise_personal
+
+  - id: wise_krw
+    institution_id: wise
+    display_name: Wise KRW
+    account_type: multi_currency
+    primary_currency: KRW
+    balance_group: wise_personal
+
 cards:
-  # Supplementary cards post to the parent account's statement. Registering
-  # them here is what makes per-cardholder spend reporting possible.
-  - id: amex_us_main_primary
-    account_id: amex_us_main
-    cardholder_name: YOUR NAME
-    last4: "1001"
+  # cardholder_name MUST match the CSV "Card Member" field exactly (case folded
+  # by ingest). last4 is the trailing four of Account #.
+  # Primary holder
+  - id: amex_hk_platinum_primary
+    account_id: amex_hk_platinum
+    cardholder_name: ZEPTO ZHOU YIXIANG
+    last4: "31003"
     is_supplementary: false
 
-  - id: amex_us_main_supp1
-    account_id: amex_us_main
-    cardholder_name: SUPPLEMENTARY HOLDER NAME
-    last4: "1009"
+  - id: amex_hk_platinum_supp_cong
+    account_id: amex_hk_platinum
+    cardholder_name: CONG WANG
+    last4: "31029"
     is_supplementary: true
 
-  # Cards get reissued — lost, expired, compromised — with a new number. The
-  # account is unchanged, so your totals, dedup and balance checks are all fine,
-  # but per-card history would split in two. Register the replacement as its own
-  # card and point replaces_card_id at what it superseded; reports then roll the
-  # chain up into one card.
-  #
-  # Set issued_on/closed_on too when you know them: they stop a new number from
-  # claiming charges made before it existed.
-  # - id: amex_us_main_primary_2
-  #   account_id: amex_us_main
-  #   cardholder_name: YOUR NAME
-  #   last4: "5566"
-  #   is_supplementary: false
-  #   issued_on: 2025-07-01
-  #   replaces_card_id: amex_us_main_primary
+  - id: amex_hk_platinum_supp_jun
+    account_id: amex_hk_platinum
+    cardholder_name: JUN YAN
+    last4: "31011"
+    is_supplementary: true
+
+  - id: amex_hk_explorer_primary
+    account_id: amex_hk_explorer
+    cardholder_name: ZEPTO ZHOU YIXIANG
+    last4: "03002"
+    is_supplementary: false
+
+  - id: amex_hk_explorer_supp_ho
+    account_id: amex_hk_explorer
+    cardholder_name: HO CHING LEUNG
+    last4: "03010"
+    is_supplementary: true
+
+  - id: amex_hk_explorer_supp_feng
+    account_id: amex_hk_explorer
+    cardholder_name: FENG TIAN
+    last4: "02020"
+    is_supplementary: true
+
+  - id: amex_us_platinum_primary
+    account_id: amex_us_platinum
+    cardholder_name: YIXIANG ZHOU
+    last4: "62003"
+    is_supplementary: false
+
+  - id: amex_us_platinum_supp_yi
+    account_id: amex_us_platinum
+    cardholder_name: YI SHEN
+    last4: "62029"
+    is_supplementary: true
+
+  - id: amex_us_platinum_supp_haonan
+    account_id: amex_us_platinum
+    cardholder_name: Haonan Bai
+    last4: "63019"
+    is_supplementary: true
+
+  - id: amex_us_marriott_primary
+    account_id: amex_us_marriott
+    cardholder_name: YIXIANG ZHOU
+    last4: "53006"
+    is_supplementary: false
+
+  - id: amex_us_marriott_supp
+    account_id: amex_us_marriott
+    cardholder_name: Chenxi Huang
+    last4: "51034"
+    is_supplementary: true

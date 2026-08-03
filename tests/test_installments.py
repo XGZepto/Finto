@@ -10,7 +10,9 @@ from fin import db as dbm
 from fin.enrich import extract_details, is_travel
 from fin.ingest import ingest_file, reconcile
 from fin.installments import (
-    find_installments, find_origination_pairs, parse_installment_marker,
+    find_installments,
+    find_origination_pairs,
+    parse_installment_marker,
     plan_subject,
 )
 from fin.models import Money, Txn, TxnKind

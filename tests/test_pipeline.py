@@ -12,10 +12,16 @@ from pathlib import Path
 import pytest
 
 from fin import db as dbm
-from fin.dedup import find_fuzzy_duplicates, dedup_exact, run_dedup
+from fin.dedup import dedup_exact, find_fuzzy_duplicates
 from fin.ingest import ingest_file, reconcile
 from fin.models import (
-    Account, AccountType, Card, Institution, Money, Txn, TxnStatus, normalize_description,
+    Account,
+    AccountType,
+    Institution,
+    Money,
+    Txn,
+    TxnStatus,
+    normalize_description,
 )
 from fin.parsers.base import ParseContext, parse_amount, parse_date, select_parser
 from fin.transfers import find_transfers
@@ -204,7 +210,7 @@ def test_a_txn_is_only_one_leg():
                txn_date=date(2026, 4, 1), description_raw="TRANSFER IN")
     in2 = _txn(account_id="amex", booked=Money(amount=100000, currency="HKD"),
                txn_date=date(2026, 4, 1), description_raw="TRANSFER IN")
-    rep = find_transfers([out, in1, in2], _accounts())
+    find_transfers([out, in1, in2], _accounts())
     claimed = [t for t in (out, in1, in2) if t.transfer_group_id]
     assert len(claimed) <= 2
 

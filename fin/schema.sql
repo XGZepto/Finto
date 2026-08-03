@@ -474,7 +474,101 @@ CREATE TABLE IF NOT EXISTS txn_annotation (
 ) STRICT;
 
 -- ---------------------------------------------------------------------------
--- 9. Settings
+-- 9. Parties & aliases — who money moves between
+-- ---------------------------------------------------------------------------
+-- Transfers between *your* accounts are netted out of spend/income. That only
+-- works when the matcher can recognise both legs as yours. Institutions write
+-- your name differently (YIXIANG ZHOU vs ZEPTO ZHOU YIXIANG vs FPS aliases), and
+-- they write the counterparty on one leg only. party + party_alias is the
+-- shared dictionary:
+--
+--   kind='self'     every name you go by — used to boost self-transfer scores
+--                   and to stop a payment to yourself being treated as income
+--   kind='person'   people you send money to / receive from (P2P). Their
+--                   transfers are REAL spend/income; we label them, we do not
+--                   net them against another of your accounts.
+--
+-- account_alias maps description tokens ("MOX", "AMEX PLATINUM") onto the
+-- destination account so HSBC→Mox FPS can link even when amounts alone are
+-- ambiguous across several same-day movements.
+
+CREATE TABLE IF NOT EXISTS party (
+    id           TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    kind         TEXT NOT NULL CHECK (kind IN ('self','person','merchant','institution')),
+    notes        TEXT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS party_alias (
+    party_id TEXT NOT NULL REFERENCES party(id) ON DELETE CASCADE,
+    alias    TEXT NOT NULL,               -- already normalised (upper, alnum)
+    PRIMARY KEY (party_id, alias)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_party_alias ON party_alias(alias);
+
+CREATE TABLE IF NOT EXISTS account_alias (
+    account_id TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+    alias      TEXT NOT NULL,
+    PRIMARY KEY (account_id, alias)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_account_alias ON account_alias(alias);
+
+-- ---------------------------------------------------------------------------
+-- 10. Investment / MPF positions
+-- ---------------------------------------------------------------------------
+-- An investment account is still an `account` row (account_type='investment').
+-- Cash contributions that leave a bank account stay cash-basis txns and can
+-- link as transfers into the investment account. What this section adds is the
+-- *unit* ledger: fund holdings and valuations that do not move cash and must
+-- never be fed into integrity.check_account.
+--
+-- HSBC MPF specifically: three member sub-accounts (Regular Employee, Personal,
+-- TDVC) plus an aggregate fund breakdown. Each sub-account is its own account
+-- row under balance_group='hsbc_mpf'; a snapshot records the valuation date;
+-- subaccount_balance and holding rows hang off the snapshot.
+
+CREATE TABLE IF NOT EXISTS investment_snapshot (
+    id                TEXT PRIMARY KEY,
+    as_of_date        TEXT NOT NULL,
+    scheme            TEXT NOT NULL,          -- 'hsbc_mpf'
+    currency          TEXT NOT NULL,
+    total_value       INTEGER NOT NULL,       -- minor units
+    source            TEXT NOT NULL,          -- 'xlsx','manual','statement'
+    statement_file_id TEXT REFERENCES statement_file(id),
+    notes             TEXT,
+    created_at        TEXT NOT NULL,
+    UNIQUE (scheme, as_of_date, source)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS investment_subaccount_balance (
+    snapshot_id  TEXT NOT NULL REFERENCES investment_snapshot(id) ON DELETE CASCADE,
+    account_id   TEXT NOT NULL REFERENCES account(id),
+    member_no    TEXT,                        -- issuer member account number
+    balance      INTEGER NOT NULL,            -- minor units
+    currency     TEXT NOT NULL,
+    allocation   TEXT,                        -- decimal string fraction of total
+    PRIMARY KEY (snapshot_id, account_id)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS investment_holding (
+    id            TEXT PRIMARY KEY,
+    snapshot_id   TEXT NOT NULL REFERENCES investment_snapshot(id) ON DELETE CASCADE,
+    instrument    TEXT NOT NULL,              -- constituent fund name
+    units         TEXT,                       -- decimal string
+    unit_price    TEXT,                       -- decimal string, in currency
+    market_value  INTEGER NOT NULL,           -- minor units
+    currency      TEXT NOT NULL,
+    allocation    TEXT,                       -- decimal string fraction of total
+    UNIQUE (snapshot_id, instrument)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_holding_snapshot ON investment_holding(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_inv_sub_account ON investment_subaccount_balance(account_id);
+
+-- ---------------------------------------------------------------------------
+-- 11. Settings
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS setting (
@@ -489,7 +583,7 @@ INSERT OR IGNORE INTO setting (key, value) VALUES
     ('llm_model',     'claude-haiku-4-5-20251001');
 
 -- ---------------------------------------------------------------------------
--- 10. Import audit log
+-- 12. Import audit log
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS import_run (

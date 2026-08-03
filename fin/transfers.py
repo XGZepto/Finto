@@ -22,22 +22,40 @@ from __future__ import annotations
 
 import hashlib
 from collections import defaultdict
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
-from typing import Iterable, Mapping, Sequence
 
 from .models import (
-    Account, AccountType, Money, TransferCandidate, TransferGroup, TransferKind,
-    TransferLeg, Txn, TxnKind,
+    Account,
+    AccountType,
+    Money,
+    TransferCandidate,
+    TransferGroup,
+    TransferKind,
+    TransferLeg,
+    Txn,
+    TxnKind,
 )
 
-
 MAX_DATE_GAP_DAYS = 5
+# Card payments often clear a few days after the bank debit — keep a wider
+# window only when the inflow lands on a card.
+MAX_CC_PAYMENT_GAP_DAYS = 10
 AUTO_LINK_THRESHOLD = 0.90
 REVIEW_THRESHOLD = 0.55
 # FX legs rarely reconcile exactly; allow spread + fee before rejecting.
 FX_TOLERANCE_PCT = Decimal("0.03")
+
+
+@dataclass
+class TransferContext:
+    """Optional name dictionaries that lift transfer recall on real statements."""
+
+    self_aliases: set[str] = field(default_factory=set)
+    account_aliases: dict[str, str] = field(default_factory=dict)
+    person_aliases: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -66,20 +84,25 @@ def find_transfers(
     accounts: Mapping[str, Account],
     *,
     fx_lookup=None,
+    context: TransferContext | None = None,
 ) -> TransferReport:
     """Pair outflows with inflows across accounts the user owns.
 
     `fx_lookup(date, base, quote) -> Decimal | None` supplies rates for
     cross-currency legs. Without it, cross-currency pairs are still proposed
     but scored lower and always sent to review.
+
+    `context` carries self/account/person aliases loaded from accounts.yaml —
+    without it the matcher still works on amounts+dates alone, but same-name
+    FPS transfers between your own accounts are much easier to miss.
     """
+    ctx = context or TransferContext()
     own = {aid for aid, a in accounts.items() if a.is_own_account}
     outs = [t for t in txns if t.duplicate_of_id is None
             and t.booked.amount < 0 and t.account_id in own]
     ins = [t for t in txns if t.duplicate_of_id is None
            and t.booked.amount > 0 and t.account_id in own]
 
-    # Bucket inflows by date so we only compare within the window.
     by_date: dict[object, list[Txn]] = defaultdict(list)
     for t in ins:
         by_date[t.txn_date].append(t)
@@ -88,7 +111,10 @@ def find_transfers(
     seen: set[tuple[str, str]] = set()
 
     for out in outs:
-        for offset in range(0, MAX_DATE_GAP_DAYS + 1):
+        # Widen the search window when any candidate inflow is on a card —
+        # we don't know yet, so search the larger window and let scoring decide.
+        max_gap = MAX_CC_PAYMENT_GAP_DAYS
+        for offset in range(0, max_gap + 1):
             for sign in ((0,) if offset == 0 else (1, -1)):
                 day = out.txn_date + timedelta(days=offset * sign)
                 for inc in by_date.get(day, ()):
@@ -99,7 +125,7 @@ def find_transfers(
                         continue
                     seen.add(key)
                     score, reasons, amt_delta = _score_pair(
-                        out, inc, accounts, fx_lookup)
+                        out, inc, accounts, fx_lookup, ctx)
                     if score < REVIEW_THRESHOLD:
                         continue
                     candidates.append(TransferCandidate(
@@ -111,8 +137,6 @@ def find_transfers(
                         reasons=reasons,
                     ))
 
-    # A transaction can only be one leg of one transfer. Greedily take the best
-    # scoring pairs and drop any later pair reusing an already-claimed leg.
     candidates.sort(key=lambda c: c.score, reverse=True)
     claimed: set[str] = set()
     groups: list[TransferGroup] = []
@@ -146,22 +170,34 @@ def find_transfers(
     return TransferReport(groups=groups, candidates=remaining)
 
 
-def _score_pair(out: Txn, inc: Txn, accounts, fx_lookup) -> tuple[float, list[str], int]:
+def _norm_blob(*parts: str | None) -> str:
+    from .models import normalize_alias
+    return normalize_alias(" ".join(p for p in parts if p))
+
+
+def _score_pair(
+    out: Txn, inc: Txn, accounts, fx_lookup, ctx: TransferContext
+) -> tuple[float, list[str], int]:
     reasons: list[str] = []
     score = 0.0
     date_delta = abs((inc.txn_date - out.txn_date).days)
+
+    in_acct = accounts.get(inc.account_id)
+    out_acct = accounts.get(out.account_id)
+    is_cc_in = bool(
+        in_acct and in_acct.account_type in (AccountType.CREDIT_CARD, AccountType.CHARGE_CARD)
+    )
+    max_gap = MAX_CC_PAYMENT_GAP_DAYS if is_cc_in else MAX_DATE_GAP_DAYS
+    if date_delta > max_gap:
+        return 0.0, [], 0
 
     same_ccy = out.booked.currency == inc.booked.currency
     if same_ccy:
         delta = abs(abs(out.booked.amount) - abs(inc.booked.amount))
         if delta == 0:
-            # Equal-and-opposite, same currency, across two accounts you own is
-            # the single strongest signal available. Weighted so that this plus
-            # a close date is enough to auto-link without extra evidence.
             score += 0.62
             reasons.append("amounts match exactly")
         elif delta <= max(200, abs(out.booked.amount) // 100):
-            # Small shortfall on the receiving side = wire/FPS fee.
             score += 0.42
             reasons.append(f"amounts differ by {delta} minor units (fee-sized)")
         else:
@@ -173,25 +209,20 @@ def _score_pair(out: Txn, inc: Txn, accounts, fx_lookup) -> tuple[float, list[st
         score += 0.35
         reasons.append("cross-currency legs reconcile within tolerance")
 
-    # Date proximity
-    score += 0.20 * max(0.0, 1.0 - date_delta / (MAX_DATE_GAP_DAYS + 1))
+    score += 0.20 * max(0.0, 1.0 - date_delta / (max_gap + 1))
     reasons.append(f"date gap {date_delta}d")
 
-    # Structural signal: a credit card receiving money is almost always a payment.
-    in_acct = accounts.get(inc.account_id)
-    out_acct = accounts.get(out.account_id)
-    if in_acct and in_acct.account_type in (AccountType.CREDIT_CARD, AccountType.CHARGE_CARD):
+    if is_cc_in:
         score += 0.12
         reasons.append("inflow lands on a card = likely CC payment")
 
-    # Description signals
     text = f"{out.description_norm} {inc.description_norm}"
     if any(w in text for w in ("TRANSFER", "FPS", "FASTER PAYMENT", "AUTOPAY",
-                               "PAYMENT RECEIVED", "THANK YOU")):
+                               "PAYMENT RECEIVED", "THANK YOU", "EPAYMENT",
+                               "ACH PMT", "MOX CREDIT PAYMENT")):
         score += 0.12
         reasons.append("transfer/payment wording")
 
-    # Same balance group (Wise HKD -> Wise USD) is a strong signal.
     if out_acct and in_acct and out_acct.balance_group and \
             out_acct.balance_group == in_acct.balance_group:
         score += 0.12
@@ -201,7 +232,43 @@ def _score_pair(out: Txn, inc: Txn, accounts, fx_lookup) -> tuple[float, list[st
         score += 0.08
         reasons.append("parser flagged FX conversion")
 
-    return min(score, 1.0), reasons, delta
+    # Description / counterparty names pointing at the other account, or at
+    # yourself. These are the signals that separate "FPS to my Mox" from
+    # "FPS to a friend with the same amount the same day".
+    out_blob = _norm_blob(out.description_raw, out.counterparty, out.description_norm)
+    inc_blob = _norm_blob(inc.description_raw, inc.counterparty, inc.description_norm)
+
+    for alias, aid in ctx.account_aliases.items():
+        if not alias or len(alias) < 3:
+            continue
+        if aid == inc.account_id and alias in out_blob:
+            score += 0.15
+            reasons.append(f"outflow names destination account ({alias})")
+            break
+        if aid == out.account_id and alias in inc_blob:
+            score += 0.10
+            reasons.append(f"inflow names source account ({alias})")
+            break
+
+    if ctx.self_aliases:
+        if any(a in out_blob for a in ctx.self_aliases if len(a) >= 4) and \
+                any(a in inc_blob for a in ctx.self_aliases if len(a) >= 4):
+            score += 0.08
+            reasons.append("both legs name self")
+        elif any(a in out_blob for a in ctx.self_aliases if len(a) >= 4):
+            # Outflow labelled with your own name is usually a payment to one
+            # of your other accounts (FPS "to YIXIANG ZHOU"), not a friend.
+            score += 0.06
+            reasons.append("outflow counterparty is self")
+
+    # A known *other person* on the outflow is evidence AGAINST a self-transfer.
+    # We still allow the pair if amounts scream, but it will usually fall into
+    # the review band rather than auto-link — correct: that money left the house.
+    if ctx.person_aliases and any(a in out_blob for a in ctx.person_aliases if len(a) >= 4):
+        score -= 0.25
+        reasons.append("outflow names a known external person (P2P, not self-transfer)")
+
+    return min(max(score, 0.0), 1.0), reasons, delta
 
 
 def _fx_reconcile(out: Txn, inc: Txn, fx_lookup) -> tuple[int, bool]:
@@ -222,7 +289,6 @@ def _fx_reconcile(out: Txn, inc: Txn, fx_lookup) -> tuple[int, bool]:
 
 def _classify(out: Txn, inc: Txn, accounts) -> TransferKind:
     in_acct = accounts.get(inc.account_id)
-    out_acct = accounts.get(out.account_id)
     if in_acct and in_acct.account_type in (AccountType.CREDIT_CARD, AccountType.CHARGE_CARD):
         return TransferKind.CC_PAYMENT
     if out.booked.currency != inc.booked.currency:

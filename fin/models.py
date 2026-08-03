@@ -13,16 +13,15 @@ Design notes
 
 from __future__ import annotations
 
+import hashlib
+import re
+import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Literal
-import hashlib
-import re
-import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
 
 # ---------------------------------------------------------------------------
 # Money
@@ -53,7 +52,7 @@ class Money(BaseModel):
         return v.upper()
 
     @classmethod
-    def from_decimal(cls, value: Decimal | str | float, currency: str) -> "Money":
+    def from_decimal(cls, value: Decimal | str | float, currency: str) -> Money:
         exp = minor_exponent(currency)
         d = Decimal(str(value)).scaleb(exp).quantize(Decimal(1))
         return cls(amount=int(d), currency=currency.upper())
@@ -154,12 +153,15 @@ class Account(BaseModel):
     balance_group: str | None = None   # groups Wise/Mox per-currency balances
     masked_number: str | None = None
     is_own_account: bool = True
+    # Description tokens that identify this account on the *other* leg of a
+    # transfer ("MOX", "AMEX PLATINUM"). Loaded into account_alias.
+    aliases: list[str] = Field(default_factory=list)
     opened_on: date | None = None
     closed_on: date | None = None
     notes: str | None = None
 
     @model_validator(mode="after")
-    def _default_currencies(self) -> "Account":
+    def _default_currencies(self) -> Account:
         ccys = [c.upper() for c in self.settlement_currencies]
         primary = self.primary_currency.upper()
         if primary not in ccys:
@@ -167,6 +169,16 @@ class Account(BaseModel):
         object.__setattr__(self, "settlement_currencies", ccys)
         object.__setattr__(self, "primary_currency", primary)
         return self
+
+
+class Party(BaseModel):
+    """A person or identity money moves as — self, a friend, a merchant label."""
+
+    id: str
+    display_name: str
+    kind: Literal["self", "person", "merchant", "institution"]
+    aliases: list[str] = Field(default_factory=list)
+    notes: str | None = None
 
 
 class Card(BaseModel):
@@ -207,7 +219,7 @@ class RawRecord(BaseModel):
     row_sha256: str = ""
 
     @model_validator(mode="after")
-    def _hash(self) -> "RawRecord":
+    def _hash(self) -> RawRecord:
         if not self.row_sha256:
             blob = repr(sorted(self.payload.items())).encode()
             object.__setattr__(self, "row_sha256", hashlib.sha256(blob).hexdigest())
@@ -252,7 +264,7 @@ class ParsedTxn(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _check_currency_consistency(self) -> "ParsedTxn":
+    def _check_currency_consistency(self) -> ParsedTxn:
         if self.native is not None and self.native.currency == self.booked.currency:
             # Same currency both sides — native is redundant noise.
             object.__setattr__(self, "native", None)
@@ -284,6 +296,13 @@ def normalize_description(raw: str) -> str:
     s = _NOISE.sub(" ", s)
     s = re.sub(r"[^A-Z0-9 &./-]", " ", s)
     return _SPACE.sub(" ", s).strip()
+
+
+def normalize_alias(raw: str) -> str:
+    """Collapse a name/alias for matching against description/counterparty text."""
+    s = raw.upper()
+    s = re.sub(r"[^A-Z0-9]", "", s)
+    return s
 
 
 class Txn(BaseModel):
@@ -328,7 +347,7 @@ class Txn(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @model_validator(mode="after")
-    def _derive(self) -> "Txn":
+    def _derive(self) -> Txn:
         if not self.description_norm:
             self.description_norm = normalize_description(self.description_raw)
         if not self.dedup_key:

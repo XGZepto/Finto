@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 # pdfminer logs a warning per malformed font descriptor. Statement PDFs are full

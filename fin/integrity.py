@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Iterable
 
 from .models import Money
 
@@ -33,13 +32,18 @@ def record_balance(conn, *, account_id: str, as_of, balance: Money,
     )
 
 
-def check_account(conn, account_id: str) -> list[dict]:
+def check_account(conn, account_id: str, *, record: bool = True) -> list[dict]:
     """Verify transactions reproduce the balance delta between assertions.
 
     Walks consecutive balance assertions and, for each interval, compares the
     bank's balance movement against the sum of transactions we hold. Any
     non-zero discrepancy means a dropped row, a duplicate we wrongly kept, or a
     sign error — all of which are invisible without this check.
+
+    `record` writes the outcome to the audit trail. Callers that are only
+    answering a question pass False: the check is pure arithmetic over data
+    already stored, so running it on a page load should not append a row, nor
+    take a write lock that a concurrent reader then deadlocks against.
     """
     name_row = conn.execute("SELECT display_name FROM account WHERE id=?",
                             (account_id,)).fetchone()
@@ -67,13 +71,14 @@ def check_account(conn, account_id: str) -> list[dict]:
         actual = row["total"]
         discrepancy = actual - expected
         status = "ok" if discrepancy == 0 else "discrepancy"
-        conn.execute(
-            "INSERT INTO reconciliation_check (id, account_id, period_start, "
-            "period_end, expected_delta, actual_delta, discrepancy, currency, "
-            "status, checked_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (str(uuid.uuid4()), account_id, prev["as_of_date"], curr["as_of_date"],
-             expected, actual, discrepancy, curr["currency"], status,
-             datetime.now().isoformat()))
+        if record:
+            conn.execute(
+                "INSERT INTO reconciliation_check (id, account_id, period_start, "
+                "period_end, expected_delta, actual_delta, discrepancy, currency, "
+                "status, checked_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()), account_id, prev["as_of_date"], curr["as_of_date"],
+                 expected, actual, discrepancy, curr["currency"], status,
+                 datetime.now().isoformat()))
         # Minor units, same as everywhere else. The period is also given as two
         # dates so a client can deep-link straight to the rows in question —
         # after "is anything missing?" the next question is always "which row?".
@@ -90,14 +95,15 @@ def check_account(conn, account_id: str) -> list[dict]:
             "currency": ccy,
             "status": status,
         })
-    conn.commit()
+    if record:
+        conn.commit()
     return out
 
 
-def check_all(conn) -> list[dict]:
+def check_all(conn, *, record: bool = True) -> list[dict]:
     out = []
     for r in conn.execute("SELECT DISTINCT account_id FROM balance_assertion"):
-        out.extend(check_account(conn, r["account_id"]))
+        out.extend(check_account(conn, r["account_id"], record=record))
     return out
 
 

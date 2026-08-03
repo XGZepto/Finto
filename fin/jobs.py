@@ -17,9 +17,10 @@ import queue
 import threading
 import traceback
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass

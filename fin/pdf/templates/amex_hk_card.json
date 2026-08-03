@@ -2,7 +2,7 @@
   "template_id": "amex_hk_card",
   "institution_id": "amex_hk",
   "label": "American Express Hong Kong card statement",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "match_all": [
     "American Express",
     "STATEMENT PERIOD",
@@ -24,7 +24,7 @@
     {
       "name": "card",
       "start": "",
-      "end": "AMEX ACCESS IT SUMMARY|Membership Rewards|Important Information",
+      "end": "^New Amex Access It Transactions|AMEX ACCESS IT SUMMARY|Membership Rewards|Important Information",
       "currency": "HKD",
       "account_hint": "AMEX HK card",
       "columns": {
@@ -63,9 +63,41 @@
           "kind": "closing",
           "scope": "document",
           "min_tokens": 4,
-          "token_index": 3,
+          "token_index": -2,
           "negate": true
         }
+      ],
+      "stop_at": [
+        "^New Amex Access It Transactions",
+        "AMEX ACCESS IT SUMMARY",
+        "Membership\\s+Rewards"
+      ]
+    },
+    {
+      "name": "card",
+      "start": "^Total of New Amex Access It Transactions",
+      "end": "AMEX ACCESS IT SUMMARY|Membership Rewards|Important Information",
+      "currency": "HKD",
+      "account_hint": "AMEX HK card",
+      "columns": {
+        "mode": "fractions",
+        "fractions": [
+          ["date", 0.0, 0.726],
+          ["amount", 0.726, 1.0]
+        ]
+      },
+      "amount": {
+        "mode": "cr_marker",
+        "column": "amount",
+        "invert": false,
+        "cr_on_following_line": true
+      },
+      "exclude": [
+        "^PAGE \\d+ OF\\d*",
+        "^Total of ",
+        "All-inclusive exchange rate",
+        "^Reference ",
+        "American Express International"
       ],
       "stop_at": [
         "AMEX ACCESS IT SUMMARY",

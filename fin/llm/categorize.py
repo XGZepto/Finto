@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from typing import Iterable, Sequence
+from collections.abc import Sequence
 
 from . import cache
 from .provider import LLMProvider, LLMUnavailable

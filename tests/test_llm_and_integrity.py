@@ -13,12 +13,15 @@ import pytest
 
 from fin import db as dbm
 from fin.integrity import (
-    check_account, find_violations, record_balance, resolve_duplicate_chains,
+    check_account,
+    find_violations,
+    record_balance,
+    resolve_duplicate_chains,
 )
 from fin.llm import cache as llm_cache
 from fin.llm.adjudicate import adjudicate_duplicates
 from fin.llm.categorize import TAXONOMY, apply_to_ledger, categorize_merchants, promote_to_rules
-from fin.llm.provider import EchoProvider, NullProvider, LLMUnavailable, _extract_json
+from fin.llm.provider import EchoProvider, NullProvider, _extract_json
 from fin.models import Account, AccountType, Institution, Money, Txn
 
 

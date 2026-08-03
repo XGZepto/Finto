@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Iterable, Sequence
 
 from .models import (
-    Account, Card, DuplicateCandidate, FxRate, InstallmentCandidate,
-    InstallmentPlan, Institution, Money, RawRecord, StatementFile,
-    TransferCandidate, TransferGroup, Txn,
+    Account,
+    Card,
+    DuplicateCandidate,
+    FxRate,
+    InstallmentCandidate,
+    InstallmentPlan,
+    Institution,
+    Money,
+    RawRecord,
+    StatementFile,
+    TransferCandidate,
+    TransferGroup,
+    Txn,
 )
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
@@ -31,6 +41,11 @@ def connect(db_path: str | Path, *,
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    # Without this, a connection that finds the database locked gives up at once
+    # rather than waiting, so an ordinary read fails whenever a write happens to
+    # be in flight. WAL lets readers and a writer coexist, but the brief
+    # exclusive moment at commit still has to be waited out.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -122,7 +137,13 @@ def _rebuild_table(conn: sqlite3.Connection, table: str, schema_text: str) -> No
 
 
 def migrate(conn: sqlite3.Connection) -> list[str]:
-    """Bring an existing database up to the current schema. Idempotent."""
+    """Bring an existing database up to the current schema. Idempotent.
+
+    The migration model is inspection-driven: we look at what actually exists
+    in the live schema, apply anything missing, and record the current version.
+    A database created at any point in the project's history converges on the
+    current shape without a fragile per-version upgrade script.
+    """
     schema_text = SCHEMA_PATH.read_text()
     applied: list[str] = []
 
@@ -132,6 +153,21 @@ def migrate(conn: sqlite3.Connection) -> list[str]:
             conn.execute(ddl)
             applied.append(f"{table}.{column}")
     conn.commit()
+
+    # Tables introduced after the project's first databases were created.
+    # CREATE TABLE IF NOT EXISTS is insufficient on its own because an old
+    # database might have a table with the right name but an out-of-date CHECK
+    # constraint; the constraint check below handles those.
+    for table in ("party", "party_alias", "account_alias",
+                  "investment_snapshot", "investment_subaccount_balance",
+                  "investment_holding"):
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+            (table,)).fetchone()
+        if row is None:
+            conn.executescript(schema_text)
+            applied.append(f"{table} (created)")
+            break
 
     for table, token in _REQUIRED_CONSTRAINTS:
         row = conn.execute(
@@ -146,7 +182,7 @@ def migrate(conn: sqlite3.Connection) -> list[str]:
     return applied
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def init_db(conn: sqlite3.Connection) -> list[str]:
@@ -198,6 +234,97 @@ def upsert_account(conn, a: Account) -> None:
         "VALUES (?,?,?)",
         [(a.id, c, int(c == a.primary_currency)) for c in a.settlement_currencies],
     )
+    from .models import normalize_alias
+    conn.execute("DELETE FROM account_alias WHERE account_id=?", (a.id,))
+    aliases = list(dict.fromkeys(
+        normalize_alias(x) for x in ([a.display_name] + list(a.aliases)) if x
+    ))
+    conn.executemany(
+        "INSERT OR IGNORE INTO account_alias (account_id, alias) VALUES (?,?)",
+        [(a.id, al) for al in aliases if al],
+    )
+
+
+def upsert_party(conn, p) -> None:
+    from .models import normalize_alias
+    conn.execute(
+        "INSERT INTO party (id, display_name, kind, notes) VALUES (?,?,?,?) "
+        "ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name, "
+        "kind=excluded.kind, notes=excluded.notes",
+        (p.id, p.display_name, p.kind, p.notes),
+    )
+    conn.execute("DELETE FROM party_alias WHERE party_id=?", (p.id,))
+    aliases = list(dict.fromkeys(
+        normalize_alias(x) for x in ([p.display_name] + list(p.aliases)) if x
+    ))
+    conn.executemany(
+        "INSERT OR IGNORE INTO party_alias (party_id, alias) VALUES (?,?)",
+        [(p.id, al) for al in aliases if al],
+    )
+
+
+def load_accounts(conn) -> dict[str, Account]:
+    ccys: dict[str, list[str]] = {}
+    for r in conn.execute(
+            "SELECT account_id, currency FROM account_currency "
+            "ORDER BY is_primary DESC, currency"):
+        ccys.setdefault(r["account_id"], []).append(r["currency"])
+    aliases: dict[str, list[str]] = {}
+    try:
+        for r in conn.execute("SELECT account_id, alias FROM account_alias"):
+            aliases.setdefault(r["account_id"], []).append(r["alias"])
+    except sqlite3.OperationalError:
+        pass
+    out = {}
+    for r in conn.execute("SELECT * FROM account"):
+        out[r["id"]] = Account(
+            id=r["id"], institution_id=r["institution_id"],
+            display_name=r["display_name"], account_type=r["account_type"],
+            primary_currency=r["primary_currency"],
+            settlement_currencies=ccys.get(r["id"], []),
+            balance_group=r["balance_group"],
+            masked_number=r["masked_number"], is_own_account=bool(r["is_own_account"]),
+            aliases=aliases.get(r["id"], []),
+            notes=r["notes"],
+        )
+    return out
+
+
+def load_self_aliases(conn) -> set[str]:
+    """Normalised names that mean 'me' — used by the transfer matcher."""
+    try:
+        rows = conn.execute(
+            "SELECT a.alias FROM party_alias a "
+            "JOIN party p ON p.id = a.party_id WHERE p.kind='self'"
+        )
+        return {r["alias"] for r in rows}
+    except sqlite3.OperationalError:
+        return set()
+
+
+def load_person_aliases(conn) -> dict[str, str]:
+    """alias -> party_id for P2P counterparties (not netted as self-transfers)."""
+    try:
+        return {
+            r["alias"]: r["party_id"]
+            for r in conn.execute(
+                "SELECT a.alias, a.party_id FROM party_alias a "
+                "JOIN party p ON p.id = a.party_id WHERE p.kind='person'"
+            )
+        }
+    except sqlite3.OperationalError:
+        return {}
+
+
+def load_account_alias_index(conn) -> dict[str, str]:
+    """alias -> account_id for destination hints in transfer descriptions."""
+    try:
+        return {
+            r["alias"]: r["account_id"]
+            for r in conn.execute("SELECT alias, account_id FROM account_alias")
+        }
+    except sqlite3.OperationalError:
+        return {}
 
 
 def upsert_card(conn, c: Card) -> None:
@@ -213,26 +340,6 @@ def upsert_card(conn, c: Card) -> None:
          int(c.is_supplementary), _iso(c.issued_on), _iso(c.closed_on),
          c.replaces_card_id),
     )
-
-
-def load_accounts(conn) -> dict[str, Account]:
-    ccys: dict[str, list[str]] = {}
-    for r in conn.execute(
-            "SELECT account_id, currency FROM account_currency "
-            "ORDER BY is_primary DESC, currency"):
-        ccys.setdefault(r["account_id"], []).append(r["currency"])
-    out = {}
-    for r in conn.execute("SELECT * FROM account"):
-        out[r["id"]] = Account(
-            id=r["id"], institution_id=r["institution_id"],
-            display_name=r["display_name"], account_type=r["account_type"],
-            primary_currency=r["primary_currency"],
-            settlement_currencies=ccys.get(r["id"], []),
-            balance_group=r["balance_group"],
-            masked_number=r["masked_number"], is_own_account=bool(r["is_own_account"]),
-            notes=r["notes"],
-        )
-    return out
 
 
 def load_cards(conn) -> list[Card]:
@@ -439,7 +546,7 @@ def insert_transfer_groups(conn, groups: Sequence[TransferGroup]) -> None:
         conn.executemany(
             "INSERT OR REPLACE INTO transfer_leg (transfer_group_id, txn_id, role) "
             "VALUES (?,?,?)",
-            [(g.id, l.txn_id, l.role) for l in g.legs],
+            [(g.id, leg.txn_id, leg.role) for leg in g.legs],
         )
 
 

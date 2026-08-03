@@ -16,8 +16,8 @@ import pytest
 from fin import db as dbm
 from fin.ingest import ingest_file, reconcile, resolve_card, unattributed_card_warnings
 from fin.models import Account, Card, Institution, Money, ParsedTxn, Txn
-from fin.parsers.base import ParseContext, parse_amount, select_parser
 from fin.parsers import institutions as _reg  # noqa: F401  (registers parsers)
+from fin.parsers.base import ParseContext, parse_amount, select_parser
 from fin.transfers import transfer_group_id
 
 FIXTURES = Path(__file__).parent / "fixtures"

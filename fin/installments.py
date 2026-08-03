@@ -26,12 +26,16 @@ from __future__ import annotations
 import hashlib
 import re
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Iterable, Sequence
 
 from .models import (
-    InstallmentCandidate, InstallmentPlan, Money, PlanStatus, Txn, TxnKind,
+    InstallmentCandidate,
+    InstallmentPlan,
+    Money,
+    PlanStatus,
+    Txn,
 )
 
 # Monthly charges land roughly a month apart; issuers vary by a few days and
@@ -50,8 +54,12 @@ REVIEW_THRESHOLD = 0.55
 # does not eat ordinary embedded dates.
 
 _PATTERNS = (
-    re.compile(r"\b(?:INSTAL?LMENT|INSTAL|INST)\b\D{0,12}?(\d{1,2})\s*(?:/|OF|-)\s*(\d{1,2})\b", re.I),
-    re.compile(r"\b(\d{1,2})\s*(?:/|OF|-)\s*(\d{1,2})\b\D{0,12}?\b(?:INSTAL?LMENT|INSTAL|INST)\b", re.I),
+    re.compile(
+        r"\b(?:INSTAL?LMENT|INSTAL|INST)\b\D{0,12}?(\d{1,2})\s*(?:/|OF|-)\s*(\d{1,2})\b",
+        re.I),
+    re.compile(
+        r"\b(\d{1,2})\s*(?:/|OF|-)\s*(\d{1,2})\b\D{0,12}?\b(?:INSTAL?LMENT|INSTAL|INST)\b",
+        re.I),
     re.compile(r"分期\D{0,6}?(\d{1,2})\s*/\s*(\d{1,2})"),
     re.compile(r"\b(?:INSTAL?LMENT|INSTAL)\b\D{0,8}?(\d{1,2})\s*期\D{0,4}?共?\s*(\d{1,2})", re.I),
 )

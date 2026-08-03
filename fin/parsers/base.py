@@ -10,11 +10,11 @@ import csv
 import io
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Iterable, Iterator, Sequence
 
 from ..models import FileFormat, Money, ParsedTxn
 

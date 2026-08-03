@@ -26,7 +26,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import (
-    accounts, imports, installments, integrity, jobs, query, review, summary,
+    accounts,
+    imports,
+    installments,
+    integrity,
+    jobs,
+    query,
+    review,
+    summary,
     transactions,
 )
 

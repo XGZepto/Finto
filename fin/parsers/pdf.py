@@ -1,71 +1,222 @@
-"""PDF statement extraction.
+"""PDF statement extraction via the layout-template engine.
 
-Several issuers — Mox in particular — give you a PDF and nothing else. A PDF has
-no columns, only text positioned on a page, so extraction is line-oriented: pull
-the text layer, find the lines that look like transactions, and read date /
-description / amount out of each.
+The old line-oriented path flattened tables into reading order and destroyed
+exactly the information that gives a number its meaning — an amount under
+Withdrawal and the same amount under Deposit arrived identical. That is why it
+extracted nothing from most of the real corpus.
 
-This is inherently less certain than CSV, and the design reflects that:
+The path now is:
 
-* **Only the text layer is read.** A scanned statement has no text layer and is
-  rejected outright rather than silently importing nothing. OCR is a different
-  problem with different failure modes.
-* **Every line that looks like a transaction but doesn't parse becomes a
-  warning**, never a silent skip. On a PDF, a dropped row is exactly the error
-  the balance-assertion check exists to catch — but only if you notice.
-* **The closing balance is captured when present**, so `check` can verify the
-  extraction against the issuer's own figure. For PDFs this matters more than
-  anywhere else.
+    extract  -> words with coordinates (lossless, stored as raw_record)
+    template -> declarative per-issuer column layout
+    verify   -> reconcile against the statement's own printed balances
+    llm      -> optional fallback when no template matches or verify fails
 
-`pypdf` is an optional dependency: `pip install finto[pdf]`.
+A failed verification is a hard warning, never a silent import of wrong money.
 """
 
 from __future__ import annotations
 
 import re
 from datetime import date
-from decimal import Decimal
 
 from ..enrich import extract_details
 from ..installments import parse_installment_marker
-from ..models import FileFormat, Money, ParsedTxn
+from ..models import FileFormat, ParsedTxn
+from ..pdf.extract import PdfTextLayerMissing, extract_document
+from ..pdf.registry import select_template
+from ..pdf.template import TemplateResult, apply_template
+from ..pdf.verify import verify_extraction
 from .base import ParseContext, ParseResult, StatementParser, parse_amount, parse_date, register
 
 
-def extract_text(path) -> list[str]:
-    """Return the PDF's text as lines. Empty when there is no text layer."""
+@register
+class PdfStatementParser(StatementParser):
+    """Layout-aware PDF parser driven by declarative issuer templates.
+
+    CONFIDENCE: high when a template matches and verification passes; medium
+    when unverified (no printed balances); refused when verification fails
+    unless the LLM fallback produces a verified extraction.
+    """
+
+    parser_id = "pdf_statement"
+    version = "0.2.0"
+    institution_id = "generic"
+    file_format = FileFormat.PDF
+
+    def sniff(self, ctx: ParseContext, sample: bytes) -> float:
+        if not sample.startswith(b"%PDF"):
+            return 0.0
+        try:
+            doc = extract_document(ctx.path)
+        except PdfTextLayerMissing:
+            return 0.0
+        except Exception:
+            return 0.0
+        if not doc.pages or not doc.text.strip():
+            return 0.0
+        tpl, score = select_template(doc)
+        if tpl is not None:
+            return min(0.55 + 0.4 * score, 0.95)
+        # No template: still a parseable text PDF. The generic line parser may
+        # recover a simple statement; a template beats it whenever one matches.
+        return 0.60
+
+    def parse(self, ctx: ParseContext) -> ParseResult:
+        try:
+            doc = extract_document(ctx.path)
+        except PdfTextLayerMissing:
+            return ParseResult(
+                txns=[], raw_rows=[], account_id=ctx.account_id,
+                warnings=["PDF has no text layer — it is probably a scan. "
+                          "Export a CSV from the issuer, or OCR the file first."])
+        except Exception as e:
+            return ParseResult(
+                txns=[], raw_rows=[], account_id=ctx.account_id,
+                warnings=[f"PDF extraction failed: {e}"])
+
+        tpl, score = select_template(doc)
+
+        if tpl is None:
+            llm = _try_llm_extract(doc, ctx)
+            if llm is not None and llm.txns:
+                return llm
+            legacy = _legacy_line_parse(doc, ctx)
+            if legacy.txns:
+                legacy.warnings.insert(
+                    0,
+                    f"no PDF template matched (best {score:.2f}); "
+                    "used the generic line parser — prefer a template",
+                )
+                return legacy
+            return ParseResult(
+                txns=[], raw_rows=[{"extraction": doc.to_json()}],
+                account_id=ctx.account_id,
+                warnings=[
+                    f"no PDF template matched (best score {score:.2f}). "
+                    "Add a template under fin/pdf/templates/, or enable the LLM "
+                    "fallback (`finto config set llm_enabled 1`)."
+                ])
+
+        result = apply_template(doc, tpl, currency_override=ctx.default_currency)
+        report = verify_extraction(result)
+        warnings = list(result.warnings)
+        warnings.append(
+            f"template={tpl.template_id} match={score:.2f} "
+            f"verify={report.status} ({report.summary()})"
+        )
+
+        if report.status == "failed":
+            llm = _try_llm_extract(doc, ctx, failed=result)
+            if llm is not None and llm.txns:
+                return llm
+            warnings.append(
+                "EXTRACTION CONTRADICTS THE STATEMENT — rows were probably "
+                "missed or double-counted. Importing anyway would corrupt the "
+                "ledger; refusing. Fix the template or enable LLM fallback."
+            )
+            return ParseResult(
+                txns=[],
+                raw_rows=[{
+                    "extraction": doc.to_json(),
+                    "template_id": tpl.template_id,
+                    "verify": report.status,
+                    "problems": report.problems,
+                }],
+                account_id=ctx.account_id,
+                warnings=warnings,
+                period_start=result.period_start,
+                period_end=result.period_end,
+                statement_date=result.statement_date,
+            )
+
+        return _to_parse_result(doc, tpl.template_id, result, warnings)
+
+
+def _to_parse_result(
+    doc, template_id: str, result: TemplateResult, warnings: list[str]
+) -> ParseResult:
+    txns: list[ParsedTxn] = []
+    raw_rows: list[dict] = [
+        {"extraction": doc.to_json(), "template_id": template_id},
+    ]
+    for i, row in enumerate(result.rows):
+        txns.append(ParsedTxn(
+            txn_date=row.txn_date,
+            posted_date=row.settlement_date,
+            booked=row.amount,
+            description_raw=row.description,
+            installment_hint=parse_installment_marker(row.description),
+            details=extract_details(description=row.description),
+            line_no=i,
+            extra={
+                "pdf_section": row.section,
+                "pdf_page": row.page_no,
+                "pdf_line": row.raw_text,
+                "account_hint": row.account_hint,
+                "running_balance": (
+                    {"amount": row.running_balance.amount,
+                     "currency": row.running_balance.currency}
+                    if row.running_balance else None
+                ),
+            },
+        ))
+        raw_rows.append({
+            "line_no": i,
+            "section": row.section,
+            "text": row.raw_text,
+            "amount": row.amount.amount,
+            "currency": row.amount.currency,
+        })
+
+    balances: list[tuple] = []
+    for when, money, kind, _section in result.balances:
+        as_of = when
+        if as_of is None:
+            as_of = (result.period_end if kind == "closing"
+                     else result.period_start or result.statement_date)
+        if as_of is not None:
+            balances.append((as_of, money))
+
+    return ParseResult(
+        txns=txns,
+        raw_rows=raw_rows,
+        warnings=warnings,
+        balances=balances,
+        period_start=result.period_start,
+        period_end=result.period_end,
+        statement_date=result.statement_date,
+    )
+
+
+def _try_llm_extract(doc, ctx: ParseContext, failed: TemplateResult | None = None):
+    """Optional LLM pass. Returns None when the layer is off or unavailable."""
     try:
-        from pypdf import PdfReader
-    except ImportError as e:  # pragma: no cover - depends on optional extra
-        raise RuntimeError(
-            "PDF support needs pypdf — install with: pip install 'finto[pdf]'") from e
-
-    reader = PdfReader(str(path))
-    lines: list[str] = []
-    for page in reader.pages:
-        text = page.extract_text() or ""
-        lines.extend(ln.rstrip() for ln in text.splitlines())
-    return [ln for ln in lines if ln.strip()]
+        from ..pdf.llm_extract import extract_with_llm
+    except ImportError:
+        return None
+    try:
+        return extract_with_llm(doc, ctx, prior=failed)
+    except Exception as e:
+        return ParseResult(
+            txns=[], raw_rows=[], account_id=ctx.account_id,
+            warnings=[f"LLM PDF fallback unavailable: {e}"])
 
 
-# A money token: 1,234.56 / (1,234.56) / 1,234.56CR / -1,234.56
+# ---------------------------------------------------------------------------
+# Legacy line parser — only for unmatched simple statements / fixtures
+# ---------------------------------------------------------------------------
+
 _MONEY = r"\(?-?(?:\d{1,3}(?:,\d{3})*|\d+)\.\d{2}\)?(?:\s?(?:CR|DR))?"
 _MONEY_RE = re.compile(_MONEY, re.I)
-
-# Dates as statements write them, anchored at the start of a transaction line.
 _DATE_PATTERNS = (
     r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}",
     r"\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4}",
-    r"\d{1,2}\s?[A-Za-z]{3}",              # "05 Jan" — year comes from context
+    r"\d{1,2}\s?[A-Za-z]{3}",
     r"\d{4}-\d{2}-\d{2}",
 )
 _LINE_RE = re.compile(
     r"^\s*(?P<date>" + "|".join(_DATE_PATTERNS) + r")\s+(?P<rest>.+)$")
-
-# Note the character classes exclude newlines throughout: a label and its value
-# are always on one line, and `\D` would happily match across a line break and
-# pair a label with a number from somewhere else entirely. The generous upper
-# bounds are because PDFs pad columns with wide runs of spaces.
 _GAP = r"[^\d\r\n]{0,80}"
 _STATEMENT_PERIOD = re.compile(
     r"(?:statement period|period|from)[^\d\r\n]{0,12}"
@@ -75,96 +226,55 @@ _CLOSING_BALANCE = re.compile(
     r"(?:closing|ending|statement|new)\s+balance" + _GAP + r"(" + _MONEY + r")", re.I)
 _OPENING_BALANCE = re.compile(
     r"(?:opening|previous|beginning|prior)\s+balance" + _GAP + r"(" + _MONEY + r")", re.I)
-
-# Lines that carry money but are not transactions.
 _NOISE_LINE = re.compile(
     r"\b(total|subtotal|balance|minimum payment|credit limit|available|"
     r"interest rate|apr|page \d|statement date|due date|payment due)\b", re.I)
 
 
-@register
-class PdfStatementParser(StatementParser):
-    """Generic line-oriented PDF statement parser.
+def _legacy_line_parse(doc, ctx: ParseContext) -> ParseResult:
+    lines = [ln.text for ln in doc.all_lines()]
+    if not lines:
+        return ParseResult(txns=[], raw_rows=[], account_id=ctx.account_id,
+                           warnings=["PDF has no text layer — it is probably a scan."])
 
-    CONFIDENCE: medium. Layout varies by issuer far more than CSV does. Always
-    run `sniff` on a new PDF before importing, and check the resulting balance
-    reconciliation — for PDFs that check is the difference between a trustworthy
-    import and a plausible-looking one.
-    """
+    ccy = ctx.default_currency or _guess_currency(lines) or "HKD"
+    year = _guess_year(lines)
+    txns: list[ParsedTxn] = []
+    raw_rows: list[dict] = []
+    warnings: list[str] = []
+    balances: list[tuple] = []
 
-    parser_id = "pdf_statement"
-    version = "0.1.0"
-    institution_id = "generic"
-    file_format = FileFormat.PDF
+    for i, line in enumerate(lines):
+        if not _looks_like_txn(line):
+            continue
+        parsed = _parse_line(line, ccy, year, i)
+        if parsed is None:
+            warnings.append(f"line {i}: could not parse {line[:70]!r}")
+            continue
+        txns.append(parsed)
+        raw_rows.append({"line_no": i, "text": line})
 
-    def sniff(self, ctx: ParseContext, sample: bytes) -> float:
-        if not sample.startswith(b"%PDF"):
-            return 0.0
+    period_start, period_end = _period(lines)
+    closing = _CLOSING_BALANCE.search("\n".join(lines))
+    if closing and period_end:
         try:
-            lines = extract_text(ctx.path)
-        except Exception:
-            return 0.0
-        if not lines:
-            return 0.0
-        # Confidence tracks how much of the document parses as transactions.
-        hits = sum(1 for ln in lines if _looks_like_txn(ln))
-        if hits >= 3:
-            return min(0.55 + 0.05 * hits, 0.9)
-        return 0.0
-
-    def parse(self, ctx: ParseContext) -> ParseResult:
-        lines = extract_text(ctx.path)
-        if not lines:
-            return ParseResult(
-                txns=[], raw_rows=[], account_id=ctx.account_id,
-                warnings=["PDF has no text layer — it is probably a scan. "
-                          "Export a CSV from the issuer, or OCR the file first."])
-
-        ccy = ctx.default_currency or _guess_currency(lines) or "HKD"
-        year = _guess_year(lines)
-
-        txns: list[ParsedTxn] = []
-        raw_rows: list[dict] = []
-        warnings: list[str] = []
-        balances: list[tuple] = []
-
-        for i, line in enumerate(lines):
-            if not _looks_like_txn(line):
-                continue
-            parsed = _parse_line(line, ccy, year, i)
-            if parsed is None:
-                # Looked like a transaction but didn't parse. On a PDF this is
-                # exactly how rows go missing, so it must be visible.
-                warnings.append(f"line {i}: could not parse {line[:70]!r}")
-                continue
-            txns.append(parsed)
-            raw_rows.append({"line_no": i, "text": line})
-
-        period_start, period_end = _period(lines)
-
-        # The issuer's own closing balance is the check on this extraction.
-        closing = _CLOSING_BALANCE.search("\n".join(lines))
-        if closing and period_end:
-            try:
-                balances.append((period_end, parse_amount(closing.group(1), ccy)))
-            except ValueError:
-                pass
-        opening = _OPENING_BALANCE.search("\n".join(lines))
-        if opening and period_start:
-            try:
-                balances.append((period_start, parse_amount(opening.group(1), ccy)))
-            except ValueError:
-                pass
-
-        if txns and not balances:
-            warnings.append(
-                "no opening/closing balance found — `check` cannot verify that "
-                "every transaction was extracted from this PDF")
-
-        return ParseResult(
-            txns=txns, raw_rows=raw_rows, warnings=warnings,
-            account_id=ctx.account_id, balances=balances,
-            period_start=period_start, period_end=period_end)
+            balances.append((period_end, parse_amount(closing.group(1), ccy)))
+        except ValueError:
+            pass
+    opening = _OPENING_BALANCE.search("\n".join(lines))
+    if opening and period_start:
+        try:
+            balances.append((period_start, parse_amount(opening.group(1), ccy)))
+        except ValueError:
+            pass
+    if txns and not balances:
+        warnings.append(
+            "no opening/closing balance found — `check` cannot verify that "
+            "every transaction was extracted from this PDF")
+    return ParseResult(
+        txns=txns, raw_rows=raw_rows, warnings=warnings,
+        account_id=ctx.account_id, balances=balances,
+        period_start=period_start, period_end=period_end)
 
 
 def _looks_like_txn(line: str) -> bool:
@@ -179,39 +289,26 @@ def _parse_line(line: str, ccy: str, year: int | None, line_no: int) -> ParsedTx
     m = _LINE_RE.match(line)
     if not m:
         return None
-
     try:
         when = _parse_date_token(m.group("date"), year)
     except ValueError:
         return None
-
     rest = m.group("rest")
     amounts = _MONEY_RE.findall(rest)
     if not amounts:
         return None
-
-    # The last money token on the line is usually the running balance, and the
-    # one before it the transaction amount. With a single token, that token is
-    # the amount.
     if len(amounts) >= 2:
         amount_token, balance_token = amounts[-2], amounts[-1]
     else:
         amount_token, balance_token = amounts[-1], None
-
     try:
         booked = parse_amount(amount_token, ccy)
     except ValueError:
         return None
-
     description = _MONEY_RE.sub(" ", rest).strip(" .-")
-    description = re.sub(r"\s{2,}", " ", description)
-    if not description:
-        description = "(no description)"
-
+    description = re.sub(r"\s{2,}", " ", description) or "(no description)"
     return ParsedTxn(
-        txn_date=when,
-        booked=booked,
-        description_raw=description,
+        txn_date=when, booked=booked, description_raw=description,
         installment_hint=parse_installment_marker(description),
         details=extract_details(description=description),
         line_no=line_no,
@@ -221,7 +318,6 @@ def _parse_line(line: str, ccy: str, year: int | None, line_no: int) -> ParsedTx
 
 def _parse_date_token(token: str, year: int | None) -> date:
     token = token.strip()
-    # "05 Jan" with no year — take it from the statement period.
     if re.fullmatch(r"\d{1,2}\s?[A-Za-z]{3}", token):
         if year is None:
             raise ValueError("no year context")
@@ -241,7 +337,7 @@ def _period(lines: list[str]) -> tuple[date | None, date | None]:
 
 
 def _guess_year(lines: list[str]) -> int | None:
-    start, end = _period(lines)
+    start, _end = _period(lines)
     if start:
         return start.year
     m = re.search(r"\b(20\d{2})\b", "\n".join(lines[:40]))

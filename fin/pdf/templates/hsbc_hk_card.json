@@ -1,0 +1,167 @@
+{
+  "template_id": "hsbc_hk_card",
+  "institution_id": "hsbc_hk",
+  "label": "HSBC HK credit card statement (Pulse dual currency, EveryMile)",
+  "version": "1.0.0",
+  "match_all": [
+    "Post\\s+date\\s+Trans\\s+date",
+    "Description\\s+of\\s+transaction",
+    "PREVIOUS\\s+BALANCE",
+    "\"CR\"\\s+means\\s+Credit",
+    "TRANSACTION\\s+SUMMARY"
+  ],
+  "match_none": [
+    "Account\\s+Transaction\\s+History",
+    "Portfolio\\s+Summary",
+    "American\\s+Express"
+  ],
+  "default_currency": "HKD",
+  "date": {
+    "format": "auto",
+    "dayfirst": true,
+    "year_from_statement": true
+  },
+  "statement_date": "Statement\\s+date\\s+Statement\\s+balance[^\\n]*\\n\\s*(\\d{1,2}\\s+[A-Za-z]{3}\\s+\\d{4})",
+  "body_start": "Post\\s+date\\s+Trans\\s+date",
+  "sections": [
+    {
+      "name": "hkd",
+      "start": "Post\\s+date\\s+Trans\\s+date",
+      "end": "\\*{3,}\\s*TRANSACTION\\s+SUMMARY|\\*{3,}\\s*FEES\\s+AND\\s+CHARGES\\s+SUMMARY|(?-i:RMB\\s+Sub-account\\s+Statement\\s+balance)",
+      "currency": "HKD",
+      "account_hint": "HSBC HK card",
+      "columns": {
+        "mode": "fractions",
+        "header": "(?-i:Post\\s+date\\s+Trans\\s+date)",
+        "fractions": [
+          ["settlement", 0.0, 0.163],
+          ["date", 0.163, 0.22],
+          ["description", 0.22, 0.65],
+          ["fx", 0.65, 0.8],
+          ["amount", 0.8, 1.0]
+        ]
+      },
+      "amount": {
+        "mode": "cr_marker",
+        "column": "amount",
+        "invert": false
+      },
+      "description_column": "description",
+      "settlement_column": "settlement",
+      "exclude": [
+        "^[\\d,]+\\.\\d{2}(?:CR)?$",
+        "^\\d{4}\\s+\\d{4}\\s+\\d{4}\\s+\\d{4}\\b",
+        "^Account\\s+number\\b",
+        "^Cardholder's\\s+name\\b",
+        "^Statement\\s+of\\s+HSBC\\b",
+        "^Page\\s+\\d+\\s*/\\s*\\d+$",
+        "^Note:\\s*\"CR\"\\s+means",
+        "^REWARDCASH\\b",
+        "REWARDCASH\\s+(?:SUMMARY|EARNINGS)\\s+FOR",
+        "^REGISTRATION/RENEWAL\\b",
+        "^\\*EXCHANGE\\s+RATE",
+        "^For\\s+important\\s+information\\s+such\\s+as\\s+payment",
+        "^lost\\s+card\\s+reporting",
+        "^card\\s+reporting,\\s+and\\s+change",
+        "^Minimum\\s+payment\\s+summary$",
+        "^Current\\s+minimum\\s+payment\\s+due",
+        "^Total\\s+minimum\\s+payment\\s+due",
+        "^Overdue\\s*/\\s*overlimit\\s+due\\s+now",
+        "^Please\\s+pay\\s+by",
+        "^number,\\s+please\\s+visit",
+        "^please\\s+visit\\s+www\\.hsbc\\.com\\.hk",
+        "^Service\\s+Hotline\\s+on",
+        "^www\\.hsbc\\.com\\.hk",
+        "^\\(852\\)",
+        "^Statement\\s+date\\s+Statement\\s+balance",
+        "^\\d{1,2}\\s+[A-Za-z]{3}\\s+\\d{4}\\s+(?:HKD|CNY)",
+        "^If\\s+you\\s+are\\s+paying\\s+by\\s+mail",
+        "^Thank\\s+you\\s+for\\s+choosing\\s+HSBC"
+      ],
+      "balances": [
+        {
+          "pattern": "^PREVIOUS\\s+BALANCE\\b",
+          "kind": "opening",
+          "column": "amount",
+          "negate": true
+        },
+        {
+          "pattern": "^STATEMENT\\s+BALANCE\\b",
+          "kind": "closing",
+          "column": "amount",
+          "negate": true
+        }
+      ]
+    },
+    {
+      "name": "cny",
+      "start": "(?-i:RMB\\s+Sub-account\\s+Statement\\s+balance)",
+      "end": "\\*{3,}\\s*TRANSACTION\\s+SUMMARY|\\*{3,}\\s*FEES\\s+AND\\s+CHARGES\\s+SUMMARY",
+      "currency": "CNY",
+      "account_hint": "HSBC HK card RMB sub-account",
+      "columns": {
+        "mode": "fractions",
+        "header": "(?-i:Post\\s+date\\s+Trans\\s+date)",
+        "fractions": [
+          ["settlement", 0.0, 0.163],
+          ["date", 0.163, 0.22],
+          ["description", 0.22, 0.65],
+          ["fx", 0.65, 0.8],
+          ["amount", 0.8, 1.0]
+        ]
+      },
+      "amount": {
+        "mode": "cr_marker",
+        "column": "amount",
+        "invert": false
+      },
+      "description_column": "description",
+      "settlement_column": "settlement",
+      "exclude": [
+        "^[\\d,]+\\.\\d{2}(?:CR)?$",
+        "^\\d{4}\\s+\\d{4}\\s+\\d{4}\\s+\\d{4}\\b",
+        "^Account\\s+number\\b",
+        "^Cardholder's\\s+name\\b",
+        "^Statement\\s+of\\s+HSBC\\b",
+        "^Page\\s+\\d+\\s*/\\s*\\d+$",
+        "^Note:\\s*\"CR\"\\s+means",
+        "^REWARDCASH\\b",
+        "REWARDCASH\\s+(?:SUMMARY|EARNINGS)\\s+FOR",
+        "^REGISTRATION/RENEWAL\\b",
+        "^\\*EXCHANGE\\s+RATE",
+        "^For\\s+important\\s+information\\s+such\\s+as\\s+payment",
+        "^lost\\s+card\\s+reporting",
+        "^card\\s+reporting,\\s+and\\s+change",
+        "^Minimum\\s+payment\\s+summary$",
+        "^Current\\s+minimum\\s+payment\\s+due",
+        "^Total\\s+minimum\\s+payment\\s+due",
+        "^Overdue\\s*/\\s*overlimit\\s+due\\s+now",
+        "^Please\\s+pay\\s+by",
+        "^number,\\s+please\\s+visit",
+        "^please\\s+visit\\s+www\\.hsbc\\.com\\.hk",
+        "^Service\\s+Hotline\\s+on",
+        "^www\\.hsbc\\.com\\.hk",
+        "^\\(852\\)",
+        "^Statement\\s+date\\s+Statement\\s+balance",
+        "^\\d{1,2}\\s+[A-Za-z]{3}\\s+\\d{4}\\s+(?:HKD|CNY)",
+        "^If\\s+you\\s+are\\s+paying\\s+by\\s+mail",
+        "^Thank\\s+you\\s+for\\s+choosing\\s+HSBC"
+      ],
+      "balances": [
+        {
+          "pattern": "^PREVIOUS\\s+BALANCE\\b",
+          "kind": "opening",
+          "column": "amount",
+          "negate": true
+        },
+        {
+          "pattern": "^STATEMENT\\s+BALANCE\\b",
+          "kind": "closing",
+          "column": "amount",
+          "negate": true
+        }
+      ]
+    }
+  ],
+  "source": "builtin"
+}

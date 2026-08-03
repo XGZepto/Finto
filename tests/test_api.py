@@ -6,13 +6,12 @@ plus a currency code, and nothing ever sums across currencies.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
+from conftest import write_pdf
 from fastapi.testclient import TestClient
 
-from conftest import write_pdf
 from fin import db as dbm
 from fin.ingest import ingest_file, reconcile
 
@@ -362,3 +361,20 @@ def test_concurrent_requests_all_succeed(client):
 
     failed = [(p, r.status_code) for p, r in responses if r.status_code != 200]
     assert not failed, f"concurrent requests failed: {failed}"
+
+
+def test_reading_integrity_does_not_write(client, conn):
+    """Reconciliation is arithmetic over stored data, so a GET must not persist.
+
+    It used to append an audit row per account per request. That grew the table
+    on every page refresh, and — because two readers each tried to upgrade the
+    same deferred transaction to a write — deadlocked outright under load, which
+    SQLite reports immediately rather than waiting out.
+    """
+    def audit_rows() -> int:
+        return conn.execute("SELECT COUNT(*) AS n FROM reconciliation_check").fetchone()["n"]
+
+    before = audit_rows()
+    for _ in range(3):
+        assert client.get("/api/integrity").status_code == 200
+    assert audit_rows() == before

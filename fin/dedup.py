@@ -24,13 +24,11 @@ notice later than a wrongly-kept one.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import timedelta
 from difflib import SequenceMatcher
-from typing import Iterable, Sequence
 
 from .models import DuplicateCandidate, Txn, TxnStatus
-
 
 # Tuning knobs. Deliberately conservative.
 FUZZY_DATE_WINDOW_DAYS = 4

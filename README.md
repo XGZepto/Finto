@@ -218,7 +218,7 @@ would be invisible forever. `check` also runs seven structural invariants
 (orphaned transfer groups, one-legged transfers, duplicate chains, currency
 mismatches) that should always return clean.
 
-See `SCHEMA_REVIEW.md` for the full design review.
+See [`docs/SCHEMA_REVIEW.md`](docs/SCHEMA_REVIEW.md) for the full design review.
 
 ---
 
@@ -265,26 +265,28 @@ different institution.
 ```
 fin/
   models.py               Pydantic DTOs, Money, normalisation, dedup key
-  schema.sql              SQLite DDL
+  schema.sql              SQLite DDL (incl. investment_*, party_*)
   db.py                   Persistence. Thin, explicit, no ORM.
   ingest.py               file -> parser -> Txn -> SQLite, then reconcile
   dedup.py                exact + fuzzy duplicate detection
-  transfers.py            transfer/payment/FX-conversion matching
+  transfers.py            transfer/payment/FX matching (+ aliases)
+  investment.py           MPF / investment position snapshots
   integrity.py            balance reconciliation + structural invariants
+  installments.py         plan detection
+  refunds.py              refund→purchase linking
+  reporting.py            shared query layer for CLI + API
   cli.py                  command line interface
   parsers/
-    base.py               parser contract, registry, amount/date helpers
-    institutions.py       AMEX, HSBC HK, Wise, Mox, generic fallback
-  llm/                    optional, off by default
-    provider.py           Anthropic / Null / Echo(test) providers
-    cache.py              decision cache + audit trail
-    categorize.py         merchant categorisation, closed taxonomy
-    adjudicate.py         ambiguous duplicate/transfer adjudication
+    institutions.py       AMEX, HSBC HK, Wise, Mox, Amex savings CSV
+    pdf.py                layout-template PDF ingest
+  pdf/                    lossless extract + declarative templates + verify
+  llm/                    optional categorise / adjudicate
+  api/                    FastAPI
+web/                      Angular frontend
+docs/                     design reviews, push instructions
+scripts/                  development harnesses (pdf_probe)
 tests/
-  test_pipeline.py            parsing, dedup, transfers
-  test_llm_and_integrity.py   LLM guardrails, balance checks
-  fixtures/                   invented statements — no real data
-accounts.example.yaml     template; copy to accounts.yaml (gitignored)
+accounts.example.yaml     full account map for this ledger; copy to accounts.yaml
 ```
 
 ## Adding an institution
@@ -322,10 +324,29 @@ retroactively attribute transactions already imported under it.
 
 ## Status
 
-Working end to end on synthetic fixtures: 70 tests passing. Parser column
-mappings need one verification pass against real exports — see `sniff` above.
+Working end to end on the real multi-institution corpus (CSV + PDF templates),
+with targeted synthetic tests for the engine and data layer.
 
-Not built yet: PDF extraction, installment plans, FX rate fetching,
-refund→purchase linking, budgets and reporting. PDFs and spreadsheets are now
-*rejected* rather than silently claimed by a CSV parser — see `PLAN.md` for the
-installment model, HTTP API and web frontend design.
+| Layer | State |
+|---|---|
+| Cash ledger, dedup, transfers, refunds, installments, integrity | Done |
+| Supplementary cards + reissue lineage | Done (register every Card Member / last4 in `accounts.yaml`) |
+| Self-transfer vs P2P (parties + account aliases) | Done |
+| HSBC MPF investment positions | Done (`finto investments import`) |
+| PDF templates (Mox, Chase, HSBC, Amex US/HK) | Done; a few Amex HK statements still fail verify |
+| HTTP API + Angular UI | Done |
+| LLM categorise / adjudicate | Optional, off by default |
+
+```bash
+pip install -e ".[dev,pdf,xlsx,api]"
+python -m fin.cli init
+cp accounts.example.yaml accounts.yaml   # edit names if needed
+python -m fin.cli accounts load accounts.yaml
+python -m fin.cli import ~/Documents/Finto-Data --dry-run
+python -m fin.cli investments import \
+  ~/Documents/Finto-Data/HSBC_HK/MPF_Investment/Positions/HSBC_MPF_Position_2026-07-31.xlsx
+python -m fin.cli reconcile
+python -m fin.cli check
+```
+
+See `PLAN.md` for the remaining work list.

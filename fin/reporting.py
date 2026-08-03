@@ -18,8 +18,8 @@ and a label saying so — and belongs in the client, not here.
 
 from __future__ import annotations
 
-from datetime import date
-from typing import Any, Iterable, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 # Aggregation dimensions the summary endpoint understands. Mapping to SQL here
 # rather than accepting caller-supplied column names keeps this injection-proof.
@@ -35,6 +35,12 @@ GROUP_BY_SQL: dict[str, str] = {
     "account": "t.account_id",
     "institution": "a.institution_id",
     "card": "COALESCE(t.card_id, '(unattributed)')",
+    # Supplementary spend is separable here: primary vs (supp) labelled by name.
+    "cardholder": (
+        "CASE WHEN c.id IS NULL THEN '(unattributed)' "
+        "WHEN c.is_supplementary = 1 THEN c.cardholder_name || ' (supp)' "
+        "ELSE c.cardholder_name END"
+    ),
     "kind": "t.kind",
     "currency": "t.currency_booked",
 }
@@ -200,7 +206,9 @@ def summary(conn, *, group_by: str = "month", filters: dict | None = None) -> li
                SUM(t.amount_booked) AS net_minor,
                SUM(CASE WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS spend_minor,
                SUM(CASE WHEN t.amount_booked > 0 THEN t.amount_booked ELSE 0 END) AS income_minor
-        FROM txn t JOIN account a ON a.id = t.account_id
+        FROM txn t
+        JOIN account a ON a.id = t.account_id
+        LEFT JOIN card c ON c.id = t.card_id
         WHERE {where}
         GROUP BY bucket, t.currency_booked
         ORDER BY bucket, t.currency_booked

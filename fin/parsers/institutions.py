@@ -14,16 +14,21 @@ from __future__ import annotations
 import re
 from datetime import date
 from decimal import Decimal
-from pathlib import Path
 
 from ..enrich import extract_details
 from ..installments import parse_installment_marker
-from ..models import FileFormat, Money, ParsedTxn, TxnKind, TxnStatus
+from ..models import FileFormat, Money, ParsedTxn, TxnKind
 from .base import (
-    ParseContext, ParseResult, StatementParser, has_columns, parse_amount,
-    parse_date, pick, read_csv_rows, register,
+    ParseContext,
+    ParseResult,
+    StatementParser,
+    has_columns,
+    parse_amount,
+    parse_date,
+    pick,
+    read_csv_rows,
+    register,
 )
-
 
 # ---------------------------------------------------------------------------
 # AMEX (US and HK share an export engine; currency and date order differ)
@@ -97,7 +102,8 @@ class AmexCsvParser(StatementParser):
                         currency=fm.group(2),
                     )
                     if native.amount:
-                        fx = (booked.to_decimal() / native.to_decimal()).quantize(Decimal("0.000001"))
+                        fx = (booked.to_decimal() / native.to_decimal()).quantize(
+                            Decimal("0.000001"))
                 except ValueError:
                     pass
 
@@ -350,7 +356,8 @@ class MoxCsvParser(StatementParser):
             txns.append(ParsedTxn(
                 txn_date=d,
                 booked=booked,
-                description_raw=pick(row, "Description", "Details", "Merchant") or "(no description)",
+                description_raw=(
+                    pick(row, "Description", "Details", "Merchant") or "(no description)"),
                 merchant=pick(row, "Merchant") or None,
                 external_ref=pick(row, "Reference", "Transaction ID") or None,
                 installment_hint=parse_installment_marker(
@@ -416,7 +423,8 @@ class GenericCsvParser(StatementParser):
             txns.append(ParsedTxn(
                 txn_date=d,
                 booked=booked,
-                description_raw=pick(row, "Description", "Details", "Narrative", "Memo") or "(no description)",
+                description_raw=(
+                    pick(row, "Description", "Details", "Narrative", "Memo") or "(no description)"),
                 installment_hint=parse_installment_marker(
                     pick(row, "Description", "Details", "Narrative", "Memo")),
                 details=extract_details(
@@ -434,9 +442,17 @@ class GenericCsvParser(StatementParser):
 # ---------------------------------------------------------------------------
 
 _PAYMENT_WORDS = re.compile(
-    r"\b(PAYMENT RECEIVED|AUTOPAY|THANK YOU|DIRECT DEBIT|PAYMENT - THANK)\b", re.I)
+    r"\b(PAYMENT RECEIVED|AUTOPAY|THANK YOU|DIRECT DEBIT|PAYMENT - THANK|"
+    r"AMEX EPAYMENT|ACH PMT)\b", re.I)
 _TRANSFER_WORDS = re.compile(
-    r"\b(TRANSFER|FPS|FASTER PAYMENT|ATM|CASH WITHDRAWAL|INTERNAL)\b", re.I)
+    r"\b(TRANSFER|FPS|FASTER PAYMENT|ATM|CASH WITHDRAWAL|INTERNAL|"
+    r"MOVE BETWEEN|OWN ACCOUNT)\b", re.I)
+_INCOME_WORDS = re.compile(
+    r"\b(SALARY|PAYROLL|WAGES|DIVIDEND|TAX REFUND|GOVERNMENT|"
+    r"EMPLOYER|DIRECT CREDIT)\b", re.I)
+_INTEREST_WORDS = re.compile(r"\b(INTEREST|INT\.?\s*PAID|CREDIT INTEREST)\b", re.I)
+_REWARD_WORDS = re.compile(
+    r"\b(CASHBACK|REWARD|STATEMENT CREDIT|MEMBERSHIP REWARDS)\b", re.I)
 
 
 def _looks_like_payment(desc: str) -> bool:
@@ -444,10 +460,18 @@ def _looks_like_payment(desc: str) -> bool:
 
 
 def _amex_kind(desc: str) -> TxnKind | None:
+    if not desc:
+        return None
     if _looks_like_payment(desc):
         return TxnKind.CC_PAYMENT
-    if desc and parse_installment_marker(desc):
+    if parse_installment_marker(desc):
         return TxnKind.INSTALLMENT
+    if _INTEREST_WORDS.search(desc):
+        return TxnKind.INTEREST
+    if _REWARD_WORDS.search(desc):
+        return TxnKind.REWARD
+    if _INCOME_WORDS.search(desc):
+        return TxnKind.INCOME
     return None
 
 
@@ -475,10 +499,12 @@ def _hsbc_kind(desc: str) -> TxnKind | None:
         return TxnKind.CC_PAYMENT
     if re.search(r"\b(ATM|CASH WITHDRAWAL)\b", desc, re.I):
         return TxnKind.ATM
+    if _INTEREST_WORDS.search(desc):
+        return TxnKind.INTEREST
+    if _INCOME_WORDS.search(desc):
+        return TxnKind.INCOME
     if _TRANSFER_WORDS.search(desc):
         return TxnKind.TRANSFER
-    if re.search(r"\bINTEREST\b", desc, re.I):
-        return TxnKind.INTEREST
     return None
 
 
@@ -489,3 +515,54 @@ def _maybe_date(value: str, dayfirst: bool) -> date | None:
         return parse_date(value, dayfirst=dayfirst)
     except ValueError:
         return None
+
+
+# ---------------------------------------------------------------------------
+# AMEX US High Yield Savings — headerless ISO-date CSV
+# ---------------------------------------------------------------------------
+
+@register
+class AmexUsSavingsCsvParser(StatementParser):
+    """AMEX US High Yield Savings export: no header, `YYYY-MM-DD,desc,amount`.
+
+    Sign convention matches ours (interest positive, card payment negative).
+    """
+
+    parser_id = "amex_us_savings_csv"
+    version = "0.1.0"
+    institution_id = "amex_us"
+    file_format = FileFormat.CSV
+
+    def sniff(self, ctx: ParseContext, sample: bytes) -> float:
+        text = sample.decode("utf-8", errors="replace")
+        first = text.splitlines()[0] if text else ""
+        if re.match(r"^\d{4}-\d{2}-\d{2},", first) and "card member" not in text.lower():
+            if "amex" in ctx.path.name.lower() or "savings" in ctx.path.name.lower():
+                return 0.85
+            return 0.4
+        return 0.0
+
+    def parse(self, ctx: ParseContext) -> ParseResult:
+        import csv
+        ccy = ctx.default_currency or "USD"
+        txns, warnings = [], []
+        with open(ctx.path, newline="", encoding="utf-8", errors="replace") as fh:
+            for i, row in enumerate(csv.reader(fh)):
+                if len(row) < 3:
+                    continue
+                try:
+                    d = parse_date(row[0], dayfirst=False)
+                    booked = parse_amount(row[2], ccy)
+                except ValueError as e:
+                    warnings.append(f"line {i}: {e}")
+                    continue
+                desc = row[1].strip()
+                txns.append(ParsedTxn(
+                    txn_date=d, booked=booked, description_raw=desc,
+                    kind_hint=_amex_kind(desc) or (
+                        TxnKind.INTEREST if "interest" in desc.lower() else None
+                    ),
+                    line_no=i,
+                ))
+        return ParseResult(txns=txns, raw_rows=[], warnings=warnings,
+                           account_id=ctx.account_id)

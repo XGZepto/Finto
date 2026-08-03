@@ -26,7 +26,6 @@ from pathlib import Path
 from . import db as dbm
 from .models import FxRate, Money, minor_exponent
 
-
 # ---------------------------------------------------------------------------
 # Harvesting rates the statements already told us
 # ---------------------------------------------------------------------------

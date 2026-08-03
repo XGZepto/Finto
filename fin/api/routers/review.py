@@ -9,7 +9,6 @@ and this list exists at all.
 from __future__ import annotations
 
 import json
-import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException

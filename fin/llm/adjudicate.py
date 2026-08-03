@@ -29,7 +29,6 @@ event. String similarity cannot see that. A model can.
 from __future__ import annotations
 
 import json
-from typing import Sequence
 
 from . import cache
 from .provider import LLMProvider, LLMUnavailable

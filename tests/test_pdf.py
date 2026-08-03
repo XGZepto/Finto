@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-
 from conftest import write_pdf
+
 from fin.ingest import ingest_file
 from fin.parsers.base import ParseContext, select_parser
 from fin.parsers.pdf import PdfStatementParser
@@ -51,7 +51,6 @@ def test_transactions_are_extracted(statement_pdf):
     result = PdfStatementParser().parse(ctx)
 
     assert len(result.txns) == 5
-    by_desc = {t.description_raw: t for t in result.txns}
 
     salary = next(t for t in result.txns if "SALARY" in t.description_raw)
     assert salary.txn_date == date(2025, 1, 2)

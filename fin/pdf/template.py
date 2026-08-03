@@ -604,7 +604,7 @@ def _document_balances(
             if not rx.search(line.text):
                 continue
             tokens = _balance_tokens(lines, i, rule)
-            if len(tokens) <= rule.token_index:
+            if len(tokens) <= abs(rule.token_index):
                 continue
             try:
                 value = parse_amount(tokens[rule.token_index], currency)
@@ -724,7 +724,7 @@ def _read_amount(
     amount = money.amount
     if spec.mode == "cr_marker":
         # Absent a marker the figure is a charge; CR flips it to a credit.
-        is_credit = bool(re.search(r"\bCR\b", token, re.IGNORECASE))
+        is_credit = bool(_CR_MARKER.search(token))
         amount = abs(amount) if is_credit else -abs(amount)
         if spec.invert:
             amount = -amount
@@ -733,6 +733,12 @@ def _read_amount(
     if spec.invert:
         amount = -amount
     return Money(amount=amount, currency=currency), balance
+
+
+# HSBC writes a credit as a suffix with no separator ("44.00CR"), where \b finds
+# no boundary because a digit and a letter are both word characters. Requiring a
+# non-letter before and after keeps the match off words like "CREDIT".
+_CR_MARKER = re.compile(r"(?:^|[^A-Za-z])CR(?![A-Za-z])", re.IGNORECASE)
 
 
 def _maybe_money(token: str, currency: str) -> Money | None:
