@@ -1,0 +1,102 @@
+{
+  "template_id": "chase_us_consolidated",
+  "institution_id": "chase_us",
+  "label": "Chase US consolidated checking and savings statement",
+  "version": "1.0.0",
+  "match_all": [
+    "JPMorgan Chase Bank",
+    "TRANSACTION DETAIL"
+  ],
+  "default_currency": "USD",
+  "date": {
+    "format": "auto",
+    "dayfirst": false,
+    "year_from_statement": true
+  },
+  "period": "(\\w+ \\d{1,2}, \\d{4})\\s+through\\s+(\\w+ \\d{1,2}, \\d{4})",
+  "sections": [
+    {
+      "name": "checking",
+      "start": "CHECKING SUMMARY",
+      "end": "SAVINGS SUMMARY",
+      "currency": "USD",
+      "account_hint": "Chase Total Checking",
+      "columns": {
+        "mode": "anchors",
+        "header": "(?-i:DATE)\\s+(?-i:DESCRIPTION)",
+        "anchors": {
+          "date": "(?-i:^DATE$)",
+          "description": "(?-i:^DESCRIPTION$)",
+          "amount": "(?-i:^AMOUNT$)",
+          "balance": "(?-i:^BALANCE$)"
+        }
+      },
+      "amount": {
+        "mode": "signed",
+        "column": "amount",
+        "balance_column": "balance"
+      },
+      "description_column": "description",
+      "exclude": [
+        "^\\*(start|end)\\*[a-z ]+$"
+      ],
+      "balances": [
+        {
+          "pattern": "Beginning Balance",
+          "kind": "opening",
+          "column": "balance"
+        },
+        {
+          "pattern": "Ending Balance",
+          "kind": "closing",
+          "column": "balance"
+        }
+      ],
+      "stop_at": [
+        "\\*end\\*transaction detail"
+      ]
+    },
+    {
+      "name": "savings",
+      "start": "SAVINGS SUMMARY",
+      "end": "^$never$",
+      "currency": "USD",
+      "account_hint": "Chase Savings",
+      "columns": {
+        "mode": "anchors",
+        "header": "(?-i:DATE)\\s+(?-i:DESCRIPTION)",
+        "anchors": {
+          "date": "(?-i:^DATE$)",
+          "description": "(?-i:^DESCRIPTION$)",
+          "amount": "(?-i:^AMOUNT$)",
+          "balance": "(?-i:^BALANCE$)"
+        }
+      },
+      "amount": {
+        "mode": "signed",
+        "column": "amount",
+        "balance_column": "balance"
+      },
+      "description_column": "description",
+      "exclude": [
+        "^\\*(start|end)\\*[a-z ]+$"
+      ],
+      "balances": [
+        {
+          "pattern": "Beginning Balance",
+          "kind": "opening",
+          "column": "balance"
+        },
+        {
+          "pattern": "Ending Balance",
+          "kind": "closing",
+          "column": "balance"
+        }
+      ],
+      "stop_at": [
+        "\\*end\\*transaction detail"
+      ]
+    }
+  ],
+  "source": "builtin"
+}

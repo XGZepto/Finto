@@ -107,6 +107,20 @@ class BalanceRule:
     #: Rows away from the matched line to read the figure from. Mox sets the
     #: amount above its own label, so the label matches at offset -1.
     line_offset: int = 0
+    #: Which money token on that row to read. AMEX prints its whole reconciliation
+    #: on one line — previous, credits, debits, new balance — so the opening and
+    #: closing figures are the first and fourth tokens of the same row.
+    token_index: int = 0
+    #: Card issuers state a balance as the amount owed. Finto holds a liability
+    #: as negative, so those figures need their sign reversed to be comparable.
+    negate: bool = False
+    #: When set, scan forward from the label for the first row carrying at
+    #: least this many money tokens, instead of trusting a fixed offset. AMEX
+    #: added an "(Including Installments)" line between its heading and its
+    #: figures partway through 2025, which a fixed offset does not survive.
+    min_tokens: int = 0
+    #: How far forward to scan for that row.
+    search_ahead: int = 4
 
 
 @dataclass
@@ -417,12 +431,16 @@ def _apply_section(
                 last_row.amount = Money(
                     amount=-last_row.amount.amount, currency=last_row.amount.currency
                 )
+                # A marker applies once. Section totals are credits too and
+                # carry their own CR, which would otherwise reach back and
+                # flip the last real transaction a second time.
+                last_row = None
                 continue
 
         cells = cols.cells(line)
         amount, balance = _read_amount(cells, spec.amount, current_currency)
 
-        found_date = _read_date(cells, tpl, anchor)
+        found_date, date_remainder = _split_date(cells.get("date", ""), tpl, anchor)
         if found_date is not None:
             current_date = found_date
             # A date on a row that carries no amount opens a new entry, so any
@@ -435,7 +453,7 @@ def _apply_section(
                 pending_desc.clear()
 
         if amount is None:
-            desc = _describe(cells, spec)
+            desc = " ".join(p for p in (date_remainder, _describe(cells, spec)) if p)
             if desc:
                 pending_desc.append(desc)
             continue
@@ -447,7 +465,7 @@ def _apply_section(
             )
             continue
 
-        desc_parts = [*pending_desc, _describe(cells, spec)]
+        desc_parts = [*pending_desc, date_remainder, _describe(cells, spec)]
         description = re.sub(r"\s{2,}", " ", " ".join(p for p in desc_parts if p)).strip()
         pending_desc.clear()
 
@@ -585,18 +603,31 @@ def _document_balances(
         for i, line in enumerate(lines):
             if not rx.search(line.text):
                 continue
-            target = i + rule.line_offset
-            if not 0 <= target < len(lines):
-                continue
-            tokens = [w.text for w in lines[target].words if is_money(w.text)]
-            if not tokens:
+            tokens = _balance_tokens(lines, i, rule)
+            if len(tokens) <= rule.token_index:
                 continue
             try:
-                value = parse_amount(tokens[0], currency)
+                value = parse_amount(tokens[rule.token_index], currency)
             except ValueError:
                 continue
-            result.balances.append((None, value, rule.kind, spec.name))
+            if rule.negate:
+                value = Money(amount=-value.amount, currency=value.currency)
+            result.balances.append((None, value, rule.kind, _section_key(spec, currency)))
             break
+
+
+def _balance_tokens(lines: list[TextLine], i: int, rule: BalanceRule) -> list[str]:
+    """The money tokens of the row a balance rule points at."""
+    if rule.min_tokens:
+        for k in range(i, min(i + rule.search_ahead + 1, len(lines))):
+            tokens = [w.text for w in lines[k].words if is_money(w.text)]
+            if len(tokens) >= rule.min_tokens:
+                return tokens
+        return []
+    target = i + rule.line_offset
+    if not 0 <= target < len(lines):
+        return []
+    return [w.text for w in lines[target].words if is_money(w.text)]
 
 
 def _match_balance(
@@ -619,6 +650,8 @@ def _match_balance(
             value = parse_amount(token, currency)
         except ValueError:
             continue
+        if rule.negate:
+            value = Money(amount=-value.amount, currency=value.currency)
         when = _read_date(cols.cells(line), tpl, anchor) if cols else None
         result.balances.append((when, value, rule.kind, _section_key(spec, currency)))
         return True
@@ -749,10 +782,29 @@ _DATE_PATTERNS = (
 
 
 def _read_date(cells: dict[str, str], tpl: StatementTemplate, anchor: date | None) -> date | None:
-    token = cells.get("date", "").strip()
-    if not token:
-        return None
-    return parse_statement_date(token, tpl.date, anchor)
+    return _split_date(cells.get("date", ""), tpl, anchor)[0]
+
+
+def _split_date(
+    cell: str, tpl: StatementTemplate, anchor: date | None
+) -> tuple[date | None, str]:
+    """Take a leading date off a cell, returning it and the text that follows.
+
+    Not every issuer gives the date a column of its own. AMEX heads a single
+    column "DETAILS" and writes the date and the merchant into it, so the date
+    has to be split off and the remainder kept as description rather than
+    discarded.
+    """
+    tokens = cell.split()
+    if not tokens:
+        return None, ""
+    for k in (1, 2, 3):
+        if k > len(tokens):
+            break
+        when = parse_statement_date(" ".join(tokens[:k]), tpl.date, anchor)
+        if when is not None:
+            return when, " ".join(tokens[k:])
+    return None, cell.strip()
 
 
 def parse_statement_date(token: str, spec: DateSpec, anchor: date | None) -> date | None:

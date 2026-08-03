@@ -1,0 +1,77 @@
+{
+  "template_id": "amex_hk_card",
+  "institution_id": "amex_hk",
+  "label": "American Express Hong Kong card statement",
+  "version": "1.0.0",
+  "match_all": [
+    "American Express",
+    "STATEMENT PERIOD",
+    "(?-i:DETAILS)"
+  ],
+  "match_none": [
+    "American Express National Bank"
+  ],
+  "default_currency": "HKD",
+  "date": {
+    "format": "auto",
+    "dayfirst": true,
+    "year_from_statement": true
+  },
+  "statement_date": "Statement includes payments and charges received by\\s*(\\w+ \\d{1,2}, \\d{4})",
+  "period": "STATEMENT PERIOD\\s+From\\s+(\\w+ \\d{1,2})\\s+to\\s*(\\w+ \\d{1,2}, \\d{4})",
+  "body_start": "(?-i:DETAILS)",
+  "sections": [
+    {
+      "name": "card",
+      "start": "",
+      "end": "AMEX ACCESS IT SUMMARY|Membership Rewards|Important Information",
+      "currency": "HKD",
+      "account_hint": "AMEX HK card",
+      "columns": {
+        "mode": "anchors",
+        "header": "(?-i:DETAILS).*(?-i:AMOUNT)",
+        "anchors": {
+          "date": "(?-i:^DETAILS$)",
+          "fx": "(?-i:FOREIGN)",
+          "amount": "(?-i:^AMOUNT)"
+        }
+      },
+      "amount": {
+        "mode": "cr_marker",
+        "column": "amount",
+        "invert": false,
+        "cr_on_following_line": true
+      },
+      "exclude": [
+        "^PAGE \\d+ OF\\d*",
+        "^Total of ",
+        "All-inclusive exchange rate",
+        "^Reference ",
+        "American Express International"
+      ],
+      "balances": [
+        {
+          "pattern": "Previous Balance\\s+New Credits",
+          "kind": "opening",
+          "scope": "document",
+          "min_tokens": 4,
+          "token_index": 0,
+          "negate": true
+        },
+        {
+          "pattern": "Previous Balance\\s+New Credits",
+          "kind": "closing",
+          "scope": "document",
+          "min_tokens": 4,
+          "token_index": 3,
+          "negate": true
+        }
+      ],
+      "stop_at": [
+        "AMEX ACCESS IT SUMMARY",
+        "Membership\\s+Rewards"
+      ]
+    }
+  ],
+  "source": "builtin"
+}
