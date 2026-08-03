@@ -1,0 +1,279 @@
+<div class="page-head">
+  <h1>Import</h1>
+  <p class="sub">
+    Files are parsed and shown to you before anything is written. Check the dates
+    and the signs against the raw header — that is where a wrong column mapping
+    is cheap to catch.
+  </p>
+</div>
+
+<!-- Defaults, applied to files dropped after they're set. Several parsers can
+     infer the account; the ones that can't need to be told. -->
+<div class="card defaults">
+  <div class="field">
+    <label for="inst">Institution</label>
+    <select id="inst" [ngModel]="defaultInstitution()"
+            (ngModelChange)="defaultInstitution.set($event); defaultAccount.set('')">
+      <option value="">detect</option>
+      @for (i of facets()?.institutions ?? []; track i.id) {
+        <option [value]="i.id">{{ i.display_name }}</option>
+      }
+    </select>
+  </div>
+  <div class="field">
+    <label for="acct">Account</label>
+    <select id="acct" [ngModel]="defaultAccount()" (ngModelChange)="defaultAccount.set($event)">
+      <option value="">detect</option>
+      @for (a of accountOptions(); track a.id) {
+        <option [value]="a.id">{{ a.display_name }}</option>
+      }
+    </select>
+  </div>
+  <div class="field narrow">
+    <label for="ccy">Currency</label>
+    <select id="ccy" [ngModel]="defaultCurrency()" (ngModelChange)="defaultCurrency.set($event)">
+      <option value="">detect</option>
+      @for (c of facets()?.currencies ?? []; track c) {
+        <option [value]="c">{{ c }}</option>
+      }
+    </select>
+  </div>
+</div>
+
+<label class="dropzone" [class.over]="dragging()"
+       (dragover)="onDragOver($event)" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
+  <input type="file" multiple hidden
+         accept=".csv,.tsv,.txt,.ofx,.qfx,.pdf,.xlsx" (change)="onPick($event)" />
+  <span class="cue">Drop statements here</span>
+  <span class="hint">or click to browse · csv, tsv, ofx, qfx, pdf</span>
+</label>
+
+<!-- Staged files: one card each, nothing committed yet. -->
+@for (e of entries(); track e.key) {
+  <section class="card entry">
+    <header class="spread">
+      <div class="ident">
+        <span class="filename mono">{{ e.filename }}</span>
+        <span class="muted small">{{ kb(e.sizeBytes) }}</span>
+        @if (e.preview?.parser) {
+          <span class="tag">{{ e.preview!.parser }}</span>
+        }
+      </div>
+      <div class="row">
+        @switch (e.state) {
+          @case ('staging') { <span class="muted small mono">parsing…</span> }
+          @case ('ready') {
+            <button class="ghost" (click)="discard(e)">Discard</button>
+            <button class="primary" (click)="confirm(e)">Import {{ e.preview?.txn_count }} rows</button>
+          }
+          @case ('refused') { <button class="ghost" (click)="discard(e)">Dismiss</button> }
+          @case ('importing') { <span class="muted small mono">{{ e.job?.progress || 'queued' }}…</span> }
+          @case ('done') { <span class="tag good">imported</span> }
+          @case ('failed') { <span class="tag bad">failed</span> }
+        }
+      </div>
+    </header>
+
+    @if (e.error) {
+      <div class="banner error">{{ e.error }}</div>
+    }
+
+    @for (w of e.preview?.warnings ?? []; track w) {
+      <div class="banner warn small">{{ w }}</div>
+    }
+
+    @if (e.state === 'ready' || e.state === 'importing') {
+      <!-- Where the file is bound. Blank means the parser inferred it. -->
+      <div class="binding">
+        <div class="field">
+          <label>Institution</label>
+          <select [ngModel]="e.institutionId"
+                  (ngModelChange)="e.institutionId = $event; e.accountId = ''">
+            <option value="">detect</option>
+            @for (i of facets()?.institutions ?? []; track i.id) {
+              <option [value]="i.id">{{ i.display_name }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label>Account</label>
+          <select [ngModel]="e.accountId" (ngModelChange)="e.accountId = $event">
+            <option value="">detect</option>
+            @for (a of facets()?.accounts ?? []; track a.id) {
+              <option [value]="a.id">{{ a.display_name }}</option>
+            }
+          </select>
+        </div>
+        <div class="field narrow">
+          <label>Currency</label>
+          <select [ngModel]="e.currency" (ngModelChange)="e.currency = $event">
+            <option value="">detect</option>
+            @for (c of facets()?.currencies ?? []; track c) {
+              <option [value]="c">{{ c }}</option>
+            }
+          </select>
+        </div>
+        <div class="field span">
+          <label>Period</label>
+          <span class="mono small">
+            {{ e.preview?.period_start || '—' }} → {{ e.preview?.period_end || '—' }}
+            @if (e.preview?.balance_count) {
+              · {{ e.preview!.balance_count }} balance assertions
+            }
+          </span>
+        </div>
+      </div>
+
+      @if (e.preview?.header?.length) {
+        <div class="raw-header">
+          <label>Header as read</label>
+          <code>{{ headerRow(e) }}</code>
+        </div>
+      }
+
+      @if (e.preview?.sample?.length) {
+        <label>First {{ e.preview!.sample!.length }} rows, as they would be stored</label>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Flags</th>
+                <th class="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of e.preview!.sample!; track $index) {
+                <tr>
+                  <td class="mono">{{ s.date | shortDate }}</td>
+                  <td>{{ s.description }}</td>
+                  <td>
+                    @if (s.installment) {
+                      <span class="tag installment">{{ s.installment[0] }}/{{ s.installment[1] }}</span>
+                    }
+                  </td>
+                  <td class="num" [class.neg]="s.amount < 0" [class.pos]="s.amount > 0">
+                    {{ { amount: s.amount, currency: s.currency } | money }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="small muted note">
+          Negative is money out, on every account type including credit cards.
+          If these signs are inverted, the parser is wrong — don't import.
+        </p>
+      }
+    }
+
+    <!-- After commit: what actually changed across the whole ledger. -->
+    @if (e.state === 'done' || e.state === 'failed') {
+      @if (e.job?.result?.import; as imp) {
+        <div class="banner" [class.ok]="imp.status === 'imported'"
+             [class.error]="imp.status === 'error'" [class.warn]="imp.status === 'skipped'">
+          @switch (imp.status) {
+            @case ('imported') { Imported {{ imp.txns }} transactions via {{ imp.parser }}. }
+            @case ('skipped') { Already imported — this exact file is in the ledger. }
+            @default { {{ imp.reason }} }
+          }
+        </div>
+      }
+      @if (changes(e.job).length) {
+        <label>Reconcile</label>
+        <div class="changes">
+          @for (c of changes(e.job); track c.label) {
+            <div class="change" [class.notable]="c.notable">
+              <span class="v mono">{{ c.value }}</span>
+              <span class="k">{{ c.label }}</span>
+            </div>
+          }
+        </div>
+      }
+      @for (b of balanceProblems(e.job); track $index) {
+        <div class="banner error small">
+          {{ b.account_name }} {{ b.period }}: off by
+          {{ b.discrepancy | money }} — a row is probably missing.
+        </div>
+      }
+      @if (e.job?.error) {
+        <div class="banner error">{{ e.job!.error }}</div>
+      }
+    }
+  </section>
+}
+
+@if (entries().length) {
+  <div class="row end">
+    <button class="ghost" (click)="clearFinished()">Clear finished</button>
+  </div>
+}
+
+<!-- Ledger-wide operations. These are jobs too — one writer at a time. -->
+<section class="card">
+  <div class="section-head">
+    <h2>Maintenance</h2>
+    @if (maintenance(); as job) {
+      <span class="small mono muted">
+        {{ job.kind }} · {{ job.status }}{{ job.progress ? ' · ' + job.progress : '' }}
+      </span>
+    }
+  </div>
+  <div class="row">
+    <button (click)="runReconcile()">Reconcile ledger</button>
+    <button (click)="runReattribute()">Re-attribute cards</button>
+    <button (click)="runHarvestFx()">Harvest FX rates</button>
+  </div>
+  <p class="small muted note">
+    Reconcile always runs over the whole ledger: a duplicate or a transfer's
+    counterpart usually sits in a different file from a different institution.
+  </p>
+  @if (maintenance()?.status === 'done') {
+    <div class="changes">
+      @for (c of resultPairs(maintenance()); track c.label) {
+        <div class="change">
+          <span class="v mono">{{ c.value }}</span>
+          <span class="k">{{ c.label }}</span>
+        </div>
+      } @empty {
+        <p class="small muted">Nothing changed.</p>
+      }
+    </div>
+  }
+  @if (maintenance()?.error) {
+    <div class="banner error">{{ maintenance()!.error }}</div>
+  }
+</section>
+
+<section class="card">
+  <div class="section-head"><h2>Imported files</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Imported</th>
+          <th>File</th>
+          <th>Account</th>
+          <th>Parser</th>
+          <th class="num">Rows</th>
+          <th class="num">Txns</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (f of history(); track f.id) {
+          <tr>
+            <td class="mono">{{ f.imported_at | shortDate }}</td>
+            <td class="path">{{ f.source_path }}</td>
+            <td>{{ f.account_id }}</td>
+            <td><span class="tag">{{ f.parser_id }}</span></td>
+            <td class="num">{{ f.row_count }}</td>
+            <td class="num">{{ f.txn_count }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="6" class="empty">Nothing imported yet</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>

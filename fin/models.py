@@ -91,6 +91,10 @@ class TxnKind(str, Enum):
     FX_CONVERSION = "fx_conversion"  # Wise/Mox in-account currency swap
     INCOME = "income"
     ADJUSTMENT = "adjustment"
+    INSTALLMENT = "installment"      # one monthly charge of a plan
+    # The full-amount purchase in statements that book the whole charge and then
+    # reverse it. Cash-neutral once paired with its reversal.
+    INSTALLMENT_ORIGINATION = "installment_origination"
     UNKNOWN = "unknown"
 
 
@@ -105,6 +109,14 @@ class TransferKind(str, Enum):
     CC_PAYMENT = "cc_payment"
     FX_CONVERSION = "fx_conversion"
     ATM_WITHDRAWAL = "atm_withdrawal"
+    # Full charge + its reversal, when a plan is booked gross then backed out.
+    INSTALLMENT_ORIGINATION = "installment_origination"
+
+
+class PlanStatus(str, Enum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 
 class FileFormat(str, Enum):
@@ -134,12 +146,27 @@ class Account(BaseModel):
     display_name: str
     account_type: AccountType
     primary_currency: str
+    # Every currency this account can settle in. A single-currency card lists
+    # one; a multi-currency card or Wise-style account lists several, and each
+    # is a separate position that is never added to the others. Defaults to
+    # [primary_currency] when unspecified.
+    settlement_currencies: list[str] = Field(default_factory=list)
     balance_group: str | None = None   # groups Wise/Mox per-currency balances
     masked_number: str | None = None
     is_own_account: bool = True
     opened_on: date | None = None
     closed_on: date | None = None
     notes: str | None = None
+
+    @model_validator(mode="after")
+    def _default_currencies(self) -> "Account":
+        ccys = [c.upper() for c in self.settlement_currencies]
+        primary = self.primary_currency.upper()
+        if primary not in ccys:
+            ccys.insert(0, primary)
+        object.__setattr__(self, "settlement_currencies", ccys)
+        object.__setattr__(self, "primary_currency", primary)
+        return self
 
 
 class Card(BaseModel):
@@ -150,6 +177,10 @@ class Card(BaseModel):
     is_supplementary: bool = False
     issued_on: date | None = None
     closed_on: date | None = None
+    # Set when this card was issued to replace another (lost, expired,
+    # compromised). Same physical cardholder, new number — chaining them keeps
+    # per-card history intact across the renumbering.
+    replaces_card_id: str | None = None
 
 
 class StatementFile(BaseModel):
@@ -211,6 +242,13 @@ class ParsedTxn(BaseModel):
     status: TxnStatus = TxnStatus.POSTED
     kind_hint: TxnKind | None = None
     line_no: int = 0
+    # (sequence, term) for a plan instalment, e.g. (3, 12) for "INSTALMENT 03/12".
+    # Captured here because normalize_description strips dd/mm patterns as noise
+    # and would erase the marker before anything downstream could read it.
+    installment_hint: tuple[int, int] | None = None
+    # Structured facts extracted from the source row: flight routing, passenger
+    # name, merchant address. Namespaced keys — see enrich.py.
+    details: dict[str, str] = Field(default_factory=dict)
     extra: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -276,9 +314,13 @@ class Txn(BaseModel):
 
     transfer_group_id: str | None = None
     duplicate_of_id: str | None = None
+    installment_plan_id: str | None = None
+    installment_seq: int | None = None
+    refund_of_id: str | None = None
     dedup_key: str = ""
     statement_file_id: str
     raw_record_id: str | None = None
+    details: dict[str, str] = Field(default_factory=dict)
 
     review_state: Literal["unreviewed", "confirmed", "flagged"] = "unreviewed"
     notes: str | None = None
@@ -360,6 +402,45 @@ class DuplicateCandidate(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     keep_txn_id: str
     dupe_txn_id: str
+    score: float
+    reasons: list[str] = Field(default_factory=list)
+    resolution: Literal["open", "accepted", "rejected"] = "open"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class InstallmentPlan(BaseModel):
+    """A card instalment plan: one purchase, N monthly charges.
+
+    `principal` is the full committed amount (negative, like any outflow). The
+    individual charges live as ordinary cash-basis transactions pointing back
+    here via installment_plan_id, so the balance-assertion check still works.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    account_id: str
+    card_id: str | None = None
+    merchant: str | None = None
+    description: str
+    principal: Money
+    term_months: int = Field(ge=2)
+    start_date: date
+    fee_total: Money | None = None
+    apr: Decimal | None = None
+    external_ref: str | None = None
+    status: PlanStatus = PlanStatus.ACTIVE
+    match_method: Literal["auto", "manual", "rule"] = "auto"
+    confidence: float = 1.0
+    is_confirmed: bool = False
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class InstallmentCandidate(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    account_id: str
+    description: str
+    txn_ids: list[str]
+    term_months: int
     score: float
     reasons: list[str] = Field(default_factory=list)
     resolution: Literal["open", "accepted", "rejected"] = "open"

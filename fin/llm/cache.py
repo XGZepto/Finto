@@ -47,6 +47,30 @@ def record(
     return did
 
 
+def cached_decision(
+    conn, *, task: str, input_summary: str, prompt_version: str, model: str,
+    compute, payload: Any = None,
+) -> tuple[Any, bool]:
+    """Return a cached decision, or compute and store one.
+
+    Returns (output, from_cache). The cache is keyed on the *input*, so an
+    identical question always yields an identical answer regardless of which
+    model version is configured today — which is what stops a ledger's numbers
+    drifting under it.
+    """
+    ihash = input_hash(task, payload if payload is not None else input_summary)
+    hit = lookup(conn, task, ihash, prompt_version)
+    if hit is not None:
+        return hit["output"], True
+
+    output = compute()
+    confidence = output.get("confidence") if isinstance(output, dict) else None
+    record(conn, task=task, ihash=ihash, summary=input_summary, output=output,
+           confidence=confidence, model=model, prompt_version=prompt_version)
+    conn.commit()
+    return output, False
+
+
 def annotate(
     conn, *, txn_id: str, field: str, value: str | None, source: str,
     confidence: float | None = None, decision_id: str | None = None,

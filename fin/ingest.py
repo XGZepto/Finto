@@ -21,21 +21,29 @@ file from a different institution.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from . import db as dbm
 from .dedup import run_dedup
-from .integrity import check_all, find_violations, record_balance, resolve_duplicate_chains
+from .installments import find_installments, find_origination_pairs
+from .refunds import apply_refund_links, find_refunds
+from .integrity import (
+    check_all, find_violations, prune_orphan_transfer_groups, record_balance,
+    resolve_duplicate_chains,
+)
 from .models import (
-    Account, Card, FileFormat, ParsedTxn, RawRecord, StatementFile, Txn, TxnKind,
+    Account, Card, FileFormat, Money, ParsedTxn, RawRecord, StatementFile,
+    TransferGroup, TransferKind, TransferLeg, Txn, TxnKind,
 )
 from .parsers.base import ParseContext, select_parser
 from .parsers import institutions as _institutions  # noqa: F401 (registers parsers)
-from .transfers import find_transfers
+from .parsers import pdf as _pdf_parser  # noqa: F401 (registers the PDF parser)
+from .transfers import find_transfers, transfer_group_id
 
 
 def sha256_file(path: Path) -> str:
@@ -55,25 +63,69 @@ def _format_of(path: Path) -> FileFormat:
 
 
 def resolve_card(parsed: ParsedTxn, account_id: str, cards: list[Card]) -> str | None:
-    """Attribute a charge to a supplementary card.
+    """Attribute a charge to a specific card on the account.
 
-    Prefers last4 (unambiguous) and falls back to a loose name match on the
-    'Card Member' field, which AMEX writes in varying case and order.
+    Prefers last4 (unambiguous) and falls back to the cardholder name, which is
+    what rescues attribution across a reissue: the number changes, the name
+    doesn't. Cards are date-scoped by issued_on/closed_on when those are set, so
+    a reissued number can't claim charges made before it existed.
+
+    Name matching is intentionally exact-first: a substring match is a last
+    resort, because a short hint like "JO" would otherwise claim "JOANNA CHAN".
     """
-    scoped = [c for c in cards if c.account_id == account_id]
+    scoped = [c for c in cards if c.account_id == account_id
+              and _card_active_on(c, parsed.txn_date)]
     if not scoped:
         return None
+
     if parsed.card_last4:
         for c in scoped:
             if c.last4 and c.last4 == parsed.card_last4:
                 return c.id
+
     if parsed.cardholder_hint:
         want = re.sub(r"[^a-z]", "", parsed.cardholder_hint.lower())
-        for c in scoped:
-            have = re.sub(r"[^a-z]", "", c.cardholder_name.lower())
-            if want and (want == have or want in have or have in want):
-                return c.id
+        if want:
+            names = [(c, re.sub(r"[^a-z]", "", c.cardholder_name.lower()))
+                     for c in scoped]
+            for c, have in names:
+                if want == have:
+                    return c.id
+            partial = [c for c, have in names
+                       if have and (want in have or have in want)]
+            # Only trust a substring match when it is unambiguous.
+            if len(partial) == 1:
+                return partial[0].id
     return None
+
+
+def _card_active_on(card: Card, when) -> bool:
+    if card.issued_on and when < card.issued_on:
+        return False
+    if card.closed_on and when > card.closed_on:
+        return False
+    return True
+
+
+def unattributed_card_warnings(
+    parsed: Sequence[ParsedTxn], txns: Sequence[Txn], account_id: str,
+    cards: list[Card],
+) -> list[str]:
+    """Flag card numbers the statement used that no registered card matches.
+
+    Without this, a reissued card fails attribution silently: card_id is simply
+    NULL and per-cardholder reporting quietly under-reports until you happen to
+    notice the totals don't add up.
+    """
+    if not any(c.account_id == account_id for c in cards):
+        return []   # no cards registered for this account at all — nothing to say
+    unknown = sorted({p.card_last4 for p, t in zip(parsed, txns)
+                      if t.card_id is None and p.card_last4})
+    if not unknown:
+        return []
+    return [f"last4 {', '.join(unknown)} matched no registered card on "
+            f"{account_id}. If the card was reissued, add it to accounts.yaml "
+            f"with replaces_card_id pointing at the card it replaced."]
 
 
 def to_txn(
@@ -101,6 +153,7 @@ def to_txn(
         kind=parsed.kind_hint or TxnKind.UNKNOWN,
         statement_file_id=statement_file_id,
         raw_record_id=raw_record_id,
+        details=parsed.details,
     )
 
 
@@ -163,6 +216,15 @@ def ingest_file(
         return {"path": str(path), "status": "error", "reason": "no parser matched"}
 
     result = parser.parse(ctx)
+    if not result.txns:
+        # Deliberately do NOT record the file. Recording it would burn its
+        # sha256, and `file_already_imported` would then refuse the re-import
+        # forever — so a statement you believe is in the ledger never would be.
+        return {"path": str(path), "status": "error",
+                "reason": f"{parser.parser_id} parsed 0 transactions — file not "
+                          "recorded, so you can re-import once this is resolved",
+                "warnings": result.warnings[:10]}
+
     resolved_account = account_id or result.account_id
     if not resolved_account:
         return {"path": str(path), "status": "error",
@@ -193,9 +255,12 @@ def ingest_file(
         for p in result.txns
     ]
 
+    warnings = list(result.warnings)
+    warnings += unattributed_card_warnings(result.txns, txns, resolved_account, cards)
+
     if dry_run:
         return {"path": str(path), "status": "dry-run", "parser": parser.parser_id,
-                "txns": len(txns), "warnings": result.warnings[:10]}
+                "txns": len(txns), "warnings": warnings[:10]}
 
     dbm.insert_statement_file(conn, sf)
     dbm.insert_raw_records(conn, raws)
@@ -212,7 +277,39 @@ def ingest_file(
 
     return {"path": str(path), "status": "imported", "parser": parser.parser_id,
             "txns": len(txns), "balances": len(result.balances),
-            "warnings": result.warnings[:10]}
+            "warnings": warnings[:10]}
+
+
+def reattribute_cards(conn) -> int:
+    """Re-resolve card_id for every transaction using the current card registry.
+
+    card_id is assigned at ingest time, so registering a reissued card afterwards
+    leaves everything imported before it unattributed. Re-running resolution
+    against the stored raw rows fixes that without re-importing anything.
+    """
+    cards = dbm.load_cards(conn)
+    if not cards:
+        return 0
+    updates: list[tuple[str | None, str]] = []
+    for r in conn.execute(
+            "SELECT t.id, t.account_id, t.txn_date, t.card_id, t.description_raw, "
+            "       rr.payload "
+            "FROM txn t LEFT JOIN raw_record rr ON rr.id = t.raw_record_id"):
+        payload = json.loads(r["payload"]) if r["payload"] else {}
+        last4 = (payload.get("Account #") or payload.get("Card Number") or "")[-4:]
+        hint = payload.get("Card Member") or payload.get("Cardholder") or None
+        parsed = ParsedTxn(
+            txn_date=date.fromisoformat(r["txn_date"]),
+            booked=Money(amount=0, currency="XXX"),
+            description_raw=r["description_raw"],
+            card_last4=last4 or None,
+            cardholder_hint=hint,
+        )
+        resolved = resolve_card(parsed, r["account_id"], cards)
+        if resolved != r["card_id"]:
+            updates.append((resolved, r["id"]))
+    conn.executemany("UPDATE txn SET card_id=? WHERE id=?", updates)
+    return len(updates)
 
 
 def cross_account_dupe_pairs(conn) -> set[tuple[str, str]]:
@@ -259,6 +356,40 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
     tr = find_transfers(live, accounts, fx_lookup=dbm.make_fx_lookup(conn))
     dbm.insert_transfer_groups(conn, tr.groups)
     dbm.insert_transfer_candidates(conn, tr.candidates)
+
+    # Instalment plans. Runs after dedup so a plan is never built out of two
+    # copies of the same charge, and before refunds so an instalment reversal
+    # is not mistaken for a merchant refund.
+    inst = find_installments(live)
+    dbm.insert_installment_plans(conn, inst.plans)
+    dbm.insert_installment_candidates(conn, inst.candidates)
+    for t in live:
+        assignment = inst.assignments.get(t.id)
+        if assignment:
+            t.installment_plan_id, t.installment_seq = assignment
+            t.kind = TxnKind.INSTALLMENT
+
+    # Gross-then-reversed plan bookings net to zero; pair them so they do.
+    origination_groups = []
+    for charge, credit in find_origination_pairs(live):
+        if charge.transfer_group_id or credit.transfer_group_id:
+            continue
+        gid = transfer_group_id([charge.id, credit.id])
+        origination_groups.append(TransferGroup(
+            id=gid, kind=TransferKind.INSTALLMENT_ORIGINATION,
+            match_method="auto", confidence=0.95,
+            legs=[TransferLeg(txn_id=charge.id, role="out"),
+                  TransferLeg(txn_id=credit.id, role="in")]))
+        for t in (charge, credit):
+            t.transfer_group_id = gid
+            t.kind = TxnKind.INSTALLMENT_ORIGINATION
+    dbm.insert_transfer_groups(conn, origination_groups)
+
+    # Refunds last: they need transfer links already set so a card payment is
+    # never mistaken for a refund.
+    refunds = find_refunds(live)
+    refunds_linked = apply_refund_links(live, refunds)
+
     dbm.update_txn_links(conn, txns)
     conn.commit()
 
@@ -268,6 +399,11 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
         "duplicate_candidates": len(report.candidates),
         "transfers_linked": len(tr.groups),
         "transfer_candidates": len(tr.candidates),
+        "installment_plans": len(inst.plans),
+        "installment_candidates": len(inst.candidates),
+        "installment_originations": len(origination_groups),
+        "refunds_linked": refunds_linked,
+        "refunds_unmatched": len(refunds.unmatched),
     }
 
     if use_llm:
@@ -279,6 +415,9 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
 
     # Structural hygiene and the balance cross-check.
     summary["chains_collapsed"] = resolve_duplicate_chains(conn)
+    summary["stale_groups_pruned"] = prune_orphan_transfer_groups(conn)
+    summary["stale_plans_pruned"] = dbm.prune_orphan_installment_plans(conn)
+    conn.commit()
     summary["violations"] = find_violations(conn)
     summary["balance_checks"] = [c for c in check_all(conn)
                                  if c.get("status") == "discrepancy"]

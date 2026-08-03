@@ -77,6 +77,7 @@ Duplicates come from four different places and need different handling:
 | Source | Detection |
 |---|---|
 | Same file imported twice | `file_sha256` on `statement_file` — refuses at the door |
+| A file that parsed to nothing | *not* recorded, so it stays re-importable once fixed |
 | Overlapping statement periods | exact `dedup_key` collision → auto-merge |
 | Pending row later posted | `dedup_key` excludes `posted_date`/`status`, so they collide by design; date drift is caught by the fuzzy pass |
 | Supplementary card on two statements | cross-account pass, scoped to whitelisted account pairs only |
@@ -302,10 +303,29 @@ class MyBankParser(StatementParser):
     def parse(self, ctx): ...           # -> ParseResult
 ```
 
+## Cards get reissued
+
+A lost or expired card comes back with a new number. The account is unchanged,
+so totals, dedup and balance checks are all unaffected — but per-card history
+would silently split in two, and charges on the new number would fail
+attribution with no warning at all.
+
+Register the replacement as its own card and point `replaces_card_id` at what it
+superseded. Reports roll the chain up into one card. `issued_on`/`closed_on`
+date-scope attribution, so a new number can't claim charges made before it
+existed. Import warns when a card number matches nothing registered.
+
+Note that `card_id` is set at ingest time, so registering a reissue does not
+retroactively attribute transactions already imported under it.
+
+---
+
 ## Status
 
-Working end to end on synthetic fixtures: 50 tests passing. Parser column
+Working end to end on synthetic fixtures: 70 tests passing. Parser column
 mappings need one verification pass against real exports — see `sniff` above.
 
-Not built yet: PDF extraction, FX rate fetching, refund→purchase linking,
-budgets and reporting.
+Not built yet: PDF extraction, installment plans, FX rate fetching,
+refund→purchase linking, budgets and reporting. PDFs and spreadsheets are now
+*rejected* rather than silently claimed by a CSV parser — see `PLAN.md` for the
+installment model, HTTP API and web frontend design.

@@ -1,0 +1,106 @@
+"""Aggregations and positions."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from ... import fx as fxm
+from ... import reporting
+from ..deps import get_conn
+from ..schemas import LedgerFilter, SummaryRequest
+from .transactions import filter_from_query
+
+router = APIRouter(tags=["summary"])
+
+
+@router.get("/summary")
+def get_summary(
+    group_by: str = Query("month"),
+    convert_to: str | None = Query(None),
+    f: LedgerFilter = Depends(filter_from_query),
+    conn=Depends(get_conn),
+) -> dict:
+    """Aggregate the ledger along one dimension.
+
+    Results are always grouped by currency as well as the requested dimension —
+    a bucket that mixed HKD and USD would be a number with no meaning. When
+    `convert_to` is given, each row gains a *companion* converted figure; the
+    native amount is never replaced.
+    """
+    if group_by not in reporting.GROUP_BY_SQL:
+        raise HTTPException(
+            400, f"group_by must be one of: {sorted(reporting.GROUP_BY_SQL)}")
+
+    rows = reporting.summary(conn, group_by=group_by, filters=f.to_query())
+    headline = reporting.totals(conn, filters=f.to_query())
+
+    payload = {
+        "group_by": group_by,
+        "rows": rows,
+        "totals": headline,
+        "dimensions": sorted(reporting.GROUP_BY_SQL),
+    }
+
+    if convert_to:
+        payload["rows"] = fxm.convert_rows(
+            conn, rows, field="net", to_currency=convert_to)
+        payload["totals"] = fxm.convert_rows(
+            conn, headline, field="net", to_currency=convert_to)
+        # A normalised view that silently drops a currency is worse than one
+        # that admits it cannot show it.
+        payload["conversion"] = {
+            "to": convert_to.upper(),
+            "unconvertible_currencies": fxm.missing_pairs(conn, convert_to),
+        }
+    return payload
+
+
+@router.post("/summary")
+def post_summary(req: SummaryRequest, conn=Depends(get_conn)) -> dict:
+    if req.group_by not in reporting.GROUP_BY_SQL:
+        raise HTTPException(
+            400, f"group_by must be one of: {sorted(reporting.GROUP_BY_SQL)}")
+    rows = reporting.summary(conn, group_by=req.group_by,
+                             filters=req.filter.to_query())
+    totals = reporting.totals(conn, filters=req.filter.to_query())
+    if req.convert_to:
+        rows = fxm.convert_rows(conn, rows, field="net", to_currency=req.convert_to)
+        totals = fxm.convert_rows(conn, totals, field="net",
+                                  to_currency=req.convert_to)
+    return {"group_by": req.group_by, "rows": rows, "totals": totals}
+
+
+@router.get("/positions")
+def get_positions(convert_to: str | None = Query(None),
+                  as_of: str | None = Query(None),
+                  conn=Depends(get_conn)) -> dict:
+    """Balance per (account, currency).
+
+    Never one cross-currency total. An account that settles in two currencies
+    holds two positions, and adding them together does not produce a third.
+    """
+    rows = reporting.positions(conn, as_of=as_of)
+    payload = {
+        "positions": rows,
+        "declared_currencies": reporting.declared_currencies(conn),
+    }
+    if convert_to:
+        payload["positions"] = fxm.convert_rows(
+            conn, rows, field="balance", to_currency=convert_to, on=as_of)
+        payload["conversion"] = {
+            "to": convert_to.upper(),
+            "unconvertible_currencies": fxm.missing_pairs(conn, convert_to),
+            "note": "Converted figures are presentation only; the native "
+                    "balance is authoritative.",
+        }
+    return payload
+
+
+@router.get("/stats")
+def get_stats(conn=Depends(get_conn)) -> dict:
+    return reporting.stats(conn)
+
+
+@router.get("/fx/rates")
+def get_rates(conn=Depends(get_conn)) -> dict:
+    return {"pairs": fxm.available_pairs(conn)}

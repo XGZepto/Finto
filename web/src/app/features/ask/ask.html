@@ -1,0 +1,184 @@
+<div class="page-head">
+  <h1>Ask</h1>
+  <p class="sub">
+    The model turns your question into a filter; the database produces the number.
+    You get to see the filter it chose, and correct it.
+  </p>
+</div>
+
+<form class="prompt" (ngSubmit)="ask()">
+  <span class="caret mono">&gt;</span>
+  <input
+    type="text"
+    autocomplete="off"
+    placeholder="how much did I spend on dining last quarter"
+    [ngModel]="question()"
+    (ngModelChange)="question.set($event)"
+    name="question"
+  />
+  <button class="primary" type="submit" [disabled]="asking() || !question().trim()">
+    {{ asking() ? 'Asking…' : 'Ask' }}
+  </button>
+</form>
+
+@if (!result() && !asking()) {
+  <div class="suggestions">
+    @for (e of examples; track e) {
+      <button class="ghost" (click)="use(e)">{{ e }}</button>
+    }
+  </div>
+}
+
+@if (history().length) {
+  <div class="history">
+    <label>Earlier</label>
+    @for (h of history(); track h) {
+      <button class="bare" (click)="use(h)">{{ h }}</button>
+    }
+  </div>
+}
+
+@if (asking()) {
+  <div class="card"><div class="spinner">translating </div></div>
+}
+
+@if (result(); as r) {
+  @if (!r.ok) {
+    <div class="banner error">{{ r.error }}</div>
+  } @else {
+    <!-- What was actually asked of the database. This is the check. -->
+    <section class="card plan">
+      <div class="section-head">
+        <h2>Interpreted as</h2>
+        <div class="row">
+          @if (r.cached) { <span class="tag">cached</span> }
+          <span class="tag" [class]="confidenceBand()">
+            {{ ((r.confidence ?? 0) * 100).toFixed(0) }}% confident
+          </span>
+          <button class="ghost" (click)="openInBlotter()">Edit in blotter →</button>
+        </div>
+      </div>
+
+      <div class="chips">
+        @for (c of chips(); track c.key) {
+          <span class="chip accent">{{ c.label }}</span>
+        } @empty {
+          <span class="chip">whole ledger</span>
+        }
+        @if (r.group_by) { <span class="chip">grouped by {{ r.group_by }}</span> }
+      </div>
+
+      @if (r.explanation) {
+        <p class="explanation">{{ r.explanation }}</p>
+      }
+
+      @if (r.unsupported) {
+        <div class="banner warn small">
+          {{ r.unsupported }} — the figures below answer the nearest question the
+          filter can express, not that one.
+        </div>
+      }
+      @if (r.dropped_fields?.length) {
+        <div class="banner warn small">
+          Ignored, because they don't exist in this ledger:
+          <span class="mono">{{ r.dropped_fields!.join(', ') }}</span>
+        </div>
+      }
+    </section>
+
+    <!-- Every figure below is computed by SQL over the filter above. -->
+    <section class="answer">
+      @for (t of r.totals ?? []; track t.currency) {
+        <div class="card total">
+          <h3>{{ t.currency }}</h3>
+          <div class="figure" [class.neg]="t.net.amount < 0" [class.pos]="t.net.amount > 0">
+            {{ t.net | money: 'bare' }}
+          </div>
+          <div class="split">
+            <span><label>Out</label><span class="mono neg">{{ t.spend | money: 'bare' }}</span></span>
+            <span><label>In</label><span class="mono pos">{{ t.income | money: 'bare' }}</span></span>
+            <span><label>Rows</label><span class="mono">{{ t.txn_count }}</span></span>
+          </div>
+        </div>
+      } @empty {
+        <div class="card"><div class="empty">Nothing matched that filter</div></div>
+      }
+    </section>
+
+    @if (r.rows?.length) {
+      <section class="card">
+        <div class="section-head"><h2>By {{ r.group_by }}</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ r.group_by }}</th>
+                <th>Currency</th>
+                <th class="num">Out</th>
+                <th class="num">In</th>
+                <th class="num">Net</th>
+                <th class="num">Rows</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of r.rows!; track row.bucket + row.currency) {
+                <tr>
+                  <td class="mono">{{ row.bucket }}</td>
+                  <td><span class="tag">{{ row.currency }}</span></td>
+                  <td class="num neg">{{ row.spend | money: 'bare' }}</td>
+                  <td class="num pos">{{ row.income | money: 'bare' }}</td>
+                  <td class="num" [class.neg]="row.net.amount < 0" [class.pos]="row.net.amount > 0">
+                    {{ row.net | money: 'bare' }}
+                  </td>
+                  <td class="num">{{ row.txn_count }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @if (r.transactions?.items?.length) {
+      <section class="card">
+        <div class="section-head">
+          <h2>Matching rows</h2>
+          <span class="small muted mono">
+            showing {{ r.transactions!.items.length }} of {{ r.transactions!.total }}
+          </span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Account</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th class="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (t of r.transactions!.items; track t.id) {
+                <tr>
+                  <td class="mono">{{ t.date | shortDate }}</td>
+                  <td>{{ t.account_name }}</td>
+                  <td>{{ t.merchant || t.description }}</td>
+                  <td class="muted">{{ t.category || '—' }}</td>
+                  <td class="num" [class.neg]="t.booked.amount < 0" [class.pos]="t.booked.amount > 0">
+                    {{ t.booked | money }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (r.transactions!.total > r.transactions!.items.length) {
+          <p class="small muted note">
+            <button class="bare" (click)="openInBlotter()">Open all {{ r.transactions!.total }} in the blotter →</button>
+          </p>
+        }
+      </section>
+    }
+  }
+}

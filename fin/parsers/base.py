@@ -82,11 +82,35 @@ def all_parsers() -> list[StatementParser]:
     return [c() for c in _REGISTRY]
 
 
+# Formats that are parsed as text. A parser declaring one of these must never be
+# offered a binary file.
+_TEXT_FORMATS = {FileFormat.CSV, FileFormat.OFX, FileFormat.QFX, FileFormat.JSON}
+_BINARY_SUFFIXES = {".pdf", ".xlsx", ".xls", ".zip", ".ofc"}
+_BINARY_MAGIC = (b"%PDF", b"PK\x03\x04", b"\xd0\xcf\x11\xe0")
+
+
+def looks_binary(path: Path, sample: bytes) -> bool:
+    """True when a file cannot sensibly be read as delimited text.
+
+    Several parsers sniff on the filename ("amex" in the name scores 0.3, "mox"
+    scores 0.6), so without this a CSV parser will happily claim `mox-statement.pdf`,
+    read zero rows out of the binary, and report success.
+    """
+    if path.suffix.lower() in _BINARY_SUFFIXES:
+        return True
+    if sample.startswith(_BINARY_MAGIC):
+        return True
+    return b"\x00" in sample[:8192]
+
+
 def select_parser(ctx: ParseContext, min_confidence: float = 0.5) -> StatementParser | None:
     """Pick the highest-confidence parser for a file, or None."""
     sample = ctx.path.read_bytes()[:65536]
+    binary = looks_binary(ctx.path, sample)
     scored = []
     for p in all_parsers():
+        if binary and p.file_format in _TEXT_FORMATS:
+            continue
         try:
             score = p.sniff(ctx, sample)
         except Exception:
@@ -158,14 +182,16 @@ def parse_amount(value: str, currency: str, *, credit_positive: bool = True) -> 
     if m:
         v = m.group("num")
         sign = m.group("sign").upper()
-        if sign in ("CR", "+"):
-            negative = not credit_positive
-        else:
-            negative = credit_positive or sign == "-"
         if sign == "CR":
-            negative = False
+            # credit_positive: a CR marker means money entering the account.
+            # Pass False for sources that write it the other way round.
+            negative = not credit_positive
         elif sign == "DR":
+            negative = credit_positive
+        elif sign == "-":
             negative = True
+        else:  # "+"
+            negative = False
 
     if v.startswith("-"):
         negative = True

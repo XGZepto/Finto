@@ -1,0 +1,391 @@
+/* ---------------------------------------------------------------------------
+   Finto design system.
+
+   The chrome is grey, black and white: panels, rules, nav, labels. Colour is
+   reserved for the things a financial interface has to encode — the sign of a
+   number, the state of a check, and series in a chart. Keeping the frame neutral
+   is what lets a red figure read as red at a glance rather than competing with a
+   coloured sidebar and three coloured buttons.
+
+   Square by intent. No rounded corners, hairline rules instead of shadows, and a
+   monospace face for anything a person reads as data: figures, codes, dates,
+   keys, labels. Prose stays in a proportional face, because a paragraph set in
+   mono is a chore to read. That split is the whole typographic system.
+--------------------------------------------------------------------------- */
+
+:root {
+  --bg: #08090a;
+  --panel: #0d0e10;
+  --panel-2: #131518;
+  --panel-3: #1a1d21;
+  --line: #232629;
+  --line-2: #31353a;
+
+  --fg: #e9eaec;
+  --fg-2: #9ba0a6;
+  --fg-3: #6a6f75;
+  --fg-4: #474b50;
+
+  /* Semantic. Money out, money in, needs attention, broken, informational. */
+  --neg: #f0736c;
+  --pos: #4ec98b;
+  --warn: #e0aa2a;
+  --bad: #f0736c;
+  --info: #5aa9e6;
+
+  /* Tinted washes for row/panel states — never used as fills for text. */
+  --neg-wash: #f0736c1f;
+  --pos-wash: #4ec98b1f;
+  --warn-wash: #e0aa2a1f;
+  --info-wash: #5aa9e61f;
+
+  /* Categorical series, for chart bars and breakdowns. Ordered so adjacent
+     entries stay distinguishable, including for the common colour deficiencies. */
+  --c1: #5aa9e6;
+  --c2: #4ec98b;
+  --c3: #e0aa2a;
+  --c4: #b98ae0;
+  --c5: #e08a5a;
+  --c6: #56c8c8;
+  --c7: #d97ba8;
+  --c8: #8fa4b8;
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, sans-serif;
+
+  color-scheme: dark;
+}
+
+/* A paper terminal: same structure, inverted. Colours are darkened rather than
+   reused, because the dark-mode values do not carry enough contrast on white. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f4f2;
+    --panel: #ffffff;
+    --panel-2: #fafaf9;
+    --panel-3: #eeeeec;
+    --line: #dcdcd8;
+    --line-2: #c4c4bf;
+
+    --fg: #17181a;
+    --fg-2: #55585c;
+    --fg-3: #7e8286;
+    --fg-4: #a3a7ab;
+
+    --neg: #c0392f;
+    --pos: #1f7a4d;
+    --warn: #8a6510;
+    --bad: #c0392f;
+    --info: #1d6fa5;
+
+    --neg-wash: #c0392f14;
+    --pos-wash: #1f7a4d14;
+    --warn-wash: #8a651014;
+    --info-wash: #1d6fa514;
+
+    --c1: #1d6fa5;
+    --c2: #1f7a4d;
+    --c3: #8a6510;
+    --c4: #6b4b9e;
+    --c5: #a0522d;
+    --c6: #12797c;
+    --c7: #a03a6b;
+    --c8: #4f6478;
+
+    color-scheme: light;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; min-height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--fg); color: var(--bg); }
+
+/* --- Type ---------------------------------------------------------------- */
+
+h1, h2, h3 { font-family: var(--mono); font-weight: 500; margin: 0; }
+
+h1 {
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+
+h2 {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+h3 {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+p { margin: 0 0 8px; }
+a { color: var(--fg); }
+
+.page-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.page-head .sub {
+  margin: 0;
+  color: var(--fg-3);
+  font-size: 12px;
+  max-width: 68ch;
+}
+
+.mono { font-family: var(--mono); }
+.muted { color: var(--fg-3); }
+.small { font-size: 11.5px; }
+.dim { color: var(--fg-4); }
+.nowrap { white-space: nowrap; }
+
+/* --- Surfaces ------------------------------------------------------------ */
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 16px;
+}
+
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.grid { display: grid; gap: 12px; }
+.spread { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.section-head label { margin: 0; }
+
+/* --- Controls ------------------------------------------------------------ */
+
+button, .btn {
+  padding: 5px 11px;
+  border: 1px solid var(--line-2);
+  border-radius: 0;
+  background: var(--panel-2);
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 80ms linear, border-color 80ms linear, background 80ms linear;
+}
+button:hover:not(:disabled), .btn:hover { color: var(--fg); border-color: var(--fg-3); }
+button:disabled { opacity: 0.35; cursor: not-allowed; }
+button.primary { background: var(--fg); border-color: var(--fg); color: var(--bg); font-weight: 500; }
+button.primary:hover:not(:disabled) { background: #fff; border-color: #fff; color: var(--bg); }
+button.ghost { background: transparent; border-color: var(--line); }
+button.danger:hover:not(:disabled) { color: var(--neg); border-color: var(--neg); }
+button.bare { background: none; border: none; padding: 0; color: var(--fg-3); }
+button.bare:hover { color: var(--fg); }
+
+input, select, textarea {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+input::placeholder, textarea::placeholder { color: var(--fg-4); }
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--fg-3);
+  background: var(--panel-2);
+}
+input[type='checkbox'] { accent-color: var(--fg-2); }
+
+label {
+  display: block;
+  margin-bottom: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+
+/* Segmented control — the terminal answer to a tab bar. */
+.seg { display: inline-flex; border: 1px solid var(--line); }
+.seg button {
+  border: none;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  padding: 5px 12px;
+}
+.seg button:last-child { border-right: none; }
+.seg button.on { background: var(--fg); color: var(--bg); }
+.seg button.on:hover { color: var(--bg); }
+
+/* --- Tables -------------------------------------------------------------- */
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--panel); }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 7px 12px;
+  text-align: left;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  white-space: nowrap;
+}
+td { padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--panel-2); }
+
+th.num, td.num {
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.amount.neg, .neg { color: var(--neg); }
+.amount.pos, .pos { color: var(--pos); }
+
+/* --- Marks --------------------------------------------------------------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 7px;
+  background: var(--panel-3);
+  border: 1px solid var(--line-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-2);
+  white-space: nowrap;
+}
+.chip button { padding: 0; border: none; background: none; color: var(--fg-4); font-size: 12px; line-height: 1; }
+.chip button:hover { color: var(--fg); border: none; }
+.chip.accent { border-color: var(--fg-3); color: var(--fg); }
+
+/* Tags are outlined with a faint wash rather than solid-filled — a solid badge
+   reads as a button, and none of these are clickable. */
+.tag {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid var(--line-2);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.tag.transfer { border-color: var(--info); background: var(--info-wash); color: var(--info); }
+.tag.installment { border-color: var(--warn); background: var(--warn-wash); color: var(--warn); }
+.tag.refund { border-color: var(--pos); background: var(--pos-wash); color: var(--pos); }
+.tag.travel { border-color: var(--c4); color: var(--c4); }
+.tag.bad { border-color: var(--bad); background: var(--neg-wash); color: var(--bad); }
+.tag.good { border-color: var(--pos); background: var(--pos-wash); color: var(--pos); }
+
+/* A status dot carries state in list rows where a tag would be too heavy. */
+.dot { display: inline-block; width: 7px; height: 7px; background: var(--fg-4); }
+.dot.ok { background: var(--pos); }
+.dot.bad { background: var(--bad); }
+.dot.warn { background: var(--warn); }
+.dot.info { background: var(--info); }
+
+.kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--line-2);
+  border-bottom-width: 2px;
+  background: var(--panel-2);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+  color: var(--fg-3);
+}
+
+/* --- Messages ------------------------------------------------------------ */
+
+.banner {
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  background: var(--panel-2);
+  font-size: 12px;
+}
+.banner.error { border-color: var(--bad); background: var(--neg-wash); color: var(--bad); }
+.banner.warn { border-color: var(--warn); background: var(--warn-wash); }
+.banner.ok { border-color: var(--pos); background: var(--pos-wash); }
+.banner.info { border-color: var(--info); background: var(--info-wash); }
+
+/* Proportional bar for breakdown rows. The series colour is set inline by the
+   component so a chart legend and its bars cannot drift apart. */
+.bar-track { display: block; width: 100%; height: 6px; background: var(--panel-3); }
+.bar-fill { display: block; height: 100%; background: var(--fg-3); }
+
+.empty {
+  padding: 36px 20px;
+  text-align: center;
+  color: var(--fg-4);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+}
+
+/* Not a spinner — a terminal blinks. */
+.spinner {
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--fg-3);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.spinner::after {
+  content: '▌';
+  animation: blink 1.05s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner::after { animation: none; }
+  * { transition: none !important; }
+}

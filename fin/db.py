@@ -10,24 +10,149 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from .models import (
-    Account, Card, DuplicateCandidate, FxRate, Institution, Money, RawRecord,
-    StatementFile, TransferCandidate, TransferGroup, Txn,
+    Account, Card, DuplicateCandidate, FxRate, InstallmentCandidate,
+    InstallmentPlan, Institution, Money, RawRecord, StatementFile,
+    TransferCandidate, TransferGroup, Txn,
 )
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
-def connect(db_path: str | Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(str(db_path))
+def connect(db_path: str | Path, *,
+            check_same_thread: bool = True) -> sqlite3.Connection:
+    """Open the ledger.
+
+    `check_same_thread` stays on by default: the CLI and the matchers are
+    single-threaded, and the check catches a real class of mistake. The API turns
+    it off deliberately — see `api/deps.py`, which explains why that is safe
+    there and would not be here.
+    """
+    conn = sqlite3.connect(str(db_path), check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
     return conn
 
 
-def init_db(conn: sqlite3.Connection) -> None:
+# ---------------------------------------------------------------------------
+# Migrations
+# ---------------------------------------------------------------------------
+# schema.sql uses CREATE TABLE IF NOT EXISTS, so an existing finto.db never
+# picks up changes on its own. Two kinds of change need handling:
+#
+#   * new columns      — ALTER TABLE ADD COLUMN, cheap and safe.
+#   * changed CHECKs   — SQLite cannot alter a constraint, so the table has to
+#                        be rebuilt. New TxnKind values (installment, refund
+#                        origination) hit exactly this.
+#
+# Migrations are driven by inspecting the live schema rather than a version
+# counter alone, so a database created at any point in the project's history
+# converges on the current shape.
+
+# (table, column, DDL) — additive, idempotent.
+_ADD_COLUMNS: list[tuple[str, str, str]] = [
+    ("card", "replaces_card_id",
+     "ALTER TABLE card ADD COLUMN replaces_card_id TEXT REFERENCES card(id)"),
+    ("txn", "installment_plan_id",
+     "ALTER TABLE txn ADD COLUMN installment_plan_id TEXT "
+     "REFERENCES installment_plan(id)"),
+    ("txn", "installment_seq", "ALTER TABLE txn ADD COLUMN installment_seq INTEGER"),
+    ("txn", "refund_of_id",
+     "ALTER TABLE txn ADD COLUMN refund_of_id TEXT REFERENCES txn(id)"),
+]
+
+# (table, token that must appear in the table's CHECK constraints). When the
+# token is missing the table is rebuilt from schema.sql.
+_REQUIRED_CONSTRAINTS: list[tuple[str, str]] = [
+    ("txn", "'installment'"),
+    ("transfer_group", "'installment_origination'"),
+    ("llm_decision", "'query'"),
+]
+
+
+def _table_sql(schema_text: str, table: str) -> str:
+    """Pull one CREATE TABLE statement out of schema.sql.
+
+    schema.sql stays the single source of truth for table shape — a rebuild
+    must not carry a second, drifting copy of the DDL.
+    """
+    marker = f"CREATE TABLE IF NOT EXISTS {table} ("
+    start = schema_text.index(marker)
+    end = schema_text.index(") STRICT;", start) + len(") STRICT;")
+    return schema_text[start:end]
+
+
+def _rebuild_table(conn: sqlite3.Connection, table: str, schema_text: str) -> None:
+    """Recreate a table with its current definition, preserving all rows.
+
+    SQLite's supported procedure: build the new table under a temporary name,
+    copy the columns that exist in both, swap, then rebuild indexes and views.
+    Foreign keys are suspended for the swap because the old and new tables
+    briefly coexist.
+    """
+    ddl = _table_sql(schema_text, table).replace(
+        f"CREATE TABLE IF NOT EXISTS {table} (", f"CREATE TABLE {table}__new (", 1)
+
+    old_cols = [r["name"] for r in conn.execute(f"PRAGMA table_info({table})")]
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.execute("BEGIN")
+        # Views referencing the table must go first; schema.sql recreates them.
+        views = [r["name"] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='view'")]
+        for v in views:
+            conn.execute(f"DROP VIEW IF EXISTS {v}")
+        conn.execute(ddl)
+        new_cols = [r["name"] for r in conn.execute(f"PRAGMA table_info({table}__new)")]
+        shared = [c for c in old_cols if c in new_cols]
+        cols = ", ".join(shared)
+        conn.execute(f"INSERT INTO {table}__new ({cols}) SELECT {cols} FROM {table}")
+        conn.execute(f"DROP TABLE {table}")
+        conn.execute(f"ALTER TABLE {table}__new RENAME TO {table}")
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+    # Indexes and views were dropped with the old table; schema.sql restores
+    # them and is idempotent.
+    conn.executescript(schema_text)
+    conn.commit()
+
+
+def migrate(conn: sqlite3.Connection) -> list[str]:
+    """Bring an existing database up to the current schema. Idempotent."""
+    schema_text = SCHEMA_PATH.read_text()
+    applied: list[str] = []
+
+    for table, column, ddl in _ADD_COLUMNS:
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if cols and column not in cols:
+            conn.execute(ddl)
+            applied.append(f"{table}.{column}")
+    conn.commit()
+
+    for table, token in _REQUIRED_CONSTRAINTS:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+            (table,)).fetchone()
+        if row and row["sql"] and token not in row["sql"]:
+            _rebuild_table(conn, table, schema_text)
+            applied.append(f"{table} (rebuilt for {token})")
+
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    conn.commit()
+    return applied
+
+
+SCHEMA_VERSION = 3
+
+
+def init_db(conn: sqlite3.Connection) -> list[str]:
     conn.executescript(SCHEMA_PATH.read_text())
     conn.commit()
+    return migrate(conn)
 
 
 def _iso(v) -> str | None:
@@ -65,26 +190,45 @@ def upsert_account(conn, a: Account) -> None:
          a.primary_currency, a.balance_group, a.masked_number,
          int(a.is_own_account), _iso(a.opened_on), _iso(a.closed_on), a.notes),
     )
+    # Declared settlement currencies are replaced wholesale: the config file is
+    # the authority, and a currency removed there must stop being permitted.
+    conn.execute("DELETE FROM account_currency WHERE account_id=?", (a.id,))
+    conn.executemany(
+        "INSERT INTO account_currency (account_id, currency, is_primary) "
+        "VALUES (?,?,?)",
+        [(a.id, c, int(c == a.primary_currency)) for c in a.settlement_currencies],
+    )
 
 
 def upsert_card(conn, c: Card) -> None:
     conn.execute(
         "INSERT INTO card (id, account_id, cardholder_name, last4, "
-        "is_supplementary, issued_on, closed_on) VALUES (?,?,?,?,?,?,?) "
+        "is_supplementary, issued_on, closed_on, replaces_card_id) "
+        "VALUES (?,?,?,?,?,?,?,?) "
         "ON CONFLICT(id) DO UPDATE SET cardholder_name=excluded.cardholder_name, "
-        "last4=excluded.last4, is_supplementary=excluded.is_supplementary",
+        "last4=excluded.last4, is_supplementary=excluded.is_supplementary, "
+        "issued_on=excluded.issued_on, closed_on=excluded.closed_on, "
+        "replaces_card_id=excluded.replaces_card_id",
         (c.id, c.account_id, c.cardholder_name, c.last4,
-         int(c.is_supplementary), _iso(c.issued_on), _iso(c.closed_on)),
+         int(c.is_supplementary), _iso(c.issued_on), _iso(c.closed_on),
+         c.replaces_card_id),
     )
 
 
 def load_accounts(conn) -> dict[str, Account]:
+    ccys: dict[str, list[str]] = {}
+    for r in conn.execute(
+            "SELECT account_id, currency FROM account_currency "
+            "ORDER BY is_primary DESC, currency"):
+        ccys.setdefault(r["account_id"], []).append(r["currency"])
     out = {}
     for r in conn.execute("SELECT * FROM account"):
         out[r["id"]] = Account(
             id=r["id"], institution_id=r["institution_id"],
             display_name=r["display_name"], account_type=r["account_type"],
-            primary_currency=r["primary_currency"], balance_group=r["balance_group"],
+            primary_currency=r["primary_currency"],
+            settlement_currencies=ccys.get(r["id"], []),
+            balance_group=r["balance_group"],
             masked_number=r["masked_number"], is_own_account=bool(r["is_own_account"]),
             notes=r["notes"],
         )
@@ -95,9 +239,31 @@ def load_cards(conn) -> list[Card]:
     return [
         Card(id=r["id"], account_id=r["account_id"],
              cardholder_name=r["cardholder_name"], last4=r["last4"],
-             is_supplementary=bool(r["is_supplementary"]))
-        for r in conn.execute("SELECT * FROM card")
+             is_supplementary=bool(r["is_supplementary"]),
+             issued_on=date.fromisoformat(r["issued_on"]) if r["issued_on"] else None,
+             closed_on=date.fromisoformat(r["closed_on"]) if r["closed_on"] else None,
+             replaces_card_id=r["replaces_card_id"])
+        for r in conn.execute("SELECT * FROM card ORDER BY id")
     ]
+
+
+def card_lineage_roots(conn) -> dict[str, str]:
+    """Map every card id to the root of its reissue chain.
+
+    A card reissued twice gives C -> B -> A; all three report as A, so
+    "spend on this card" survives renumbering. Cycles (a config mistake) resolve
+    to the card itself rather than looping.
+    """
+    parent = {r["id"]: r["replaces_card_id"]
+              for r in conn.execute("SELECT id, replaces_card_id FROM card")}
+    roots: dict[str, str] = {}
+    for cid in parent:
+        seen, cur = {cid}, cid
+        while parent.get(cur) and parent[cur] not in seen:
+            cur = parent[cur]
+            seen.add(cur)
+        roots[cid] = cur
+    return roots
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +302,17 @@ def insert_raw_records(conn, records: Iterable[RawRecord]) -> None:
 # Transactions
 # ---------------------------------------------------------------------------
 
+_TXN_COLUMNS = (
+    "id", "account_id", "card_id", "txn_date", "posted_date", "status",
+    "amount_booked", "currency_booked", "amount_native", "currency_native",
+    "fx_rate", "fx_fee_booked", "description_raw", "description_norm", "merchant",
+    "counterparty", "external_ref", "kind", "category", "subcategory",
+    "transfer_group_id", "duplicate_of_id", "installment_plan_id",
+    "installment_seq", "refund_of_id", "dedup_key", "statement_file_id",
+    "raw_record_id", "review_state", "notes", "created_at", "updated_at",
+)
+
+
 def insert_txns(conn, txns: Sequence[Txn]) -> int:
     rows = []
     for t in txns:
@@ -148,20 +325,47 @@ def insert_txns(conn, txns: Sequence[Txn]) -> int:
             t.fx_fee.amount if t.fx_fee else None,
             t.description_raw, t.description_norm, t.merchant, t.counterparty,
             t.external_ref, t.kind.value, t.category, t.subcategory,
-            t.transfer_group_id, t.duplicate_of_id, t.dedup_key,
+            t.transfer_group_id, t.duplicate_of_id, t.installment_plan_id,
+            t.installment_seq, t.refund_of_id, t.dedup_key,
             t.statement_file_id, t.raw_record_id, t.review_state, t.notes,
             _iso(t.created_at), _iso(t.updated_at),
         ))
     conn.executemany(
-        "INSERT OR REPLACE INTO txn (id, account_id, card_id, txn_date, posted_date, "
-        "status, amount_booked, currency_booked, amount_native, currency_native, "
-        "fx_rate, fx_fee_booked, description_raw, description_norm, merchant, "
-        "counterparty, external_ref, kind, category, subcategory, transfer_group_id, "
-        "duplicate_of_id, dedup_key, statement_file_id, raw_record_id, review_state, "
-        "notes, created_at, updated_at) VALUES (" + ",".join("?" * 29) + ")",
+        f"INSERT OR REPLACE INTO txn ({', '.join(_TXN_COLUMNS)}) "
+        f"VALUES ({','.join('?' * len(_TXN_COLUMNS))})",
         rows,
     )
+    insert_txn_details(conn, txns)
     return len(rows)
+
+
+def insert_txn_details(conn, txns: Sequence[Txn]) -> int:
+    """Persist extracted structured facts (flight routing, passenger, address).
+
+    Parser-sourced details never overwrite a manual correction, so this inserts
+    with OR IGNORE and leaves anything already recorded by a human alone.
+    """
+    rows = [(t.id, k, v, "parser")
+            for t in txns for k, v in (t.details or {}).items() if v]
+    if not rows:
+        return 0
+    conn.executemany(
+        "INSERT OR IGNORE INTO txn_detail (txn_id, key, value, source) "
+        "VALUES (?,?,?,?)", rows)
+    return len(rows)
+
+
+def load_txn_details(conn, txn_ids: Sequence[str]) -> dict[str, dict[str, str]]:
+    if not txn_ids:
+        return {}
+    out: dict[str, dict[str, str]] = {}
+    for chunk in (txn_ids[i:i + 500] for i in range(0, len(txn_ids), 500)):
+        q = ",".join("?" * len(chunk))
+        for r in conn.execute(
+                f"SELECT txn_id, key, value FROM txn_detail WHERE txn_id IN ({q})",
+                tuple(chunk)):
+            out.setdefault(r["txn_id"], {})[r["key"]] = r["value"]
+    return out
 
 
 def load_txns(conn, *, include_duplicates: bool = False) -> list[Txn]:
@@ -185,7 +389,10 @@ def load_txns(conn, *, include_duplicates: bool = False) -> list[Txn]:
             merchant=r["merchant"], counterparty=r["counterparty"],
             external_ref=r["external_ref"], kind=r["kind"], category=r["category"],
             subcategory=r["subcategory"], transfer_group_id=r["transfer_group_id"],
-            duplicate_of_id=r["duplicate_of_id"], dedup_key=r["dedup_key"],
+            duplicate_of_id=r["duplicate_of_id"],
+            installment_plan_id=r["installment_plan_id"],
+            installment_seq=r["installment_seq"], refund_of_id=r["refund_of_id"],
+            dedup_key=r["dedup_key"],
             statement_file_id=r["statement_file_id"], raw_record_id=r["raw_record_id"],
             review_state=r["review_state"], notes=r["notes"],
         ))
@@ -193,11 +400,13 @@ def load_txns(conn, *, include_duplicates: bool = False) -> list[Txn]:
 
 
 def update_txn_links(conn, txns: Sequence[Txn]) -> None:
-    """Persist only the fields the dedup/transfer passes mutate."""
+    """Persist only the fields the dedup/transfer/installment passes mutate."""
     conn.executemany(
         "UPDATE txn SET duplicate_of_id=?, transfer_group_id=?, kind=?, "
+        "installment_plan_id=?, installment_seq=?, refund_of_id=?, "
         "updated_at=? WHERE id=?",
         [(t.duplicate_of_id, t.transfer_group_id, t.kind.value,
+          t.installment_plan_id, t.installment_seq, t.refund_of_id,
           datetime.now().isoformat(), t.id) for t in txns],
     )
 
@@ -207,11 +416,22 @@ def update_txn_links(conn, txns: Sequence[Txn]) -> None:
 # ---------------------------------------------------------------------------
 
 def insert_transfer_groups(conn, groups: Sequence[TransferGroup]) -> None:
+    """Upsert transfer groups, keyed on the group's (deterministic) id.
+
+    Re-running reconcile re-proposes the same groups, so this must converge
+    rather than accumulate. A group you confirmed by hand is never downgraded by
+    a later automatic pass — hence the WHERE on the upsert.
+    """
     for g in groups:
         conn.execute(
-            "INSERT OR REPLACE INTO transfer_group (id, kind, match_method, "
+            "INSERT INTO transfer_group (id, kind, match_method, "
             "confidence, fee_booked, fee_currency, is_confirmed, notes, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "VALUES (?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, "
+            "match_method=excluded.match_method, confidence=excluded.confidence, "
+            "fee_booked=excluded.fee_booked, fee_currency=excluded.fee_currency, "
+            "notes=excluded.notes "
+            "WHERE transfer_group.is_confirmed = 0",
             (g.id, g.kind.value, g.match_method, g.confidence,
              g.fee.amount if g.fee else None, g.fee.currency if g.fee else None,
              int(g.is_confirmed), g.notes, _iso(g.created_at)),
@@ -240,6 +460,84 @@ def insert_duplicate_candidates(conn, cands: Sequence[DuplicateCandidate]) -> No
         [(c.id, c.keep_txn_id, c.dupe_txn_id, c.score, json.dumps(c.reasons),
           c.resolution, _iso(c.created_at)) for c in cands],
     )
+
+
+# ---------------------------------------------------------------------------
+# Installment plans
+# ---------------------------------------------------------------------------
+
+def insert_installment_plans(conn, plans: Sequence[InstallmentPlan]) -> None:
+    """Upsert plans on their deterministic id, preserving manual confirmations."""
+    for p in plans:
+        conn.execute(
+            "INSERT INTO installment_plan (id, account_id, card_id, merchant, "
+            "description, principal, currency, term_months, start_date, fee_total, "
+            "apr, external_ref, status, match_method, confidence, is_confirmed, "
+            "notes, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(id) DO UPDATE SET merchant=excluded.merchant, "
+            "description=excluded.description, principal=excluded.principal, "
+            "term_months=excluded.term_months, start_date=excluded.start_date, "
+            "status=excluded.status, confidence=excluded.confidence, "
+            "card_id=excluded.card_id "
+            "WHERE installment_plan.is_confirmed = 0",
+            (p.id, p.account_id, p.card_id, p.merchant, p.description,
+             p.principal.amount, p.principal.currency, p.term_months,
+             _iso(p.start_date), p.fee_total.amount if p.fee_total else None,
+             str(p.apr) if p.apr is not None else None, p.external_ref,
+             p.status.value, p.match_method, p.confidence, int(p.is_confirmed),
+             p.notes, _iso(p.created_at)),
+        )
+
+
+def insert_installment_candidates(conn, cands: Sequence[InstallmentCandidate]) -> None:
+    conn.executemany(
+        "INSERT OR IGNORE INTO installment_candidate (id, account_id, description, "
+        "txn_ids, term_months, score, reasons, resolution, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        [(c.id, c.account_id, c.description, json.dumps(c.txn_ids), c.term_months,
+          c.score, json.dumps(c.reasons), c.resolution, _iso(c.created_at))
+         for c in cands],
+    )
+
+
+def prune_orphan_installment_plans(conn) -> int:
+    """Drop unconfirmed plans no transaction belongs to any more."""
+    cur = conn.execute(
+        "DELETE FROM installment_plan WHERE is_confirmed = 0 AND id NOT IN "
+        "(SELECT installment_plan_id FROM txn WHERE installment_plan_id IS NOT NULL)")
+    return cur.rowcount
+
+
+def load_installment_plans(conn, *, active_only: bool = False) -> list[dict]:
+    """Plans with progress: how many instalments are in the ledger, and what's left."""
+    sql = """
+        SELECT p.*,
+               COUNT(t.id)                       AS paid_count,
+               COALESCE(SUM(t.amount_booked), 0) AS paid_minor
+        FROM installment_plan p
+        LEFT JOIN txn t ON t.installment_plan_id = p.id AND t.duplicate_of_id IS NULL
+        {where}
+        GROUP BY p.id
+        ORDER BY p.start_date DESC
+    """.format(where="WHERE p.status = 'active'" if active_only else "")
+    out = []
+    for r in conn.execute(sql):
+        per = abs(r["principal"]) // r["term_months"] if r["term_months"] else 0
+        remaining = max(0, r["term_months"] - r["paid_count"])
+        out.append({
+            "id": r["id"], "account_id": r["account_id"], "card_id": r["card_id"],
+            "merchant": r["merchant"], "description": r["description"],
+            "principal": {"amount": r["principal"], "currency": r["currency"]},
+            "term_months": r["term_months"], "start_date": r["start_date"],
+            "status": r["status"], "confidence": r["confidence"],
+            "is_confirmed": bool(r["is_confirmed"]),
+            "paid_count": r["paid_count"],
+            "paid": {"amount": r["paid_minor"], "currency": r["currency"]},
+            "remaining_count": remaining,
+            "outstanding": {"amount": -(per * remaining), "currency": r["currency"]},
+            "per_installment": {"amount": -per, "currency": r["currency"]},
+        })
+    return out
 
 
 # ---------------------------------------------------------------------------

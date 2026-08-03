@@ -20,11 +20,12 @@ transfer_candidate for you to accept or reject.
 
 from __future__ import annotations
 
+import hashlib
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
-from typing import Mapping, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from .models import (
     Account, AccountType, Money, TransferCandidate, TransferGroup, TransferKind,
@@ -43,6 +44,21 @@ FX_TOLERANCE_PCT = Decimal("0.03")
 class TransferReport:
     groups: list[TransferGroup]
     candidates: list[TransferCandidate]
+
+
+def transfer_group_id(leg_txn_ids: Iterable[str]) -> str:
+    """Deterministic group id, derived from the legs it contains.
+
+    This must not be random. `reconcile` re-runs over the whole ledger every
+    time, so a uuid4 here created a brand-new group for the same pair on every
+    run: transfer_group and transfer_leg grew without bound while
+    txn.transfer_group_id pointed only at the newest one. Nothing caught it —
+    each stale group still had exactly one inflow and one outflow leg, so every
+    structural invariant stayed green while `stats` over-reported transfers.
+
+    Deriving the id from the legs makes re-running reconcile a no-op.
+    """
+    return hashlib.sha256("|".join(sorted(leg_txn_ids)).encode()).hexdigest()[:32]
 
 
 def find_transfers(
@@ -109,6 +125,7 @@ def find_transfers(
         if c.score >= AUTO_LINK_THRESHOLD:
             out, inc = index[c.out_txn_id], index[c.in_txn_id]
             g = TransferGroup(
+                id=transfer_group_id([out.id, inc.id]),
                 kind=_classify(out, inc, accounts),
                 match_method="auto",
                 confidence=c.score,

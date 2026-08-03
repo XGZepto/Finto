@@ -1,0 +1,67 @@
+.liability {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.block h3 { margin-bottom: 10px; }
+.block p { margin: 8px 0 0; max-width: 40ch; }
+
+.figure {
+  font-family: var(--mono);
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+.figure.none { font-size: 13px; color: var(--fg-4); letter-spacing: 0.1em; }
+
+section.card { margin-bottom: 12px; }
+tr.clickable { cursor: pointer; }
+td.caret, th:first-child { width: 22px; padding-right: 0; color: var(--fg-4); }
+.desc { margin-right: 6px; }
+
+th.prog, td.prog { width: 130px; }
+td.prog .bar-track { margin-bottom: 3px; }
+td.prog .bar-fill { background: var(--info); }
+
+/* Expanded schedule ------------------------------------------------------- */
+
+tr.schedule-row:hover { background: transparent; }
+tr.schedule-row td { background: var(--panel-2); padding: 14px 16px; }
+
+.schedule .meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.schedule .meta span { font-size: 12px; }
+
+.ticks { list-style: none; margin: 0; padding: 0; }
+.ticks li {
+  display: grid;
+  grid-template-columns: 28px 92px 1fr 70px;
+  gap: 10px;
+  align-items: center;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+}
+.ticks li:last-child { border-bottom: none; }
+.ticks .seq { color: var(--fg-4); text-align: right; }
+.ticks .amt { text-align: right; font-variant-numeric: tabular-nums; }
+.ticks .state {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  text-align: right;
+}
+.ticks li.due { color: var(--fg-3); }
+.ticks li.due .date, .ticks li.due .amt { color: var(--fg-4); }
+.ticks li.due .state { color: var(--warn); }
+
+.schedule p { margin: 10px 0 0; }

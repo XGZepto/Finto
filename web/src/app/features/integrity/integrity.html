@@ -1,0 +1,163 @@
+<div class="page-head">
+  <h1>Integrity</h1>
+  <p class="sub">
+    Statements print a running balance. That number is the bank's, independent of
+    our parsing — so if our transactions reproduce it, nothing was dropped.
+  </p>
+</div>
+
+@if (loading()) {
+  <div class="card"><div class="spinner">checking </div></div>
+} @else if (report(); as r) {
+  <div class="verdict" [class.bad]="!r.healthy">
+    <span class="dot" [class.ok]="r.healthy" [class.bad]="!r.healthy"></span>
+    <span class="text">
+      @if (r.healthy) {
+        Ledger reconciles. {{ okCount() }} balance checks passed, no structural violations.
+      } @else {
+        {{ r.summary.discrepancy_count }} balance
+        {{ r.summary.discrepancy_count === 1 ? 'discrepancy' : 'discrepancies' }},
+        {{ r.summary.violation_count }} structural
+        {{ r.summary.violation_count === 1 ? 'violation' : 'violations' }}.
+      }
+    </span>
+    <button class="ghost" (click)="load()">Re-run</button>
+  </div>
+
+  <section class="stats">
+    <div class="card stat">
+      <span class="v mono">{{ r.summary.checks_run }}</span>
+      <span class="k">Checks run</span>
+    </div>
+    <div class="card stat" [class.bad]="r.summary.discrepancy_count > 0">
+      <span class="v mono">{{ r.summary.discrepancy_count }}</span>
+      <span class="k">Discrepancies</span>
+    </div>
+    <div class="card stat" [class.bad]="r.summary.violation_count > 0">
+      <span class="v mono">{{ r.summary.violation_count }}</span>
+      <span class="k">Violations</span>
+    </div>
+    <div class="card stat" [class.warn]="r.summary.unverified_account_count > 0">
+      <span class="v mono">{{ r.summary.unverified_account_count }}</span>
+      <span class="k">Unverified accounts</span>
+    </div>
+  </section>
+
+  <!-- Structural invariants. These should always be empty. -->
+  <section class="card">
+    <div class="section-head"><h2>Structural invariants</h2></div>
+    @if (r.violations.length) {
+      @for (v of r.violations; track v.check) {
+        <div class="banner error violation">
+          <span class="mono name">{{ v.check }}</span>
+          <span class="count mono">×{{ v.count }}</span>
+          <span class="desc">{{ v.description }}</span>
+        </div>
+      }
+    } @else {
+      <p class="small muted clean">
+        All clean. No orphaned transfer groups, one-legged transfers, duplicate
+        chains or currency mismatches.
+      </p>
+    }
+  </section>
+
+  <!-- Balance reconciliation, the check that can actually find a missing row. -->
+  <section class="card">
+    <div class="section-head">
+      <h2>Balance reconciliation</h2>
+      <div class="seg">
+        <button [class.on]="!showAllChecks()" (click)="showAllChecks.set(false)">Problems</button>
+        <button [class.on]="showAllChecks()" (click)="showAllChecks.set(true)">All periods</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Account</th>
+            <th>Period</th>
+            <th class="num">Bank moved</th>
+            <th class="num">We hold</th>
+            <th class="num">Difference</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of checks(); track c.account_id + c.period) {
+            <tr [class.problem]="c.status === 'discrepancy'">
+              <td><span class="dot" [class.ok]="c.status === 'ok'" [class.bad]="c.status === 'discrepancy'"></span></td>
+              <td>{{ c.account_name || c.account_id }}</td>
+              <td class="mono small">
+                {{ c.period_start | shortDate }} → {{ c.period_end | shortDate }}
+              </td>
+              <td class="num">{{ c.expected_delta | money: 'bare' }}</td>
+              <td class="num">{{ c.actual_delta | money: 'bare' }}</td>
+              <td class="num" [class.neg]="c.status === 'discrepancy'">
+                {{ c.discrepancy | money }}
+              </td>
+              <td class="action">
+                @if (c.status === 'discrepancy') {
+                  <button class="bare" (click)="inspect(c)">inspect →</button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" class="empty">
+                @if (showAllChecks()) {
+                  No balance assertions recorded — parsers capture these when the
+                  statement has a balance column
+                } @else {
+                  Every checked period reconciles to the cent
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (checks().length && !showAllChecks()) {
+      <p class="small muted note">
+        A difference is located to the day and the cent. Inspect opens the blotter
+        over exactly that period, with transfers and duplicates shown, because the
+        missing row could be any of them.
+      </p>
+    }
+  </section>
+
+  <!-- Nothing checked is not the same as nothing wrong. -->
+  <section class="card">
+    <div class="section-head"><h2>Unverified accounts</h2></div>
+    @if (r.unverified_accounts.length) {
+      <p class="small muted">
+        These hold transactions but have fewer than two balance assertions, so
+        nothing about them has been proven. Import a statement that carries a
+        running balance, or record one by hand.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Account</th><th class="num">Transactions</th><th></th></tr>
+          </thead>
+          <tbody>
+            @for (u of r.unverified_accounts; track u.account_id) {
+              <tr>
+                <td>{{ u.display_name }}</td>
+                <td class="num">{{ u.txn_count }}</td>
+                <td class="action">
+                  <button class="bare" (click)="inspectAccount(u.account_id)">open →</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <p class="small muted clean">Every account with transactions has been checked against a balance.</p>
+    }
+  </section>
+}

@@ -16,6 +16,8 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from ..enrich import extract_details
+from ..installments import parse_installment_marker
 from ..models import FileFormat, Money, ParsedTxn, TxnKind, TxnStatus
 from .base import (
     ParseContext, ParseResult, StatementParser, has_columns, parse_amount,
@@ -99,6 +101,16 @@ class AmexCsvParser(StatementParser):
                 except ValueError:
                     pass
 
+            # AMEX's Extended Details carry the richest metadata of any source
+            # here — flight routing, passenger name, ticket number, merchant
+            # address. Extract it into structured facts rather than losing it.
+            details = extract_details(
+                extended=ext,
+                columns={k: v for k, v in row.items()
+                         if k.lower() not in ("date", "amount")},
+                description=desc,
+            )
+
             txns.append(ParsedTxn(
                 txn_date=d,
                 booked=booked,
@@ -108,7 +120,9 @@ class AmexCsvParser(StatementParser):
                 cardholder_hint=pick(row, "Card Member") or None,
                 card_last4=(pick(row, "Account #", "Card Number") or "")[-4:] or None,
                 external_ref=pick(row, "Reference", "Reference ID") or None,
-                kind_hint=TxnKind.CC_PAYMENT if _looks_like_payment(desc) else None,
+                kind_hint=_amex_kind(desc),
+                installment_hint=parse_installment_marker(desc or ext),
+                details=details,
                 line_no=i,
                 extra={"category_hint": pick(row, "Category")},
             ))
@@ -183,17 +197,14 @@ class HsbcHkCsvParser(StatementParser):
                 counterparty=pick(row, "Payee", "Beneficiary") or None,
                 external_ref=pick(row, "Reference", "Transaction Reference") or None,
                 kind_hint=_hsbc_kind(desc),
+                installment_hint=parse_installment_marker(desc),
+                details=extract_details(columns=row, description=desc),
                 line_no=i,
             ))
 
             # The running balance is the bank's own figure. Capturing it is what
             # lets integrity.check_account detect rows we failed to parse.
-            bal = pick(row, "Balance", "Running Balance", "Ledger Balance")
-            if bal:
-                try:
-                    balances.append((d, parse_amount(bal, ccy)))
-                except ValueError:
-                    pass
+            balances.extend(_balance_at(row, d, ccy))
 
         return ParseResult(txns=txns, raw_rows=rows, warnings=warnings,
                            account_id=ctx.account_id, balances=balances)
@@ -281,17 +292,14 @@ class WiseCsvParser(StatementParser):
                 # Wise's own ID — authoritative, makes dedup exact.
                 external_ref=pick(row, "TransferWise ID", "Wise ID", "ID") or None,
                 kind_hint=kind,
+                details=extract_details(columns=row,
+                                        description=pick(row, "Description")),
                 line_no=i,
                 extra={"exchange_from": ex_from, "exchange_to": ex_to,
                        "reference": pick(row, "Payment Reference")},
             ))
 
-            bal = pick(row, "Running Balance")
-            if bal:
-                try:
-                    balances.append((d, parse_amount(bal, ccy)))
-                except ValueError:
-                    pass
+            balances.extend(_balance_at(row, d, ccy))
 
         return ParseResult(txns=txns, raw_rows=rows, warnings=warnings,
                            account_id=ctx.account_id, balances=balances)
@@ -327,7 +335,7 @@ class MoxCsvParser(StatementParser):
     def parse(self, ctx: ParseContext) -> ParseResult:
         header, rows = read_csv_rows(ctx.path)
         ccy = ctx.default_currency or "HKD"
-        txns, warnings = [], []
+        txns, warnings, balances = [], [], []
         for i, row in enumerate(rows):
             raw_date = pick(row, "Date", "Transaction Date")
             raw_amt = pick(row, "Amount", "Transaction Amount")
@@ -345,10 +353,16 @@ class MoxCsvParser(StatementParser):
                 description_raw=pick(row, "Description", "Details", "Merchant") or "(no description)",
                 merchant=pick(row, "Merchant") or None,
                 external_ref=pick(row, "Reference", "Transaction ID") or None,
+                installment_hint=parse_installment_marker(
+                    pick(row, "Description", "Details", "Merchant")),
+                details=extract_details(
+                    columns=row,
+                    description=pick(row, "Description", "Details", "Merchant")),
                 line_no=i,
             ))
+            balances.extend(_balance_at(row, d, ccy))
         return ParseResult(txns=txns, raw_rows=rows, warnings=warnings,
-                           account_id=ctx.account_id)
+                           account_id=ctx.account_id, balances=balances)
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +391,7 @@ class GenericCsvParser(StatementParser):
     def parse(self, ctx: ParseContext) -> ParseResult:
         header, rows = read_csv_rows(ctx.path)
         ccy = ctx.default_currency or "HKD"
-        txns, warnings = [], []
+        txns, warnings, balances = [], [], []
         for i, row in enumerate(rows):
             raw_date = pick(row, "Date", "Transaction Date", "Posting Date", "Value Date")
             raw_amt = pick(row, "Amount", "Transaction Amount", "Value")
@@ -403,10 +417,16 @@ class GenericCsvParser(StatementParser):
                 txn_date=d,
                 booked=booked,
                 description_raw=pick(row, "Description", "Details", "Narrative", "Memo") or "(no description)",
+                installment_hint=parse_installment_marker(
+                    pick(row, "Description", "Details", "Narrative", "Memo")),
+                details=extract_details(
+                    columns=row,
+                    description=pick(row, "Description", "Details", "Narrative", "Memo")),
                 line_no=i,
             ))
+            balances.extend(_balance_at(row, d, ccy))
         return ParseResult(txns=txns, raw_rows=rows, warnings=warnings,
-                           account_id=ctx.account_id)
+                           account_id=ctx.account_id, balances=balances)
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +441,31 @@ _TRANSFER_WORDS = re.compile(
 
 def _looks_like_payment(desc: str) -> bool:
     return bool(desc and _PAYMENT_WORDS.search(desc))
+
+
+def _amex_kind(desc: str) -> TxnKind | None:
+    if _looks_like_payment(desc):
+        return TxnKind.CC_PAYMENT
+    if desc and parse_installment_marker(desc):
+        return TxnKind.INSTALLMENT
+    return None
+
+
+def _balance_at(row: dict, d: date, ccy: str) -> list[tuple]:
+    """Capture the statement's own running balance when the row carries one.
+
+    This is the independent check that we captured every transaction — see
+    integrity.check_account. Any parser reading a source with a balance column
+    should call this; without it `check` has nothing to verify the account
+    against and a dropped row stays invisible.
+    """
+    bal = pick(row, "Balance", "Running Balance", "Ledger Balance", "Closing Balance")
+    if not bal:
+        return []
+    try:
+        return [(d, parse_amount(bal, ccy))]
+    except ValueError:
+        return []
 
 
 def _hsbc_kind(desc: str) -> TxnKind | None:

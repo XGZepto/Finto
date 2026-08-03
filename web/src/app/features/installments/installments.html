@@ -1,0 +1,132 @@
+<div class="page-head">
+  <h1>Instalments</h1>
+  <p class="sub">
+    What you still owe, and what is already committed for next month. Neither
+    figure exists in the transaction rows — those are cash-basis by necessity.
+  </p>
+</div>
+
+<section class="liability">
+  <div class="card block">
+    <h3>Outstanding</h3>
+    @for (o of outstanding(); track o.currency) {
+      <div class="figure neg">{{ o | money }}</div>
+    } @empty {
+      <div class="figure none">nothing owed</div>
+    }
+    <p class="small muted">Principal less instalments already charged.</p>
+  </div>
+
+  <div class="card block">
+    <h3>Committed monthly</h3>
+    @for (m of monthly(); track m.currency) {
+      <div class="figure neg">{{ m | money }}</div>
+    } @empty {
+      <div class="figure none">—</div>
+    }
+    <p class="small muted">Known future outflow, every month, until each plan ends.</p>
+  </div>
+
+  <div class="card block">
+    <h3>Active plans</h3>
+    <div class="figure">{{ plans().length }}</div>
+    <p class="small muted">
+      A plan is a group of charges the matcher linked. Anything ambiguous waits
+      in the review queue instead.
+    </p>
+  </div>
+</section>
+
+<section class="card">
+  <div class="section-head">
+    <h2>Plans</h2>
+    <div class="seg">
+      <button [class.on]="activeOnly()" (click)="setActiveOnly(true)">Active</button>
+      <button [class.on]="!activeOnly()" (click)="setActiveOnly(false)">All</button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="spinner">loading </div>
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Plan</th>
+            <th>Account</th>
+            <th>Started</th>
+            <th class="prog">Progress</th>
+            <th class="num">Per month</th>
+            <th class="num">Outstanding</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of plans(); track p.id) {
+            <tr class="clickable" (click)="toggle(p)">
+              <td class="caret mono">{{ expanded() === p.id ? '▾' : '▸' }}</td>
+              <td>
+                <span class="desc">{{ p.merchant || p.description }}</span>
+                @if (isUncertain(p)) {
+                  <span class="tag" title="Matched automatically, not confirmed">
+                    {{ (p.confidence * 100).toFixed(0) }}%
+                  </span>
+                }
+              </td>
+              <td class="mono small">{{ p.account_id }}</td>
+              <td class="mono small">{{ p.start_date | shortDate }}</td>
+              <td class="prog">
+                <span class="bar-track">
+                  <span class="bar-fill" [style.width]="progress(p)"></span>
+                </span>
+                <span class="mono small muted">{{ p.paid_count }}/{{ p.term_months }}</span>
+              </td>
+              <td class="num neg">{{ p.per_installment | money: 'bare' }}</td>
+              <td class="num neg">{{ p.outstanding | money: 'bare' }}</td>
+              <td>
+                <span class="tag" [class.good]="p.status === 'completed'">{{ p.status }}</span>
+              </td>
+            </tr>
+
+            @if (expanded() === p.id) {
+              <tr class="schedule-row">
+                <td colspan="8">
+                  @if (detail(); as d) {
+                    <div class="schedule">
+                      <div class="meta">
+                        <div><label>Principal</label><span class="mono">{{ d.principal | money }}</span></div>
+                        <div><label>Paid</label><span class="mono">{{ d.paid | money }}</span></div>
+                        <div><label>Remaining</label><span class="mono">{{ d.remaining_count }} charges</span></div>
+                        <div><label>Matched</label><span class="mono">{{ d.is_confirmed ? 'confirmed' : 'automatic' }}</span></div>
+                      </div>
+                      <ol class="ticks">
+                        @for (s of schedule(d); track s.seq) {
+                          <li [class.due]="!s.paid">
+                            <span class="seq mono">{{ s.seq }}</span>
+                            <span class="date mono">{{ s.date | shortDate }}</span>
+                            <span class="amt mono" [class.neg]="s.paid">{{ s.amount | money: 'bare' }}</span>
+                            <span class="state">{{ s.paid ? 'charged' : 'due' }}</span>
+                          </li>
+                        }
+                      </ol>
+                      <p class="small muted">
+                        Rows marked <em>due</em> are not in the ledger — they are the
+                        remaining term projected forward from the start date.
+                      </p>
+                    </div>
+                  } @else {
+                    <div class="spinner">loading </div>
+                  }
+                </td>
+              </tr>
+            }
+          } @empty {
+            <tr><td colspan="8" class="empty">No instalment plans detected</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

@@ -37,6 +37,13 @@ CREATE TABLE IF NOT EXISTS account (
 
 -- Supplementary cards. Charges post to the parent account's statement but
 -- must stay attributable to the cardholder.
+--
+-- Card identity is not stable over time: a lost/expired/compromised card is
+-- reissued with a new number, but it is the same card in every sense that
+-- matters for reporting. The account_id does not change, so ledger totals,
+-- dedup and balance continuity are all unaffected — but per-card attribution
+-- would silently split in two. replaces_card_id chains the reissue back to what
+-- it replaced, so a card's history survives renumbering.
 CREATE TABLE IF NOT EXISTS card (
     id               TEXT PRIMARY KEY,
     account_id       TEXT NOT NULL REFERENCES account(id),
@@ -44,10 +51,31 @@ CREATE TABLE IF NOT EXISTS card (
     last4            TEXT,
     is_supplementary INTEGER NOT NULL DEFAULT 0,
     issued_on        TEXT,
-    closed_on        TEXT
+    closed_on        TEXT,
+    replaces_card_id TEXT REFERENCES card(id)
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_card_account ON card(account_id);
+CREATE INDEX IF NOT EXISTS idx_card_replaces ON card(replaces_card_id);
+
+-- Which currencies an account actually settles in.
+--
+-- A position is only meaningful in a currency the account can hold. Some cards
+-- settle in exactly one currency; multi-currency cards and Wise-style accounts
+-- settle in several, and each is a separate position that must never be added
+-- to the others. Summing HKD and USD into one number is not a balance, it is a
+-- category error — so the ledger computes and stores positions per currency and
+-- leaves any normalised "total in USD" view to the presentation layer, where it
+-- can be labelled as converted and dated.
+--
+-- account.primary_currency remains the default for parsing and display order;
+-- this table is the authority on what the account may hold.
+CREATE TABLE IF NOT EXISTS account_currency (
+    account_id TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+    currency   TEXT NOT NULL,              -- ISO-4217
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (account_id, currency)
+) STRICT;
 
 -- ---------------------------------------------------------------------------
 -- 2. Provenance — every canonical row traces back to a file and a raw line
@@ -117,12 +145,18 @@ CREATE TABLE IF NOT EXISTS txn (
     kind              TEXT NOT NULL DEFAULT 'purchase' CHECK (kind IN
                         ('purchase','refund','fee','interest','reward',
                          'cc_payment','transfer','atm','fx_conversion',
-                         'income','adjustment','unknown')),
+                         'income','adjustment','installment',
+                         'installment_origination','unknown')),
     category          TEXT,
     subcategory       TEXT,
 
     -- Links & lineage
     transfer_group_id TEXT REFERENCES transfer_group(id),
+    -- Instalment plan membership: which plan, and which of its N charges.
+    installment_plan_id TEXT REFERENCES installment_plan(id),
+    installment_seq   INTEGER,
+    -- A refund points at the purchase it reverses, when we can identify it.
+    refund_of_id      TEXT REFERENCES txn(id),
     duplicate_of_id   TEXT REFERENCES txn(id),       -- non-NULL = suppressed dupe
     dedup_key         TEXT NOT NULL,                 -- deterministic natural key
     statement_file_id TEXT NOT NULL REFERENCES statement_file(id),
@@ -144,12 +178,66 @@ CREATE INDEX IF NOT EXISTS idx_txn_dupe         ON txn(duplicate_of_id);
 CREATE INDEX IF NOT EXISTS idx_txn_extref       ON txn(account_id, external_ref);
 CREATE INDEX IF NOT EXISTS idx_txn_card         ON txn(card_id);
 CREATE INDEX IF NOT EXISTS idx_txn_merchant     ON txn(description_norm);
+CREATE INDEX IF NOT EXISTS idx_txn_plan         ON txn(installment_plan_id);
+CREATE INDEX IF NOT EXISTS idx_txn_refund       ON txn(refund_of_id);
+CREATE INDEX IF NOT EXISTS idx_txn_date         ON txn(txn_date);
+CREATE INDEX IF NOT EXISTS idx_txn_category     ON txn(category, subcategory);
 
 -- The ledger you actually query: duplicates filtered out.
 CREATE VIEW IF NOT EXISTS v_ledger AS
 SELECT t.*, a.display_name AS account_name, a.institution_id
 FROM txn t JOIN account a ON a.id = t.account_id
 WHERE t.duplicate_of_id IS NULL AND t.status <> 'void';
+
+-- Net movement per (account, currency). One row per currency an account has
+-- actually transacted in — never a cross-currency total, which would be
+-- meaningless. This is movement, not balance: a true balance also needs an
+-- opening figure, which comes from balance_assertion (see reporting.positions).
+CREATE VIEW IF NOT EXISTS v_position AS
+SELECT t.account_id,
+       a.display_name    AS account_name,
+       a.institution_id,
+       a.account_type,
+       t.currency_booked AS currency,
+       COUNT(*)          AS txn_count,
+       SUM(t.amount_booked) AS net_minor,
+       SUM(CASE WHEN t.amount_booked < 0 THEN t.amount_booked ELSE 0 END) AS outflow_minor,
+       SUM(CASE WHEN t.amount_booked > 0 THEN t.amount_booked ELSE 0 END) AS inflow_minor,
+       MIN(t.txn_date)   AS first_txn_date,
+       MAX(t.txn_date)   AS last_txn_date
+FROM txn t JOIN account a ON a.id = t.account_id
+WHERE t.duplicate_of_id IS NULL AND t.status <> 'void'
+GROUP BY t.account_id, t.currency_booked;
+
+-- ---------------------------------------------------------------------------
+-- 3b. Structured transaction detail
+-- ---------------------------------------------------------------------------
+-- Statements carry far more than date/amount/description. AMEX's Extended
+-- Details field describes air travel down to the passenger name, carrier,
+-- routing and ticket number; most issuers include the merchant's address, city
+-- and country.
+--
+-- raw_record already keeps the source row verbatim, but a JSON blob is not
+-- queryable — you cannot ask "every flight I booked for a given passenger" of
+-- it. This table holds the extracted, namespaced facts so you can.
+--
+-- Keys are namespaced by domain: 'travel.passenger_name', 'travel.carrier',
+-- 'merchant.city', 'issuer.reference'. Unknown-but-present detail lines are
+-- kept under 'raw.*' rather than discarded — a parser that improves later can
+-- re-derive from raw_record, but only if we noticed the field existed.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS txn_detail (
+    txn_id  TEXT NOT NULL REFERENCES txn(id) ON DELETE CASCADE,
+    key     TEXT NOT NULL,
+    value   TEXT NOT NULL,
+    source  TEXT NOT NULL DEFAULT 'parser'
+              CHECK (source IN ('parser','rule','llm','manual')),
+    PRIMARY KEY (txn_id, key)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_detail_key   ON txn_detail(key, value);
+CREATE INDEX IF NOT EXISTS idx_detail_value ON txn_detail(value);
 
 -- ---------------------------------------------------------------------------
 -- 4. Transfers between accounts you own
@@ -162,7 +250,8 @@ WHERE t.duplicate_of_id IS NULL AND t.status <> 'void';
 CREATE TABLE IF NOT EXISTS transfer_group (
     id            TEXT PRIMARY KEY,
     kind          TEXT NOT NULL CHECK (kind IN
-                    ('internal_transfer','cc_payment','fx_conversion','atm_withdrawal')),
+                    ('internal_transfer','cc_payment','fx_conversion','atm_withdrawal',
+                     'installment_origination')),
     match_method  TEXT NOT NULL CHECK (match_method IN ('auto','manual','rule')),
     confidence    REAL NOT NULL DEFAULT 1.0,
     fee_booked    INTEGER,                  -- leakage: outflow + inflow != 0
@@ -207,6 +296,67 @@ CREATE TABLE IF NOT EXISTS duplicate_candidate (
                    CHECK (resolution IN ('open','accepted','rejected')),
     created_at   TEXT NOT NULL,
     UNIQUE (keep_txn_id, dupe_txn_id)
+) STRICT;
+
+-- ---------------------------------------------------------------------------
+-- 4b. Installment plans
+-- ---------------------------------------------------------------------------
+-- A card instalment plan turns one purchase into N monthly charges. Statements
+-- present this two ways:
+--
+--   (a) amortised only  — each statement shows one "INSTALMENT 03/12" charge.
+--   (b) charge+reversal — month 1 shows the full amount, a credit reversing all
+--       but the first instalment, then the first instalment.
+--
+-- Transactions stay CASH BASIS — what actually hit the account. That is forced:
+-- integrity.check_account proves we captured every row by reproducing the
+-- bank's own running balance, and an accrual-basis row would break it. The
+-- economic view (one HKD 12,000 event in January, not twelve of HKD 1,000) is a
+-- projection over these rows, never the stored form.
+--
+-- Shape (b)'s origination and its reversal net to zero and are linked as a
+-- transfer_group with kind='installment_origination', reusing machinery that
+-- already nets to zero in reports.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS installment_plan (
+    id            TEXT PRIMARY KEY,
+    account_id    TEXT NOT NULL REFERENCES account(id),
+    card_id       TEXT REFERENCES card(id),
+    merchant      TEXT,
+    description   TEXT NOT NULL,
+    principal     INTEGER NOT NULL,        -- minor units, signed (negative = owed)
+    currency      TEXT NOT NULL,
+    term_months   INTEGER NOT NULL,
+    start_date    TEXT NOT NULL,
+    fee_total     INTEGER,                 -- handling fee, when itemised
+    apr           TEXT,                    -- decimal string; NULL = interest free
+    external_ref  TEXT,                    -- issuer's plan id, when supplied
+    status        TEXT NOT NULL DEFAULT 'active'
+                    CHECK (status IN ('active','completed','cancelled')),
+    match_method  TEXT NOT NULL DEFAULT 'auto'
+                    CHECK (match_method IN ('auto','manual','rule')),
+    confidence    REAL NOT NULL DEFAULT 1.0,
+    is_confirmed  INTEGER NOT NULL DEFAULT 0,
+    notes         TEXT,
+    created_at    TEXT NOT NULL
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_plan_account ON installment_plan(account_id, status);
+
+-- Plans the matcher proposed but wasn't confident enough to create.
+CREATE TABLE IF NOT EXISTS installment_candidate (
+    id           TEXT PRIMARY KEY,
+    account_id   TEXT NOT NULL REFERENCES account(id),
+    description  TEXT NOT NULL,
+    txn_ids      TEXT NOT NULL,            -- JSON array
+    term_months  INTEGER NOT NULL,
+    score        REAL NOT NULL,
+    reasons      TEXT NOT NULL,            -- JSON array
+    resolution   TEXT NOT NULL DEFAULT 'open'
+                   CHECK (resolution IN ('open','accepted','rejected')),
+    created_at   TEXT NOT NULL,
+    UNIQUE (account_id, description, term_months)
 ) STRICT;
 
 -- ---------------------------------------------------------------------------
@@ -295,7 +445,8 @@ CREATE TABLE IF NOT EXISTS reconciliation_check (
 CREATE TABLE IF NOT EXISTS llm_decision (
     id             TEXT PRIMARY KEY,
     task           TEXT NOT NULL CHECK (task IN ('categorize','adjudicate_duplicate',
-                                                 'adjudicate_transfer','normalize_merchant')),
+                                                 'adjudicate_transfer','normalize_merchant',
+                                                 'query')),
     input_hash     TEXT NOT NULL,        -- sha256 of the canonical input
     input_summary  TEXT NOT NULL,        -- human-readable, for auditing
     output         TEXT NOT NULL,        -- JSON

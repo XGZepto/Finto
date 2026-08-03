@@ -1,0 +1,134 @@
+<div class="page-head">
+  <h1>Review</h1>
+  <p class="sub">
+    Everything the matchers were not certain about. Rejecting is the safe answer:
+    a wrongly-kept row is easy to spot later, a wrongly-merged one is not.
+  </p>
+</div>
+
+<div class="bar">
+  <div class="seg">
+    @for (q of queues; track q.id) {
+      <button [class.on]="queue() === q.id" (click)="select(q.id)">
+        {{ q.label }}
+        @if (counts()[q.id]) { <span class="n">{{ counts()[q.id] }}</span> }
+      </button>
+    }
+  </div>
+  <div class="keys">
+    <span><span class="kbd">J</span><span class="kbd">K</span> move</span>
+    <span><span class="kbd">A</span> accept</span>
+    <span><span class="kbd">R</span> reject</span>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="card"><div class="spinner">loading </div></div>
+} @else if (!items().length) {
+  <div class="card">
+    <div class="empty">Queue clear — nothing waiting on a decision</div>
+  </div>
+} @else {
+  <div class="workspace">
+    <!-- The queue, so you can see how far in you are. -->
+    <ol class="queue">
+      @for (item of items(); track item.id; let i = $index) {
+        <li [class.on]="i === cursor()" (click)="cursor.set(i)">
+          <span class="score mono" [class]="scoreBand(item.score)">
+            {{ (item.score * 100).toFixed(0) }}
+          </span>
+          <span class="line">
+            {{ item.keep_desc || item.out_desc || item.description }}
+          </span>
+        </li>
+      }
+    </ol>
+
+    @if (current(); as item) {
+      <section class="card candidate">
+        <header class="spread">
+          <div class="row">
+            <span class="score-lg mono" [class]="scoreBand(item.score)">
+              {{ (item.score * 100).toFixed(0) }}
+            </span>
+            <div>
+              <h2>{{ queue() }} candidate</h2>
+              <span class="small muted">{{ cursor() + 1 }} of {{ items().length }}</span>
+            </div>
+          </div>
+          <div class="row">
+            <button class="danger" [disabled]="busy()" (click)="resolve('reject')">Reject</button>
+            <button class="primary" [disabled]="busy()" (click)="resolve('accept')">Accept</button>
+          </div>
+        </header>
+
+        <!-- Two panes, side by side: the whole point is seeing them together. -->
+        @if (sides(item).length) {
+          <div class="panes">
+            @for (side of sides(item); track side.role) {
+              <div class="pane">
+                <div class="pane-head">
+                  <span class="tag">{{ side.role }}</span>
+                  <span class="mono small muted">{{ side.account }}</span>
+                </div>
+                <div class="pane-amount mono"
+                     [class.neg]="side.amount.amount < 0" [class.pos]="side.amount.amount > 0">
+                  {{ side.amount | money }}
+                </div>
+                <div class="pane-date mono small">{{ side.date | shortDate }}</div>
+                <p class="pane-desc">{{ side.description }}</p>
+                <span class="pane-id mono">{{ side.id }}</span>
+              </div>
+            }
+          </div>
+        } @else {
+          <!-- Instalments are a group, not a pair. -->
+          <div class="group">
+            <div class="group-head">
+              <span class="mono">{{ item.description }}</span>
+              <span class="tag installment">{{ item.term_months }} months</span>
+              <span class="mono small muted">{{ item.account_id }}</span>
+            </div>
+            <table>
+              <thead>
+                <tr><th>Date</th><th>Description</th><th class="num">Amount</th></tr>
+              </thead>
+              <tbody>
+                @for (t of item.transactions; track t.id) {
+                  <tr>
+                    <td class="mono">{{ t.txn_date | shortDate }}</td>
+                    <td>{{ t.description_raw }}</td>
+                    <td class="num neg">
+                      {{ asMoney(t.amount_booked, t.currency_booked) | money: 'bare' }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <!-- Why the matcher scored it this way. A score with no reasons is not
+             reviewable, it is just a number to trust or ignore. -->
+        <div class="reasons">
+          <label>Scored on</label>
+          <ul>
+            @for (r of item.reasons; track $index) {
+              <li>{{ r }}</li>
+            } @empty {
+              <li class="muted">no reasons recorded</li>
+            }
+          </ul>
+          @if (item.date_delta != null) {
+            <div class="deltas mono small">
+              {{ item.date_delta }} day gap
+              @if (item.amount_delta) { · {{ item.amount_delta }} amount gap (minor units) }
+            </div>
+          }
+        </div>
+
+        <p class="small muted consequence">{{ consequence() }}</p>
+      </section>
+    }
+  </div>
+}

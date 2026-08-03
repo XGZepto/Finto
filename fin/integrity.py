@@ -41,11 +41,16 @@ def check_account(conn, account_id: str) -> list[dict]:
     non-zero discrepancy means a dropped row, a duplicate we wrongly kept, or a
     sign error — all of which are invisible without this check.
     """
+    name_row = conn.execute("SELECT display_name FROM account WHERE id=?",
+                            (account_id,)).fetchone()
+    account_name = name_row["display_name"] if name_row else account_id
+
     assertions = list(conn.execute(
         "SELECT as_of_date, balance, currency FROM balance_assertion "
         "WHERE account_id=? ORDER BY as_of_date", (account_id,)))
     if len(assertions) < 2:
-        return [{"account_id": account_id, "status": "insufficient_data",
+        return [{"account_id": account_id, "account_name": account_name,
+                 "status": "insufficient_data",
                  "note": "need at least two balance assertions"}]
 
     out = []
@@ -69,13 +74,20 @@ def check_account(conn, account_id: str) -> list[dict]:
             (str(uuid.uuid4()), account_id, prev["as_of_date"], curr["as_of_date"],
              expected, actual, discrepancy, curr["currency"], status,
              datetime.now().isoformat()))
+        # Minor units, same as everywhere else. The period is also given as two
+        # dates so a client can deep-link straight to the rows in question —
+        # after "is anything missing?" the next question is always "which row?".
+        ccy = curr["currency"]
         out.append({
             "account_id": account_id,
+            "account_name": account_name,
             "period": f"{prev['as_of_date']} -> {curr['as_of_date']}",
-            "expected_delta": expected / 100.0,
-            "actual_delta": actual / 100.0,
-            "discrepancy": discrepancy / 100.0,
-            "currency": curr["currency"],
+            "period_start": prev["as_of_date"],
+            "period_end": curr["as_of_date"],
+            "expected_delta": {"amount": expected, "currency": ccy},
+            "actual_delta": {"amount": actual, "currency": ccy},
+            "discrepancy": {"amount": discrepancy, "currency": ccy},
+            "currency": ccy,
             "status": status,
         })
     conn.commit()
@@ -115,6 +127,20 @@ def resolve_duplicate_chains(conn) -> int:
     return fixed
 
 
+def prune_orphan_transfer_groups(conn) -> int:
+    """Delete automatic transfer groups no transaction points at any more.
+
+    A group goes stale when its legs get re-matched — one leg is later suppressed
+    as a duplicate, say, and the survivor pairs with something else. Groups you
+    confirmed by hand are never pruned. transfer_leg cascades on delete.
+    """
+    cur = conn.execute(
+        "DELETE FROM transfer_group WHERE is_confirmed = 0 AND id NOT IN "
+        "(SELECT transfer_group_id FROM txn WHERE transfer_group_id IS NOT NULL)")
+    conn.commit()
+    return cur.rowcount
+
+
 def find_violations(conn) -> list[dict]:
     """Structural problems that should never occur. Empty list is the goal."""
     problems: list[dict] = []
@@ -135,15 +161,25 @@ def find_violations(conn) -> list[dict]:
          "SELECT COUNT(*) n FROM (SELECT transfer_group_id FROM transfer_leg "
          "GROUP BY transfer_group_id HAVING COUNT(*) < 2)",
          "transfer group with fewer than two legs"),
+        ("stale_transfer_group",
+         "SELECT COUNT(*) n FROM transfer_group WHERE is_confirmed = 0 AND id NOT IN "
+         "(SELECT transfer_group_id FROM txn WHERE transfer_group_id IS NOT NULL)",
+         "transfer group no transaction references — run prune_orphan_transfer_groups"),
         ("duplicate_in_transfer",
          "SELECT COUNT(*) n FROM txn WHERE duplicate_of_id IS NOT NULL "
          "AND transfer_group_id IS NOT NULL",
          "suppressed duplicate is still linked into a transfer"),
-        ("currency_mismatch",
+        # An account may settle in any currency listed in account_currency. When
+        # nothing is declared, primary_currency is the only permitted one —
+        # except for multi_currency accounts, which are multi-currency by type.
+        ("currency_not_settleable",
          "SELECT COUNT(*) n FROM txn t JOIN account a ON a.id=t.account_id "
-         "WHERE t.currency_booked <> a.primary_currency AND a.account_type "
-         "NOT IN ('multi_currency')",
-         "transaction currency differs from a single-currency account"),
+         "WHERE a.account_type <> 'multi_currency' "
+         "AND t.currency_booked <> a.primary_currency "
+         "AND NOT EXISTS (SELECT 1 FROM account_currency ac "
+         "                WHERE ac.account_id=t.account_id "
+         "                  AND ac.currency=t.currency_booked)",
+         "transaction in a currency the account does not settle in"),
         ("transfer_not_balanced",
          "SELECT COUNT(*) n FROM (SELECT tl.transfer_group_id FROM transfer_leg tl "
          "JOIN txn t ON t.id=tl.txn_id GROUP BY tl.transfer_group_id "

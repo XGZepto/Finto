@@ -93,3 +93,19 @@ cards:
     cardholder_name: SUPPLEMENTARY HOLDER NAME
     last4: "1009"
     is_supplementary: true
+
+  # Cards get reissued — lost, expired, compromised — with a new number. The
+  # account is unchanged, so your totals, dedup and balance checks are all fine,
+  # but per-card history would split in two. Register the replacement as its own
+  # card and point replaces_card_id at what it superseded; reports then roll the
+  # chain up into one card.
+  #
+  # Set issued_on/closed_on too when you know them: they stop a new number from
+  # claiming charges made before it existed.
+  # - id: amex_us_main_primary_2
+  #   account_id: amex_us_main
+  #   cardholder_name: YOUR NAME
+  #   last4: "5566"
+  #   is_supplementary: false
+  #   issued_on: 2025-07-01
+  #   replaces_card_id: amex_us_main_primary

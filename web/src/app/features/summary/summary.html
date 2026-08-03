@@ -1,0 +1,206 @@
+<div class="page-head">
+  <h1>Summary</h1>
+  <p class="sub">Positions are held per currency. Nothing is summed across them.</p>
+</div>
+
+<app-filter-bar (changed)="load()" />
+
+<!-- Headline figures, one card per currency. -->
+<section class="totals">
+  @for (t of totals(); track t.currency) {
+    <div class="card kpi">
+      <div class="kpi-head">
+        <h3>{{ t.currency }}</h3>
+        <span class="mono small muted">{{ t.txn_count }} rows</span>
+      </div>
+      <div class="kpi-net" [class.neg]="t.net.amount < 0" [class.pos]="t.net.amount > 0">
+        {{ t.net | money: 'bare' }}
+      </div>
+      @if (t.net_converted?.ok && t.net_converted?.converted) {
+        <div class="kpi-converted mono">≈ {{ t.net_converted! | money }}</div>
+      }
+      <div class="kpi-split">
+        <span>
+          <label>Out</label>
+          <span class="mono neg">{{ t.spend | money: 'bare' }}</span>
+        </span>
+        <span>
+          <label>In</label>
+          <span class="mono pos">{{ t.income | money: 'bare' }}</span>
+        </span>
+      </div>
+      @if (t.uncategorised > 0) {
+        <div class="kpi-foot">
+          <span class="dot warn"></span>
+          {{ t.uncategorised }} uncategorised
+        </div>
+      }
+    </div>
+  } @empty {
+    <div class="empty card">Nothing imported yet — start on the import page</div>
+  }
+
+  @for (o of outstanding(); track o.currency) {
+    <div class="card kpi liability">
+      <div class="kpi-head">
+        <h3>Instalments {{ o.currency }}</h3>
+        <span class="tag installment">owed</span>
+      </div>
+      <div class="kpi-net neg">{{ o | money: 'bare' }}</div>
+      <div class="kpi-foot">Committed future outflow</div>
+    </div>
+  }
+</section>
+
+<!-- Positions per (account, currency). -->
+<section class="card">
+  <div class="section-head">
+    <h2>Positions</h2>
+    <div class="row">
+      <label for="convert">Show also in</label>
+      <select id="convert" [ngModel]="convertTo()" (ngModelChange)="setConvert($event)">
+        <option value="">native only</option>
+        @for (c of currencies(); track c) {
+          <option [value]="c">{{ c }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (conversion(); as conv) {
+    @if (conv.unconvertible_currencies.length) {
+      <div class="banner warn small">
+        No rate for {{ conv.unconvertible_currencies.join(', ') }} → {{ conv.to }}.
+        Those rows show native amounts only — run
+        <span class="mono">fx harvest</span> from the import page.
+      </div>
+    }
+  }
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Account</th>
+          <th>Currency</th>
+          <th class="num">Balance</th>
+          @if (convertTo()) { <th class="num">≈ {{ convertTo() }}</th> }
+          <th class="num">In</th>
+          <th class="num">Out</th>
+          <th class="num">Rows</th>
+          <th>Basis</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (p of positions(); track p.account_id + p.currency) {
+          <tr>
+            <td>{{ p.account_name }}</td>
+            <td><span class="tag">{{ p.currency }}</span></td>
+            <td class="num" [class.neg]="p.balance.amount < 0" [class.pos]="p.balance.amount > 0">
+              {{ p.balance | money: 'bare' }}
+            </td>
+            @if (convertTo()) {
+              <td class="num muted">
+                @if (p.balance_converted?.ok && p.balance_converted?.converted) {
+                  ≈ {{ p.balance_converted! | money: 'bare' }}
+                } @else { — }
+              </td>
+            }
+            <td class="num pos">{{ p.inflow | money: 'bare' }}</td>
+            <td class="num neg">{{ p.outflow | money: 'bare' }}</td>
+            <td class="num">{{ p.txn_count }}</td>
+            <td>
+              <!-- 'statement' is the bank's own closing figure. 'movements' is a
+                   sum with no opening balance in it, so it is a net change, not
+                   a balance — worth saying out loud rather than implying. -->
+              <span class="tag" [class.good]="p.basis === 'statement'"
+                    [title]="p.basis === 'statement'
+                      ? 'Anchored to the bank\'s closing balance on ' + (p.basis_date || '')
+                      : 'Sum of movements only — no opening balance was available'">
+                {{ p.basis }}
+              </span>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="8" class="empty">No positions</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Aggregation. One control drives every level, so month / category / merchant
+     / account / card is one screen instead of five. -->
+<section class="card">
+  <div class="section-head">
+    <h2>Breakdown</h2>
+    <div class="row">
+      @if (isTimeDimension() && chartCurrencies().length > 1) {
+        <div class="seg">
+          @for (c of chartCurrencies(); track c) {
+            <button [class.on]="shownCurrency() === c" (click)="chartCurrency.set(c)">{{ c }}</button>
+          }
+        </div>
+      }
+      <label for="groupby">Group by</label>
+      <select id="groupby" [ngModel]="groupBy()" (ngModelChange)="setGroupBy($event)">
+        @for (d of dimensions; track d) {
+          <option [value]="d">{{ d }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="spinner">loading </div>
+  } @else {
+    @if (trend().length > 1) {
+      <div class="trend">
+        @for (b of trend(); track b.bucket) {
+          <div class="col" (click)="drill(b.bucket)" [title]="barTitle(b.row, b.bucket)">
+            <div class="stem"><span class="fill" [style.height]="b.height"></span></div>
+            <span class="tick mono">{{ b.bucket }}</span>
+          </div>
+        }
+      </div>
+    }
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ groupBy() }}</th>
+            <th>Currency</th>
+            <th class="num">Out</th>
+            <th class="num">In</th>
+            <th class="num">Net</th>
+            <th class="num">Rows</th>
+            <th class="bar-col"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (b of buckets(); track b.bucket) {
+            @for (r of b.rows; track r.currency) {
+              <tr class="clickable" (click)="drill(b.bucket)">
+                <td>{{ $first ? b.bucket : '' }}</td>
+                <td><span class="tag">{{ r.currency }}</span></td>
+                <td class="num amount neg">{{ r.spend | money: 'bare' }}</td>
+                <td class="num amount pos">{{ r.income | money: 'bare' }}</td>
+                <td class="num" [class.neg]="r.net.amount < 0" [class.pos]="r.net.amount > 0">
+                  {{ r.net | money: 'bare' }}
+                </td>
+                <td class="num">{{ r.txn_count }}</td>
+                <td class="bar-col">
+                  <span class="bar-track"><span class="bar-fill" [style.width]="barWidth(r)"></span></span>
+                </td>
+              </tr>
+            }
+          } @empty {
+            <tr><td colspan="7" class="empty">Nothing matches this filter</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted hint">Click any row to open it in the blotter.</p>
+  }
+</section>

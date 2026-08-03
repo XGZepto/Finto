@@ -339,7 +339,10 @@ def test_balance_check_detects_a_dropped_transaction(conn):
     conn.commit()
     checks = check_account(conn, "acct1")
     assert checks[0]["status"] == "discrepancy"
-    assert checks[0]["discrepancy"] == pytest.approx(200.00)
+    # Minor units, like every other money value that crosses a boundary here.
+    assert checks[0]["discrepancy"] == {"amount": 20000, "currency": "HKD"}
+    assert checks[0]["period_start"] == "2025-03-01"
+    assert checks[0]["period_end"] == "2025-03-31"
 
 
 def test_duplicate_chains_are_collapsed(conn):

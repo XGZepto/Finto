@@ -1,0 +1,192 @@
+<div class="page-head">
+  <h1>Blotter</h1>
+  <p class="sub">Every row traces back to a line in a file you imported.</p>
+</div>
+
+<app-filter-bar (changed)="load()" />
+
+<div class="card">
+  <div class="toolbar">
+    <span class="small muted mono">
+      @if (total()) {
+        {{ pageStart() }}–{{ pageEnd() }} / {{ total() }}
+      } @else { no matching rows }
+    </span>
+    <div class="row">
+      <button class="ghost" [disabled]="!hasPrev()" (click)="page(-1)">← Prev</button>
+      <button class="ghost" [disabled]="!hasNext()" (click)="page(1)">Next →</button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="spinner">loading </div>
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" [class.on]="sort() === 'date'" (click)="sortBy('date')">
+              Date{{ sort() === 'date' ? (direction() === 'asc' ? ' ↑' : ' ↓') : '' }}
+            </th>
+            <th class="sortable" [class.on]="sort() === 'account'" (click)="sortBy('account')">Account</th>
+            <th class="sortable" [class.on]="sort() === 'merchant'" (click)="sortBy('merchant')">Description</th>
+            <th class="sortable" [class.on]="sort() === 'category'" (click)="sortBy('category')">Category</th>
+            <th>Flags</th>
+            <th class="num sortable" [class.on]="sort() === 'amount'" (click)="sortBy('amount')">
+              Amount{{ sort() === 'amount' ? (direction() === 'asc' ? ' ↑' : ' ↓') : '' }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (t of rows(); track t.id) {
+            <tr (click)="open(t)" class="clickable" [class.on]="selected()?.id === t.id">
+              <td class="mono small nowrap">{{ t.date | shortDate }}</td>
+              <td>
+                {{ t.account_name }}
+                @if (t.card_last4) {
+                  <span class="muted small mono">·{{ t.card_last4 }}</span>
+                }
+              </td>
+              <td class="desc">
+                <span class="primary">{{ t.merchant || t.description }}</span>
+                @if (t.merchant && t.description !== t.merchant) {
+                  <span class="muted small block">{{ t.description }}</span>
+                }
+              </td>
+              <td>
+                @if (t.category) {
+                  {{ t.category }}
+                  @if (t.subcategory) { <span class="muted small block">{{ t.subcategory }}</span> }
+                } @else {
+                  <span class="dim small">uncategorised</span>
+                }
+              </td>
+              <td class="flags">
+                @if (t.transfer_group_id) { <span class="tag transfer">transfer</span> }
+                @if (t.installment_seq) {
+                  <span class="tag installment">inst {{ t.installment_seq }}</span>
+                }
+                @if (t.refund_of_id) { <span class="tag refund">refund</span> }
+                @if (isTravel(t)) { <span class="tag travel">travel</span> }
+              </td>
+              <td class="num" [class.neg]="t.booked.amount < 0" [class.pos]="t.booked.amount > 0">
+                {{ t.booked | money }}
+                @if (t.native) {
+                  <span class="muted small block">{{ t.native | money }}</span>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="6" class="empty">Nothing matches this filter</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+<!-- Detail drawer. Provenance is the point: every number here traces to a line
+     in a file you downloaded, and you can read that line. -->
+@if (selected(); as txn) {
+  <div class="drawer-backdrop" (click)="close()"></div>
+  <aside class="drawer">
+    <header>
+      <div class="head-text">
+        <h2>{{ txn.merchant || txn.description }}</h2>
+        <p class="muted small mono">{{ txn.account_name }} · {{ txn.date | shortDate }}</p>
+      </div>
+      <button class="bare close" (click)="close()" aria-label="Close">×</button>
+    </header>
+
+    <div class="amount-hero" [class.neg]="txn.booked.amount < 0" [class.pos]="txn.booked.amount > 0">
+      {{ txn.booked | money }}
+    </div>
+    @if (txn.native) {
+      <p class="muted small">Merchant charged {{ txn.native | money }}</p>
+    }
+
+    <div class="drawer-flags">
+      <span class="tag">{{ txn.kind }}</span>
+      <span class="tag">{{ txn.status }}</span>
+      @if (txn.installment_seq) {
+        <button class="tag installment link" (click)="openPlan()">
+          instalment {{ txn.installment_seq }} →
+        </button>
+      }
+      @if (txn.refund_of_id) {
+        <button class="tag refund link" (click)="openById(txn.refund_of_id!)">
+          reverses a purchase →
+        </button>
+      }
+    </div>
+
+    <section>
+      <h3>Classification</h3>
+      <div class="field">
+        <label for="cat">Category</label>
+        <input id="cat" [ngModel]="editCategory()" (ngModelChange)="editCategory.set($event)"
+               placeholder="e.g. dining" />
+      </div>
+      <div class="field">
+        <label for="notes">Notes</label>
+        <textarea id="notes" rows="2" [ngModel]="editNotes()"
+                  (ngModelChange)="editNotes.set($event)"></textarea>
+      </div>
+      <button class="primary" [disabled]="saving()" (click)="save()">
+        {{ saving() ? 'Saving…' : 'Save' }}
+      </button>
+      <p class="muted small">Manual edits outrank rules and the model, permanently.</p>
+    </section>
+
+    @if (detailEntries(txn).length) {
+      <section>
+        <h3>Statement detail</h3>
+        <dl class="details">
+          @for (d of detailEntries(txn); track d.key) {
+            <dt>{{ d.key | detailKey }}</dt>
+            <dd>{{ d.value }}</dd>
+          }
+        </dl>
+      </section>
+    }
+
+    @if (otherLegs(txn).length) {
+      <section>
+        <h3>Transfer counterpart</h3>
+        @for (leg of otherLegs(txn); track leg.id) {
+          <button class="leg" (click)="openById(leg.id)">
+            <span class="tag">{{ leg.role }}</span>
+            <span class="leg-desc">{{ leg.description_raw }}</span>
+            <span class="mono small muted">{{ leg.account_id }} · {{ leg.txn_date }}</span>
+            <span class="mono leg-amt"
+                  [class.neg]="leg.amount_booked < 0" [class.pos]="leg.amount_booked > 0">
+              {{ { amount: leg.amount_booked, currency: leg.currency_booked } | money: 'bare' }}
+            </span>
+          </button>
+        }
+        <p class="muted small">
+          Both legs are one movement of your own money, so neither counts as
+          spending or income.
+        </p>
+      </section>
+    }
+
+    <section>
+      <h3>Provenance</h3>
+      @if (txn.provenance; as p) {
+        <p class="muted small">
+          Parsed by <span class="mono">{{ p.parser_id }}</span> from
+          <span class="mono break">{{ p.source_path }}</span>
+        </p>
+        <dl class="details raw">
+          @for (r of rawEntries(txn); track r.key) {
+            <dt>{{ r.key }}</dt>
+            <dd class="mono">{{ r.value }}</dd>
+          }
+        </dl>
+      } @else {
+        <p class="muted small">No raw record linked.</p>
+      }
+    </section>
+  </aside>
+}

@@ -10,7 +10,10 @@ dependencies = [
 
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.40"]
-dev = ["pytest>=7.0", "ruff>=0.1"]
+pdf = ["pdfplumber>=0.11", "pypdf>=4.0"]
+api = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "python-multipart>=0.0.9"]
+dev = ["pytest>=7.0", "ruff>=0.1", "pdfplumber>=0.11", "pypdf>=4.0", "fastapi>=0.110",
+       "uvicorn[standard]>=0.27", "python-multipart>=0.0.9", "httpx>=0.27"]
 
 [project.scripts]
 finto = "fin.cli:main"
@@ -20,7 +23,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["fin", "fin.parsers", "fin.llm"]
+packages = ["fin", "fin.parsers", "fin.llm", "fin.api", "fin.api.routers"]
 
 [tool.setuptools.package-data]
 fin = ["schema.sql"]
