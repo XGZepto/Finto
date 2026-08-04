@@ -18,6 +18,7 @@ def filter_from_query(
     date_to: str | None = Query(None, alias="to"),
     accounts: list[str] | None = Query(None),
     cards: list[str] | None = Query(None),
+    cardholders: list[str] | None = Query(None),
     institutions: list[str] | None = Query(None),
     categories: list[str] | None = Query(None),
     kinds: list[str] | None = Query(None),
@@ -34,7 +35,7 @@ def filter_from_query(
 ) -> LedgerFilter:
     return LedgerFilter(
         **{"from": date_from, "to": date_to}, accounts=accounts, cards=cards,
-        institutions=institutions, categories=categories, kinds=kinds,
+        cardholders=cardholders, institutions=institutions, categories=categories, kinds=kinds,
         currency=currency, minAmount=minAmount, maxAmount=maxAmount, q=q,
         detail=detail, tags=tags,
         includeTransfers=includeTransfers, includeDuplicates=includeDuplicates,

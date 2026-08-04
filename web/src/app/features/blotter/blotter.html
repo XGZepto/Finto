@@ -58,7 +58,10 @@
               <td class="account">
                 {{ t.account_name }}
                 @if (t.cardholder_name) {
-                  <span class="holder small block">{{ t.cardholder_name }}</span>
+                  <button class="bare holder small block"
+                          (click)="$event.stopPropagation(); filterByCardholder(t.cardholder_name)">
+                    {{ t.cardholder_name }}
+                  </button>
                 } @else if (t.card_last4) {
                   <span class="muted small mono">·{{ t.card_last4 }}</span>
                 }

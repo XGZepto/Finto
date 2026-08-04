@@ -447,6 +447,25 @@ def update_txn_links(conn, txns: Sequence[Txn]) -> None:
           datetime.now().isoformat(), t.id) for t in txns],
     )
     insert_txn_details(conn, txns)
+    merge_duplicate_details(conn)
+
+
+def merge_duplicate_details(conn) -> int:
+    """Give a survivor every fact its suppressed copies carried.
+
+    The same charge from a statement and from a CSV export describes one
+    movement; each source records details the other omits — the PDF names the
+    cardholder from its section header, the CSV from a Card Member column. When
+    one supersedes the other the loser's rows are hidden, so its facts move to
+    the survivor, never overwriting one already there.
+    """
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO txn_detail (txn_id, key, value, source) "
+        "SELECT t.duplicate_of_id, d.key, d.value, d.source "
+        "FROM txn t JOIN txn_detail d ON d.txn_id = t.id "
+        "WHERE t.duplicate_of_id IS NOT NULL")
+    conn.commit()
+    return cur.rowcount
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,8 @@ import { LedgerFilter } from './models';
  */
 
 const ARRAY_KEYS = [
-  'accounts', 'cards', 'institutions', 'categories', 'kinds', 'detail', 'tags',
+  'accounts', 'cards', 'cardholders', 'institutions', 'categories', 'kinds',
+  'detail', 'tags',
 ] as const;
 const BOOL_KEYS = [
   'includeTransfers', 'includeDuplicates', 'uncategorisedOnly', 'installmentsOnly',

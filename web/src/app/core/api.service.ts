@@ -3,9 +3,9 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   Account, Card, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
-  InstallmentPlan,
-  IntegrityReport, InvestmentDetail, InvestmentSnapshot, Job, LedgerFilter,
-  Page, Position, QueryResult, StagePreview, SummaryRow, TotalRow, Txn,
+  InstallmentPlan, IntegrityReport, InvestmentDetail, InvestmentSnapshot, Job,
+  LedgerFilter, Money, Page, Position, QueryResult, StagePreview, SummaryRow,
+  TotalRow, Txn,
 } from './models';
 
 /** Serialise a LedgerFilter into query params, omitting anything unset. */
@@ -23,6 +23,7 @@ export function filterToParams(f: LedgerFilter): HttpParams {
   put('to', f.to);
   put('accounts', f.accounts);
   put('cards', f.cards);
+  put('cardholders', f.cardholders);
   put('institutions', f.institutions);
   put('categories', f.categories);
   put('kinds', f.kinds);
@@ -86,7 +87,13 @@ addTag(id: string, tag: string): Observable<Txn> {
   positions(convertTo?: string, asOf?: string): Observable<{
     positions: Position[];
     declared_currencies: Record<string, string[]>;
-    conversion?: any;
+    conversion?: { to: string; unconvertible_currencies: string[] };
+    normalised?: {
+      to: string;
+      net_worth: Money;
+      by_type: Array<{ account_type: string; balance: Money }>;
+      unconvertible_currencies: string[];
+    };
   }> {
     let p = new HttpParams();
     if (convertTo) p = p.set('convert_to', convertTo);

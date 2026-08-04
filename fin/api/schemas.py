@@ -26,6 +26,7 @@ class LedgerFilter(BaseModel):
     date_to: str | None = Field(default=None, alias="to")
     accounts: list[str] | None = None
     cards: list[str] | None = None
+    cardholders: list[str] | None = None
     institutions: list[str] | None = None
     categories: list[str] | None = None
     kinds: list[str] | None = None

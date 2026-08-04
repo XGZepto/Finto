@@ -111,3 +111,62 @@ tr:hover .bar-col .bar-fill { background: var(--fg-3); }
   text-transform: uppercase;
   color: var(--fg-4);
 }
+
+.networth {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.networth .nw-label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+.networth .nw-figure { font-size: 26px; font-variant-numeric: tabular-nums; }
+
+.flowchart { margin-bottom: 14px; }
+.flow-head {
+  display: flex;
+  font-size: 9px;
+  color: var(--fg-4);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding-left: 148px;
+}
+.flow-head .out { flex: 1; text-align: right; padding-right: 6px; }
+.flow-head .in { flex: 1; padding-left: 6px; }
+.flow-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.flow-row:hover { background: var(--panel-2); }
+.flow-row .fname {
+  width: 140px;
+  flex: none;
+  font-size: 11px;
+  text-align: right;
+  color: var(--fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fbar { flex: 1; display: flex; align-items: center; }
+.fout, .fin { flex: 1; display: flex; height: 11px; }
+.fout { justify-content: flex-end; }
+.fout .fill { background: var(--neg); opacity: 0.7; }
+.fin .fill { background: var(--pos); opacity: 0.6; }
+.flow-row .fnum { width: 82px; font-size: 10.5px; text-align: right; }
+.flow-row .fnum.out { color: var(--neg); }
+.flow-row .fnum.in { color: var(--pos); }
+
+@media (max-width: 700px) {
+  .flow-head { padding-left: 0; }
+  .flow-row .fname { width: 72px; }
+  .flow-row .fnum { width: 60px; }
+}

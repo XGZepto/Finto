@@ -33,6 +33,7 @@ export interface LedgerFilter {
   to?: string;
   accounts?: string[];
   cards?: string[];
+  cardholders?: string[];
   institutions?: string[];
   categories?: string[];
   kinds?: string[];

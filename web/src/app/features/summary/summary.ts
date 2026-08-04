@@ -1,10 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { FilterState } from '../../core/filter-state';
 import { MoneyPipe } from '../../core/money.pipe';
-import { Position, SummaryRow, TotalRow } from '../../core/models';
+import { Money, Position, SummaryRow, TotalRow } from '../../core/models';
 import { FilterBar } from '../../shared/filter-bar';
 
 /**
@@ -28,6 +28,7 @@ import { FilterBar } from '../../shared/filter-bar';
 export class SummaryPage {
   private api = inject(Api);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private money = new MoneyPipe();
   filters = inject(FilterState);
 
@@ -45,6 +46,7 @@ export class SummaryPage {
   totals = signal<TotalRow[]>([]);
   positions = signal<Position[]>([]);
   conversion = signal<{ to: string; unconvertible_currencies: string[] } | null>(null);
+  netWorth = signal<Money | null>(null);
   outstanding = signal<Array<{ currency: string; amount: number }>>([]);
 
   /** Currencies present, so the conversion picker offers real options. */
@@ -112,6 +114,37 @@ export class SummaryPage {
   maxSpend = computed(() =>
     Math.max(1, ...this.rows().map((r) => Math.abs(r.spend.amount))),
   );
+
+  /**
+   * In and out per account, normalised so the bars are comparable. Diverging
+   * from a centre line — out to the left, in to the right — so you see at a
+   * glance where money entered and left.
+   */
+  flow = computed(() => {
+    const conv = !!this.convertTo();
+    const agg = new Map<string, { name: string; inn: number; out: number }>();
+    for (const p of this.positions()) {
+      const inn = conv ? (p.inflow_converted?.ok ? p.inflow_converted.amount : null)
+                       : p.inflow.amount;
+      const out = conv ? (p.outflow_converted?.ok ? p.outflow_converted.amount : null)
+                       : p.outflow.amount;
+      if (inn === null || out === null) continue;   // no rate: excluded
+      const a = agg.get(p.account_id) ?? { name: p.account_name, inn: 0, out: 0 };
+      a.inn += inn;
+      a.out += Math.abs(out);
+      agg.set(p.account_id, a);
+    }
+    const peak = Math.max(1, ...[...agg.values()].map((a) => Math.max(a.inn, a.out)));
+    return [...agg.entries()]
+      .map(([id, a]) => ({
+        account_id: id, name: a.name,
+        inn: { amount: a.inn, currency: this.convertTo() },
+        out: { amount: -a.out, currency: this.convertTo() },
+        inW: `${(a.inn / peak) * 100}%`,
+        outW: `${(a.out / peak) * 100}%`,
+      }))
+      .sort((x, y) => (Math.abs(y.out.amount) + y.inn.amount) - (Math.abs(x.out.amount) + x.inn.amount));
+  });
 
   readonly timeDimensions = ['day', 'month', 'quarter', 'year'];
   isTimeDimension = computed(() => this.timeDimensions.includes(this.groupBy()));
@@ -187,12 +220,19 @@ export class SummaryPage {
     });
 
     this.api.positions(convert, this.asOf() || undefined).subscribe({
-      next: (res) => this.positions.set(res.positions),
+      next: (res) => {
+        this.positions.set(res.positions);
+        this.netWorth.set(res.normalised?.net_worth ?? null);
+      },
     });
 
     this.api.installments(true).subscribe({
       next: (res) => this.outstanding.set(res.outstanding_by_currency),
     });
+  }
+
+  drillAccount(id: string): void {
+    this.router.navigate(['/blotter'], { queryParams: { accounts: id } });
   }
 
   setGroupBy(value: string): void {

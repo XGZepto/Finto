@@ -552,6 +552,9 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
     refunds = find_refunds(live)
     refunds_linked = apply_refund_links(live, refunds)
 
+    from .fx import harvest_rates
+    harvest_rates(conn)
+
     # Regular income on top of whatever the parsers already labelled.
     from .income import apply_income_labels, detect_regular_income
     income_streams = detect_regular_income(live, income_accounts={

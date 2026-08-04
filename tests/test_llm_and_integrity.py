@@ -87,11 +87,11 @@ def test_category_outside_taxonomy_is_rejected(conn):
 
 def test_valid_category_is_accepted_and_cached(conn):
     provider = EchoProvider({"categorise": [
-        {"i": 0, "category": "food", "subcategory": "coffee",
+        {"i": 0, "category": "dining", "subcategory": "coffee",
          "merchant": "Blue Bottle", "confidence": 0.95},
     ]})
     out = categorize_merchants(conn, provider, ["BLUE BOTTLE HK"])
-    assert out["BLUE BOTTLE HK"]["category"] == "food"
+    assert out["BLUE BOTTLE HK"]["category"] == "dining"
 
     # Second call must hit cache, not the provider.
     before = len(provider.calls)
@@ -123,7 +123,7 @@ def test_llm_never_touches_amounts(conn):
     before = conn.execute("SELECT amount_booked, currency_booked, txn_date, "
                           "account_id FROM txn").fetchone()
     provider = EchoProvider({"categorise": [
-        {"i": 0, "category": "food", "subcategory": "coffee",
+        {"i": 0, "category": "dining", "subcategory": "coffee",
          "merchant": "Starbucks", "confidence": 0.98,
          "amount": 999999, "account": "hacked"},   # model tries to send extras
     ]})
@@ -131,7 +131,7 @@ def test_llm_never_touches_amounts(conn):
     after = conn.execute("SELECT amount_booked, currency_booked, txn_date, "
                          "account_id FROM txn").fetchone()
     assert tuple(before) == tuple(after)   # money and identity untouched
-    assert conn.execute("SELECT category FROM txn").fetchone()["category"] == "food"
+    assert conn.execute("SELECT category FROM txn").fetchone()["category"] == "dining"
 
 
 def test_annotation_records_llm_as_source(conn):
@@ -139,7 +139,7 @@ def test_annotation_records_llm_as_source(conn):
     dbm.insert_txns(conn, [_txn(description_raw="PARKNSHOP TST")])
     conn.commit()
     provider = EchoProvider({"categorise": [
-        {"i": 0, "category": "food", "subcategory": "groceries",
+        {"i": 0, "category": "groceries", "subcategory": "supermarket",
          "merchant": "ParknShop", "confidence": 0.97},
     ]})
     apply_to_ledger(conn, provider)
@@ -167,13 +167,13 @@ def test_promote_to_rules_creates_deterministic_rule(conn):
                            for d in (1, 2, 3)])
     conn.commit()
     provider = EchoProvider({"categorise": [
-        {"i": 0, "category": "food", "subcategory": "groceries",
+        {"i": 0, "category": "groceries", "subcategory": "supermarket",
          "merchant": "ParknShop", "confidence": 0.98},
     ]})
     apply_to_ledger(conn, provider)
     assert promote_to_rules(conn) == 1
     rule = conn.execute("SELECT * FROM category_rule").fetchone()
-    assert rule["set_category"] == "food"
+    assert rule["set_category"] == "groceries"
     # The point of promotion: the model is never consulted about this again.
 
 
@@ -279,7 +279,7 @@ def test_unsure_verdict_leaves_score_untouched(conn):
 def test_llm_decisions_are_auditable(conn):
     _seed_file(conn)
     provider = EchoProvider({"categorise": [
-        {"i": 0, "category": "food", "subcategory": "coffee",
+        {"i": 0, "category": "dining", "subcategory": "coffee",
          "merchant": "Cafe", "confidence": 0.9},
     ]})
     categorize_merchants(conn, provider, ["CAFE ABC"])
@@ -292,7 +292,7 @@ def test_llm_decisions_are_auditable(conn):
 
 def test_cache_invalidation(conn):
     provider = EchoProvider({"categorise": [
-        {"i": 0, "category": "food", "subcategory": "coffee",
+        {"i": 0, "category": "dining", "subcategory": "coffee",
          "merchant": "Cafe", "confidence": 0.9},
     ]})
     categorize_merchants(conn, provider, ["CAFE ABC"])

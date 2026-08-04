@@ -62,6 +62,34 @@
 
 <!-- Positions per (account, currency). -->
 <section class="card">
+  @if (netWorth(); as nw) {
+    <div class="networth">
+      <span class="nw-label">Net worth</span>
+      <span class="nw-figure" [class.neg]="nw.amount < 0" [class.pos]="nw.amount > 0">
+        {{ nw | money }}
+      </span>
+    </div>
+  }
+
+  @if (flow().length) {
+    <div class="flowchart">
+      <div class="flow-head">
+        <span class="out">out</span><span class="in">in</span>
+      </div>
+      @for (f of flow(); track f.account_id) {
+        <div class="flow-row" (click)="drillAccount(f.account_id)">
+          <span class="fname">{{ f.name }}</span>
+          <div class="fbar">
+            <div class="fout"><span class="fill" [style.width]="f.outW"></span></div>
+            <div class="fin"><span class="fill" [style.width]="f.inW"></span></div>
+          </div>
+          <span class="fnum out mono">{{ f.out | money: 'bare' }}</span>
+          <span class="fnum in mono">{{ f.inn | money: 'bare' }}</span>
+        </div>
+      }
+    </div>
+  }
+
   <div class="section-head">
     <h2>Positions</h2>
     <div class="row">

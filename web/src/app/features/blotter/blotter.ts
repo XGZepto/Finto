@@ -218,6 +218,13 @@ export class BlotterPage {
     this.load();
   }
 
+  filterByCardholder(name: string): void {
+    this.close();
+    this.filters.patch({ cardholders: [name] });
+    this.offset.set(0);
+    this.load();
+  }
+
   gateway(txn: Txn): string | null {
     return txn.details?.['payment.gateway'] ?? null;
   }

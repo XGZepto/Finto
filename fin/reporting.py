@@ -118,6 +118,11 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
         in_clause("t.account_id", f["accounts"])
     if f.get("cards"):
         in_clause("t.card_id", f["cards"])
+    if f.get("cardholders"):
+        ph = ",".join("?" * len(f["cardholders"]))
+        clauses.append(
+            f"t.card_id IN (SELECT id FROM card WHERE cardholder_name IN ({ph}))")
+        params.extend(f["cardholders"])
     if f.get("institutions"):
         in_clause("a.institution_id", f["institutions"])
     if f.get("categories"):

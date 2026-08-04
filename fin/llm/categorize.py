@@ -27,6 +27,7 @@ import json
 from collections import defaultdict
 from collections.abc import Sequence
 
+from .. import db as dbm
 from . import cache
 from .provider import LLMProvider, LLMUnavailable
 
@@ -35,19 +36,24 @@ PROMPT_VERSION = "cat-v1"
 # A closed taxonomy. The model must pick from this list; anything else is
 # rejected. An open-ended taxonomy drifts — you get "Food", "food", "Dining",
 # "Restaurants" and "Eating out" for the same thing, and your reports lie.
+# The top level matches the deterministic category_rule scheme, so a category
+# the model fills reads the same as one a rule filled. Subcategories add detail
+# the flat rules don't carry.
 TAXONOMY: dict[str, list[str]] = {
-    "food": ["groceries", "restaurants", "coffee", "delivery", "bars"],
-    "transport": ["public_transit", "taxi_rideshare", "fuel", "parking", "flights"],
-    "housing": ["rent", "mortgage", "utilities", "internet", "maintenance"],
-    "health": ["medical", "pharmacy", "fitness", "insurance_health"],
-    "shopping": ["clothing", "electronics", "home_goods", "books_media", "general"],
+    "dining": ["restaurants", "coffee", "bars", "delivery", "fast_food"],
+    "groceries": ["supermarket", "convenience"],
+    "transport": ["transit", "taxi_rideshare", "fuel", "parking", "tolls"],
+    "travel": ["hotels", "flights", "tours", "agency"],
+    "shopping": ["clothing", "electronics", "home_goods", "general", "cosmetics"],
+    "services": ["subscriptions", "software", "telecom", "professional", "education"],
+    "housing": ["rent", "utilities", "internet", "maintenance"],
+    "health": ["medical", "pharmacy", "fitness"],
     "entertainment": ["streaming", "events", "gaming", "hobbies"],
-    "travel": ["hotels", "transport_travel", "tours_activities"],
-    "services": ["subscriptions", "professional", "telecom", "education"],
-    "financial": ["fees", "interest", "insurance", "tax", "investment"],
-    "income": ["salary", "refund", "interest_income", "other_income"],
-    "transfer": ["internal", "cc_payment", "fx_conversion"],
-    "other": ["cash", "uncategorised", "charity", "gifts"],
+    "fees": ["bank", "card", "service"],
+    "interest": ["interest"],
+    "income": ["salary", "refund", "other_income"],
+    "rewards": ["cashback", "points"],
+    "other": ["charity", "gifts", "cash", "uncategorised"],
 }
 
 CONFIDENCE_FLOOR = 0.60   # below this, leave uncategorised rather than guess
@@ -129,8 +135,11 @@ def categorize_merchants(
             if not _valid(cat, sub):
                 continue          # reject anything outside the closed taxonomy
             conf = float(row.get("confidence", 0.0))
+            tags = [str(x).strip() for x in (row.get("tags") or [])
+                    if str(x).strip()][:2]
             out = {"category": cat, "subcategory": sub,
-                   "merchant": row.get("merchant"), "confidence": conf}
+                   "merchant": row.get("merchant"), "tags": tags,
+                   "confidence": conf}
             cache.record(conn, task="categorize",
                          ihash=cache.input_hash("categorize", desc),
                          summary=desc, output=out, confidence=conf,
@@ -184,6 +193,8 @@ def apply_to_ledger(conn, provider: LLMProvider, *, dry_run: bool = False) -> di
                            value=res["category"], source="llm",
                            confidence=res["confidence"],
                            decision_id=did["id"] if did else None)
+            for tag in res.get("tags") or []:
+                dbm.add_tag(conn, tid, tag, source="llm")
             applied += 1
     conn.commit()
     return {"transactions": len(rows), "distinct_merchants": len(distinct),
