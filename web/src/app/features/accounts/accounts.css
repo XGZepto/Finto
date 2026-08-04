@@ -1,0 +1,42 @@
+.card { margin-bottom: 12px; }
+.card h3 { margin: 0 0 10px; }
+
+td .bal .ccy { color: var(--fg-4); font-size: 10px; }
+td .bal + .bal { margin-top: 2px; }
+
+.detail .panes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+}
+.detail section h3 {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  margin-bottom: 8px;
+}
+
+.holder-row,
+.stat-row,
+.flow-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.holder-row .who { font-weight: 500; }
+.holder-row .numbers { color: var(--fg-3); }
+.num-chip + .num-chip { margin-left: 4px; }
+.tag.reissued { border-color: var(--warn); color: var(--warn); }
+
+.stat-row .k, .flow-row .peer { flex: 1; min-width: 0; }
+.stat-row .v, .flow-row .v { font-variant-numeric: tabular-nums; }
+.stat-row .c { color: var(--fg-4); font-size: 10px; }
+.stat-row .n, .flow-row .n { width: 3ch; text-align: right; }
+
+.flow-row .arrow { color: var(--fg-4); }
+.flow-row.out .arrow { color: var(--neg); }
+.flow-row .v { color: var(--fg-2); }

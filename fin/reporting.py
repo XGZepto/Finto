@@ -143,6 +143,55 @@ def detail_values(conn, key: str, limit: int = 200) -> dict:
         (key, int(limit)))]}
 
 
+def flows(conn, *, filters: dict | None = None) -> dict:
+    """Where money moved: between your own accounts, and across the boundary.
+
+    A transfer between accounts you own is the same money in a different place,
+    so it is counted apart from what actually entered or left your control.
+    """
+    where, params = build_where({**(filters or {}), "includeTransfers": True})
+
+    internal = conn.execute(f"""
+        SELECT src.account_id AS from_account, dst.account_id AS to_account,
+               src.currency_booked AS currency, COUNT(*) AS moves,
+               SUM(-src.amount_booked) AS amount_minor
+        FROM transfer_leg lo
+        JOIN transfer_leg li ON li.transfer_group_id = lo.transfer_group_id
+                            AND li.role = 'in'
+        JOIN txn src ON src.id = lo.txn_id
+        JOIN txn dst ON dst.id = li.txn_id
+        WHERE lo.role = 'out' AND src.account_id <> dst.account_id
+          AND src.id IN (SELECT t.id FROM txn t JOIN account a ON a.id = t.account_id
+                         WHERE {where})
+        GROUP BY 1, 2, 3
+        ORDER BY amount_minor DESC
+    """, params).fetchall()
+
+    external = conn.execute(f"""
+        SELECT t.currency_booked AS currency,
+               SUM(CASE WHEN t.amount_booked > 0 THEN t.amount_booked ELSE 0 END) AS in_minor,
+               SUM(CASE WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS out_minor,
+               COUNT(*) AS moves
+        FROM txn t JOIN account a ON a.id = t.account_id
+        WHERE {where} AND t.transfer_group_id IS NULL
+        GROUP BY 1 ORDER BY 1
+    """, params).fetchall()
+
+    return {
+        "internal": [{
+            "from_account": r["from_account"], "to_account": r["to_account"],
+            "moves": r["moves"],
+            "amount": money(r["amount_minor"], r["currency"]),
+        } for r in internal],
+        "external": [{
+            "currency": r["currency"], "moves": r["moves"],
+            "in": money(r["in_minor"], r["currency"]),
+            "out": money(-r["out_minor"], r["currency"]),
+            "net": money(r["in_minor"] - r["out_minor"], r["currency"]),
+        } for r in external],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Positions
 # ---------------------------------------------------------------------------

@@ -55,12 +55,13 @@ export class App {
   readonly nav = [
     { path: '/summary', label: 'Summary', idx: '01' },
     { path: '/blotter', label: 'Blotter', idx: '02' },
-    { path: '/import', label: 'Import', idx: '03' },
-    { path: '/installments', label: 'Instalments', idx: '04' },
-    { path: '/investments', label: 'Investments', idx: '05' },
-    { path: '/review', label: 'Review', idx: '06' },
-    { path: '/integrity', label: 'Integrity', idx: '07' },
-    { path: '/ask', label: 'Ask', idx: '08' },
+    { path: '/accounts', label: 'Accounts', idx: '03' },
+    { path: '/import', label: 'Import', idx: '04' },
+    { path: '/installments', label: 'Instalments', idx: '05' },
+    { path: '/investments', label: 'Investments', idx: '06' },
+    { path: '/review', label: 'Review', idx: '07' },
+    { path: '/integrity', label: 'Integrity', idx: '08' },
+    { path: '/ask', label: 'Ask', idx: '09' },
   ];
 
   reviewCount = signal(0);

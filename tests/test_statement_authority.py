@@ -390,3 +390,38 @@ def test_a_filtered_page_reports_what_the_whole_match_comes_to(tmp_path):
     hkd = next(t for t in page["totals"] if t["currency"] == "HKD")
     assert hkd["spend"]["amount"] == 3500       # both, not just the page
     conn.close()
+
+
+def test_flows_separate_your_own_accounts_from_the_boundary(tmp_path):
+    """Moving your own money is not income, however it looks in one account."""
+    from fin.models import TransferGroup, TransferKind, TransferLeg
+    from fin.reporting import flows
+
+    conn = _seeded(tmp_path)
+    dbm.upsert_account(conn, Account(
+        id="bank", institution_id="amex_hk", display_name="Bank",
+        account_type="savings", primary_currency="HKD"))
+    out = _txn(account_id="bank", booked=Money(amount=-5000, currency="HKD"))
+    inc = _txn(account_id="card", booked=Money(amount=5000, currency="HKD"))
+    salary = _txn(account_id="bank", booked=Money(amount=9000, currency="HKD"),
+                  description_raw="SALARY")
+    # Rows, then the group, then the links — the order reconcile uses, and the
+    # only one the foreign keys allow in both directions.
+    dbm.insert_txns(conn, [out, inc, salary])
+    group = TransferGroup(kind=TransferKind.CC_PAYMENT, legs=[
+        TransferLeg(txn_id=out.id, role="out"), TransferLeg(txn_id=inc.id, role="in")])
+    dbm.insert_transfer_groups(conn, [group])
+    out.transfer_group_id = inc.transfer_group_id = group.id
+    dbm.update_txn_links(conn, [out, inc, salary])
+    conn.commit()
+
+    f = flows(conn)
+    assert f["internal"] == [{
+        "from_account": "bank", "to_account": "card", "moves": 1,
+        "amount": {"amount": 5000, "currency": "HKD"},
+    }]
+    # Only the salary crossed the boundary; the transfer's legs are excluded.
+    hkd = next(e for e in f["external"] if e["currency"] == "HKD")
+    assert hkd["in"]["amount"] == 9000
+    assert hkd["out"]["amount"] == 0
+    conn.close()

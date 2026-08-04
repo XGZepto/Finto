@@ -71,6 +71,13 @@ def post_summary(req: SummaryRequest, conn=Depends(get_conn)) -> dict:
     return {"group_by": req.group_by, "rows": rows, "totals": totals}
 
 
+@router.get("/flows")
+def get_flows(f: LedgerFilter = Depends(filter_from_query),
+              conn=Depends(get_conn)) -> dict:
+    """Movement between your own accounts, and across the boundary."""
+    return reporting.flows(conn, filters=f.to_query())
+
+
 @router.get("/positions")
 def get_positions(convert_to: str | None = Query(None),
                   as_of: str | None = Query(None),

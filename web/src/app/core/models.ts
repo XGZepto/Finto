@@ -314,3 +314,21 @@ export interface InvestmentDetail extends InvestmentSnapshot {
     allocation: string | null;
   }>;
 }
+
+
+/** Movement between accounts you own, and across the boundary. */
+export interface Flows {
+  internal: Array<{
+    from_account: string;
+    to_account: string;
+    moves: number;
+    amount: Money;
+  }>;
+  external: Array<{
+    currency: string;
+    moves: number;
+    in: Money;
+    out: Money;
+    net: Money;
+  }>;
+}

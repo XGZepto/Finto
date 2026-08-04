@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  Account, Card, DetailKey, DetailValue, Facets, InstallmentPlan,
+  Account, Card, DetailKey, DetailValue, Facets, Flows, InstallmentPlan,
   IntegrityReport, InvestmentDetail, InvestmentSnapshot, Job, LedgerFilter,
   Page, Position, QueryResult, StagePreview, SummaryRow, TotalRow, Txn,
 } from './models';
@@ -172,6 +172,10 @@ export class Api {
   detailValues(key: string): Observable<{ key: string; values: DetailValue[] }> {
     return this.http.get<{ key: string; values: DetailValue[] }>(
       `${this.base}/details/${encodeURIComponent(key)}`);
+  }
+
+  flows(f: LedgerFilter = {}): Observable<Flows> {
+    return this.http.get<Flows>(`${this.base}/flows`, { params: filterToParams(f) });
   }
 
   integrity(): Observable<IntegrityReport> {
