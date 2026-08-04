@@ -33,7 +33,7 @@ export class SummaryPage {
 
   readonly dimensions = [
     'month', 'quarter', 'year', 'category', 'subcategory', 'merchant',
-    'account', 'institution', 'card', 'kind', 'currency',
+    'account', 'institution', 'card', 'cardholder', 'kind', 'currency',
   ];
 
   groupBy = signal('month');
@@ -58,6 +58,54 @@ export class SummaryPage {
     }
     return [...map.entries()].map(([bucket, rows]) => ({ bucket, rows }));
   });
+
+  /**
+   * The same buckets collapsed into one currency and ranked by spend.
+   *
+   * Spending across five currencies cannot be ordered natively — HKD 1,000 and
+   * USD 1,000 are not comparable — so "what did I spend most on" is only
+   * answerable once everything is in one unit. Available whenever a conversion
+   * currency is picked; the native rows stay underneath.
+   */
+  ranked = computed(() => {
+    if (!this.convertTo()) return [];
+    const map = new Map<string, { spend: number; income: number; rows: number }>();
+    for (const r of this.rows()) {
+      const spend = r.spend_converted?.ok ? r.spend_converted.amount : null;
+      const income = r.income_converted?.ok ? r.income_converted.amount : null;
+      if (spend === null) continue;   // unconvertible: excluded, and said so
+      const acc = map.get(r.bucket) ?? { spend: 0, income: 0, rows: 0 };
+      acc.spend += Math.abs(spend);
+      acc.income += Math.abs(income ?? 0);
+      acc.rows += r.txn_count;
+      map.set(r.bucket, acc);
+    }
+    const total = [...map.values()].reduce((s, b) => s + b.spend, 0) || 1;
+    const peak = Math.max(1, ...[...map.values()].map((b) => b.spend));
+    return [...map.entries()]
+      .map(([bucket, b]) => ({
+        bucket,
+        spend: { amount: -b.spend, currency: this.convertTo() },
+        income: { amount: b.income, currency: this.convertTo() },
+        net: { amount: b.income - b.spend, currency: this.convertTo() },
+        rows: b.rows,
+        share: b.spend / total,
+        width: `${(b.spend / peak) * 100}%`,
+      }))
+      .sort((a, b) => Math.abs(b.spend.amount) - Math.abs(a.spend.amount));
+  });
+
+  /** Rows a missing rate kept out of the ranking. */
+  unranked = computed(() =>
+    this.convertTo()
+      ? [...new Set(this.rows().filter((r) => !r.spend_converted?.ok).map((r) => r.currency))]
+      : [],
+  );
+
+  rankedTotal = computed(() => ({
+    amount: -this.ranked().reduce((s, b) => s + Math.abs(b.spend.amount), 0),
+    currency: this.convertTo(),
+  }));
 
   maxSpend = computed(() =>
     Math.max(1, ...this.rows().map((r) => Math.abs(r.spend.amount))),

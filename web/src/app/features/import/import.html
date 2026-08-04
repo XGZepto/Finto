@@ -1,10 +1,5 @@
 <div class="page-head">
   <h1>Import</h1>
-  <p class="sub">
-    Files are parsed and shown to you before anything is written. Check the dates
-    and the signs against the raw header — that is where a wrong column mapping
-    is cheap to catch.
-  </p>
 </div>
 
 <!-- Defaults, applied to files dropped after they're set. Several parsers can
@@ -161,10 +156,6 @@
             </tbody>
           </table>
         </div>
-        <p class="small muted note">
-          Negative is money out, on every account type including credit cards.
-          If these signs are inverted, the parser is wrong — don't import.
-        </p>
       }
     }
 
@@ -225,10 +216,6 @@
     <button (click)="runReattribute()">Re-attribute cards</button>
     <button (click)="runHarvestFx()">Harvest FX rates</button>
   </div>
-  <p class="small muted note">
-    Reconcile always runs over the whole ledger: a duplicate or a transfer's
-    counterpart usually sits in a different file from a different institution.
-  </p>
   @if (maintenance()?.status === 'done') {
     <div class="changes">
       @for (c of resultPairs(maintenance()); track c.label) {

@@ -60,10 +60,10 @@ def natural_language_query(req: QueryRequest, conn=Depends(get_conn)) -> dict:
 
     if req.convert_to:
         result["totals"] = fxm.convert_rows(
-            conn, result["totals"], field="net", to_currency=req.convert_to)
+            conn, result["totals"], fields=("net",), to_currency=req.convert_to)
         if "rows" in result:
             result["rows"] = fxm.convert_rows(
-                conn, result["rows"], field="net", to_currency=req.convert_to)
+                conn, result["rows"], fields=("net",), to_currency=req.convert_to)
     return result
 
 

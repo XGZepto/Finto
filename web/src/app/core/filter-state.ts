@@ -11,7 +11,9 @@ import { LedgerFilter } from './models';
  * view is just a stored URL.
  */
 
-const ARRAY_KEYS = ['accounts', 'cards', 'institutions', 'categories', 'kinds'] as const;
+const ARRAY_KEYS = [
+  'accounts', 'cards', 'institutions', 'categories', 'kinds', 'detail',
+] as const;
 const BOOL_KEYS = [
   'includeTransfers', 'includeDuplicates', 'uncategorisedOnly', 'installmentsOnly',
 ] as const;
@@ -68,7 +70,11 @@ export function describeFilter(f: LedgerFilter): Array<{ key: string; label: str
   }
   for (const key of ARRAY_KEYS) {
     const v = (f as any)[key] as string[] | undefined;
-    if (v?.length) chips.push({ key, label: `${key}: ${v.join(', ')}` });
+    if (!v?.length) continue;
+    chips.push({
+      key,
+      label: key === 'detail' ? v.join(', ') : `${key}: ${v.join(', ')}`,
+    });
   }
   if (f.currency) chips.push({ key: 'currency', label: f.currency });
   if (f.q) chips.push({ key: 'q', label: `“${f.q}”` });

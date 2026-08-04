@@ -57,9 +57,10 @@ export class App {
     { path: '/blotter', label: 'Blotter', idx: '02' },
     { path: '/import', label: 'Import', idx: '03' },
     { path: '/installments', label: 'Instalments', idx: '04' },
-    { path: '/review', label: 'Review', idx: '05' },
-    { path: '/integrity', label: 'Integrity', idx: '06' },
-    { path: '/ask', label: 'Ask', idx: '07' },
+    { path: '/investments', label: 'Investments', idx: '05' },
+    { path: '/review', label: 'Review', idx: '06' },
+    { path: '/integrity', label: 'Integrity', idx: '07' },
+    { path: '/ask', label: 'Ask', idx: '08' },
   ];
 
   reviewCount = signal(0);

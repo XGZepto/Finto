@@ -2,7 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  Account, Card, Facets, InstallmentPlan, IntegrityReport, Job, LedgerFilter,
+  Account, Card, DetailKey, DetailValue, Facets, InstallmentPlan,
+  IntegrityReport, InvestmentDetail, InvestmentSnapshot, Job, LedgerFilter,
   Page, Position, QueryResult, StagePreview, SummaryRow, TotalRow, Txn,
 } from './models';
 
@@ -28,6 +29,7 @@ export function filterToParams(f: LedgerFilter): HttpParams {
   put('minAmount', f.minAmount);
   put('maxAmount', f.maxAmount);
   put('q', f.q);
+  put('detail', f.detail);
   if (f.includeTransfers) put('includeTransfers', true);
   if (f.includeDuplicates) put('includeDuplicates', true);
   if (f.uncategorisedOnly) put('uncategorisedOnly', true);
@@ -154,6 +156,23 @@ export class Api {
   }
 
   // --- Other --------------------------------------------------------------
+
+  investments(): Observable<{ snapshots: InvestmentSnapshot[] }> {
+    return this.http.get<{ snapshots: InvestmentSnapshot[] }>(`${this.base}/investments`);
+  }
+
+  investment(id: string): Observable<InvestmentDetail> {
+    return this.http.get<InvestmentDetail>(`${this.base}/investments/${id}`);
+  }
+
+  detailKeys(): Observable<{ keys: DetailKey[] }> {
+    return this.http.get<{ keys: DetailKey[] }>(`${this.base}/details`);
+  }
+
+  detailValues(key: string): Observable<{ key: string; values: DetailValue[] }> {
+    return this.http.get<{ key: string; values: DetailValue[] }>(
+      `${this.base}/details/${encodeURIComponent(key)}`);
+  }
 
   integrity(): Observable<IntegrityReport> {
     return this.http.get<IntegrityReport>(`${this.base}/integrity`);

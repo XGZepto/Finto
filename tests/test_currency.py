@@ -210,13 +210,14 @@ def test_convert_rows_keeps_the_native_amount(conn):
                                     quote="USD", rate=Decimal("0.128")))
     conn.commit()
     _add(conn, "hsbc_hk_current", -100000, "HKD")
-    rows = fxm.convert_rows(conn, positions(conn), field="net", to_currency="USD",
-                            on=date(2025, 6, 1))
+    rows = fxm.convert_rows(conn, positions(conn), fields=("net", "inflow"),
+                            to_currency="USD", on=date(2025, 6, 1))
     row = next(r for r in rows if r["account_id"] == "hsbc_hk_current")
     assert row["net"]["amount"] == -100000          # native untouched
     assert row["net"]["currency"] == "HKD"
     assert row["net_converted"]["currency"] == "USD"
     assert row["net_converted"]["converted"] is True
+    assert row["inflow_converted"]["currency"] == "USD"
 
 
 def test_rates_load_from_csv(conn, tmp_path):

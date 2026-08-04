@@ -1,6 +1,14 @@
 <div class="page-head">
   <h1>Summary</h1>
-  <p class="sub">Positions are held per currency. Nothing is summed across them.</p>
+  <div class="head-controls">
+    <label for="convert">Normalise to</label>
+    <select id="convert" [ngModel]="convertTo()" (ngModelChange)="setConvert($event)">
+      <option value="">off</option>
+      @for (c of currencies(); track c) {
+        <option [value]="c">{{ c }}</option>
+      }
+    </select>
+  </div>
 </div>
 
 <app-filter-bar (changed)="load()" />
@@ -56,23 +64,13 @@
 <section class="card">
   <div class="section-head">
     <h2>Positions</h2>
-    <div class="row">
-      <label for="convert">Show also in</label>
-      <select id="convert" [ngModel]="convertTo()" (ngModelChange)="setConvert($event)">
-        <option value="">native only</option>
-        @for (c of currencies(); track c) {
-          <option [value]="c">{{ c }}</option>
-        }
-      </select>
-    </div>
   </div>
 
   @if (conversion(); as conv) {
     @if (conv.unconvertible_currencies.length) {
       <div class="banner warn small">
-        No rate for {{ conv.unconvertible_currencies.join(', ') }} → {{ conv.to }}.
-        Those rows show native amounts only — run
-        <span class="mono">fx harvest</span> from the import page.
+        No {{ conv.to }} rate for {{ conv.unconvertible_currencies.join(', ') }} —
+        native only. Run <span class="mono">fx harvest</span> on the import page.
       </div>
     }
   }
@@ -165,6 +163,57 @@
       </div>
     }
 
+    @if (ranked().length) {
+      <div class="table-wrap ranked">
+        <table>
+          <thead>
+            <tr>
+              <th class="rank">#</th>
+              <th>{{ groupBy() }}</th>
+              <th class="num">Spend</th>
+              <th class="num">Share</th>
+              <th class="num">In</th>
+              <th class="num">Net</th>
+              <th class="num">Rows</th>
+              <th class="bar-col"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (b of ranked(); track b.bucket) {
+              <tr class="clickable" (click)="drill(b.bucket)">
+                <td class="rank mono">{{ $index + 1 }}</td>
+                <td>{{ b.bucket }}</td>
+                <td class="num amount neg">{{ b.spend | money: 'bare' }}</td>
+                <td class="num share mono">{{ (b.share * 100).toFixed(1) }}%</td>
+                <td class="num amount pos">{{ b.income | money: 'bare' }}</td>
+                <td class="num" [class.neg]="b.net.amount < 0" [class.pos]="b.net.amount > 0">
+                  {{ b.net | money: 'bare' }}
+                </td>
+                <td class="num">{{ b.rows }}</td>
+                <td class="bar-col">
+                  <span class="bar-track"><span class="bar-fill" [style.width]="b.width"></span></span>
+                </td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr>
+              <td></td>
+              <td>{{ ranked().length }} {{ groupBy() }}</td>
+              <td class="num amount neg">{{ rankedTotal() | money: 'bare' }}</td>
+              <td colspan="5"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      @if (unranked().length) {
+        <p class="small muted">
+          {{ unranked().join(', ') }} excluded — no {{ convertTo() }} rate.
+        </p>
+      }
+      <h3 class="native-head">By native currency</h3>
+    }
+
     <div class="table-wrap">
       <table>
         <thead>
@@ -201,6 +250,5 @@
         </tbody>
       </table>
     </div>
-    <p class="small muted hint">Click any row to open it in the blotter.</p>
   }
 </section>

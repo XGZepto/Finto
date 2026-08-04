@@ -1,0 +1,90 @@
+<div class="page-head">
+  <h1>Investments</h1>
+</div>
+
+@if (loading()) {
+  <div class="spinner">loading </div>
+} @else if (!current()) {
+  <div class="card empty-state">
+    <p class="muted">No snapshots imported.</p>
+  </div>
+} @else if (current(); as snap) {
+  <div class="card">
+    <div class="toolbar">
+      <span class="small muted mono">{{ snap.scheme }}</span>
+      @if (snapshots().length > 1) {
+        <select [value]="snap.id" (change)="select($any($event.target).value)">
+          @for (s of snapshots(); track s.id) {
+            <option [value]="s.id">{{ s.as_of_date | shortDate }}</option>
+          }
+        </select>
+      }
+    </div>
+
+    <div class="total-hero">
+      <span class="figure">{{ snap.total | money }}</span>
+      <span class="muted small">as at {{ snap.as_of_date | shortDate }}</span>
+    </div>
+  </div>
+
+  @if (snap.subaccounts.length) {
+    <div class="card">
+      <h3>Member accounts</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Member no.</th>
+              <th class="num">Share</th>
+              <th class="num">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of snap.subaccounts; track s.account_id) {
+              <tr>
+                <td>{{ s.account_id }}</td>
+                <td class="mono small muted">{{ s.member_no || '—' }}</td>
+                <td class="num muted small">{{ percent(s.allocation) }}</td>
+                <td class="num">{{ s.balance | money }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+
+  <div class="card">
+    <h3>Constituent funds</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fund</th>
+            <th class="num">Units</th>
+            <th class="num">Unit price</th>
+            <th class="num">Share</th>
+            <th class="num">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (h of snap.holdings; track h.instrument) {
+            <tr>
+              <td class="fund">
+                <span class="bar" [style.width]="width(h.market_value.amount)"></span>
+                <span class="fund-name">{{ h.instrument }}</span>
+              </td>
+              <td class="num mono small muted">{{ h.units || '—' }}</td>
+              <td class="num mono small muted">{{ h.unit_price || '—' }}</td>
+              <td class="num muted small">{{ percent(h.allocation) }}</td>
+              <td class="num">{{ h.market_value | money }}</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="5" class="empty">No fund breakdown in this snapshot</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+}

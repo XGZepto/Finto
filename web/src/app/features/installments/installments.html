@@ -1,9 +1,5 @@
 <div class="page-head">
   <h1>Instalments</h1>
-  <p class="sub">
-    What you still owe, and what is already committed for next month. Neither
-    figure exists in the transaction rows — those are cash-basis by necessity.
-  </p>
 </div>
 
 <section class="liability">
@@ -14,7 +10,6 @@
     } @empty {
       <div class="figure none">nothing owed</div>
     }
-    <p class="small muted">Principal less instalments already charged.</p>
   </div>
 
   <div class="card block">
@@ -24,16 +19,11 @@
     } @empty {
       <div class="figure none">—</div>
     }
-    <p class="small muted">Known future outflow, every month, until each plan ends.</p>
   </div>
 
   <div class="card block">
     <h3>Active plans</h3>
     <div class="figure">{{ plans().length }}</div>
-    <p class="small muted">
-      A plan is a group of charges the matcher linked. Anything ambiguous waits
-      in the review queue instead.
-    </p>
   </div>
 </section>
 

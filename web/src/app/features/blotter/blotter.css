@@ -104,3 +104,49 @@ tr.on td { background: var(--panel-3); }
   border-left: 2px solid color-mix(in srgb, var(--muted, #6b7280) 35%, transparent);
   padding-left: 0.75rem;
 }
+
+/* A detail value is a question as much as a fact: what else shares it? */
+button.fact {
+  text-align: left;
+  color: inherit;
+  border-bottom: 1px dotted var(--line-2, var(--line));
+  cursor: pointer;
+}
+button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
+
+/* Narrow screens: the table becomes a list. A six-column grid pushes the
+   amount off-screen, and the amount is the number you came for. */
+@media (max-width: 760px) {
+  .table-wrap { overflow-x: visible; }
+  .table-wrap table,
+  .table-wrap tbody,
+  .table-wrap tr,
+  .table-wrap td { display: block; }
+  .table-wrap thead { display: none; }
+
+  /* Flex, not grid: the meta cells have to flow onto one wrapped line, and a
+     grid container blockifies its children. */
+  .table-wrap tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 6px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .table-wrap td { border: none; padding: 0; }
+
+  td.desc { order: 1; flex: 1 1 55%; }
+  td.num { order: 2; margin-left: auto; text-align: right; white-space: nowrap; }
+  td.date, td.account, td.category {
+    order: 3;
+    font-size: 11px;
+    color: var(--fg-3);
+  }
+  td.account::before, td.category::before { content: '· '; }
+  td.flags { order: 4; flex: 1 0 100%; }
+  td.flags:empty { display: none; }
+  td.desc .primary { font-size: 13px; }
+}
+
+.holder { color: var(--c4, var(--info)); }

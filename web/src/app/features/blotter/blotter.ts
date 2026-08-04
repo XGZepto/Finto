@@ -177,6 +177,13 @@ export class BlotterPage {
    * records — not a row we failed to read — so it is shown as such rather than
    * left looking unclassified.
    */
+  filterByDetail(key: string, value: string): void {
+    this.close();
+    this.filters.patch({ detail: [`${key}=${value}`] });
+    this.offset.set(0);
+    this.load();
+  }
+
   gateway(txn: Txn): string | null {
     return txn.details?.['payment.gateway'] ?? null;
   }

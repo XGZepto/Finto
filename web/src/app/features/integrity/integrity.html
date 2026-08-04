@@ -1,9 +1,5 @@
 <div class="page-head">
   <h1>Integrity</h1>
-  <p class="sub">
-    Statements print a running balance. That number is the bank's, independent of
-    our parsing — so if our transactions reproduce it, nothing was dropped.
-  </p>
 </div>
 
 @if (loading()) {
@@ -55,10 +51,7 @@
         </div>
       }
     } @else {
-      <p class="small muted clean">
-        All clean. No orphaned transfer groups, one-legged transfers, duplicate
-        chains or currency mismatches.
-      </p>
+      <p class="small muted clean">All clean.</p>
     }
   </section>
 
@@ -121,11 +114,6 @@
     </div>
 
     @if (checks().length && !showAllChecks()) {
-      <p class="small muted note">
-        A difference is located to the day and the cent. Inspect opens the blotter
-        over exactly that period, with transfers and duplicates shown, because the
-        missing row could be any of them.
-      </p>
     }
   </section>
 
@@ -133,11 +121,6 @@
   <section class="card">
     <div class="section-head"><h2>Unverified accounts</h2></div>
     @if (r.unverified_accounts.length) {
-      <p class="small muted">
-        These hold transactions but have fewer than two balance assertions, so
-        nothing about them has been proven. Import a statement that carries a
-        running balance, or record one by hand.
-      </p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -157,7 +140,6 @@
         </table>
       </div>
     } @else {
-      <p class="small muted clean">Every account with transactions has been checked against a balance.</p>
     }
   </section>
 }

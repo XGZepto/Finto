@@ -42,10 +42,11 @@ def get_summary(
     }
 
     if convert_to:
+        money_fields = ("net", "spend", "income")
         payload["rows"] = fxm.convert_rows(
-            conn, rows, field="net", to_currency=convert_to)
+            conn, rows, fields=money_fields, to_currency=convert_to)
         payload["totals"] = fxm.convert_rows(
-            conn, headline, field="net", to_currency=convert_to)
+            conn, headline, fields=money_fields, to_currency=convert_to)
         # A normalised view that silently drops a currency is worse than one
         # that admits it cannot show it.
         payload["conversion"] = {
@@ -64,8 +65,8 @@ def post_summary(req: SummaryRequest, conn=Depends(get_conn)) -> dict:
                              filters=req.filter.to_query())
     totals = reporting.totals(conn, filters=req.filter.to_query())
     if req.convert_to:
-        rows = fxm.convert_rows(conn, rows, field="net", to_currency=req.convert_to)
-        totals = fxm.convert_rows(conn, totals, field="net",
+        rows = fxm.convert_rows(conn, rows, fields=("net",), to_currency=req.convert_to)
+        totals = fxm.convert_rows(conn, totals, fields=("net",),
                                   to_currency=req.convert_to)
     return {"group_by": req.group_by, "rows": rows, "totals": totals}
 
@@ -86,7 +87,7 @@ def get_positions(convert_to: str | None = Query(None),
     }
     if convert_to:
         payload["positions"] = fxm.convert_rows(
-            conn, rows, field="balance", to_currency=convert_to, on=as_of)
+            conn, rows, fields=("balance",), to_currency=convert_to, on=as_of)
         payload["conversion"] = {
             "to": convert_to.upper(),
             "unconvertible_currencies": fxm.missing_pairs(conn, convert_to),

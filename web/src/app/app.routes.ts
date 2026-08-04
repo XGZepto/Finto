@@ -24,6 +24,12 @@ export const routes: Routes = [
     title: 'Instalments · Finto',
   },
   {
+    path: 'investments',
+    loadComponent: () =>
+      import('./features/investments/investments').then((m) => m.InvestmentsPage),
+    title: 'Investments · Finto',
+  },
+  {
     path: 'review',
     loadComponent: () => import('./features/review/review').then((m) => m.ReviewPage),
     title: 'Review · Finto',

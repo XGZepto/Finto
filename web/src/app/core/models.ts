@@ -40,6 +40,8 @@ export interface LedgerFilter {
   minAmount?: number;
   maxAmount?: number;
   q?: string;
+  /** Structured facts, each "key" or "key=value". */
+  detail?: string[];
   /** Transfers between your own accounts are not spending. Default false. */
   includeTransfers?: boolean;
   includeDuplicates?: boolean;
@@ -108,6 +110,8 @@ export interface SummaryRow {
   spend: Money;
   income: Money;
   net_converted?: ConvertedMoney;
+  spend_converted?: ConvertedMoney;
+  income_converted?: ConvertedMoney;
 }
 
 export interface TotalRow {
@@ -264,4 +268,47 @@ export interface QueryResult {
   totals?: TotalRow[];
   rows?: SummaryRow[];
   transactions?: Page<Txn>;
+}
+
+
+/** A fact a parser lifted off a statement, and how often it appears. */
+export interface DetailKey {
+  key: string;
+  facts: number;
+  transactions: number;
+}
+
+export interface DetailValue {
+  value: string;
+  transactions: number;
+}
+
+/**
+ * An MPF valuation. These are units, not cash: contributions that left a bank
+ * account are ordinary transactions and reconcile as such, while what is held
+ * here moves with the market and never enters a balance check.
+ */
+export interface InvestmentSnapshot {
+  id: string;
+  as_of_date: string;
+  scheme: string;
+  total: Money;
+  source: string;
+  notes: string | null;
+}
+
+export interface InvestmentDetail extends InvestmentSnapshot {
+  subaccounts: Array<{
+    account_id: string;
+    member_no: string | null;
+    balance: Money;
+    allocation: string | null;
+  }>;
+  holdings: Array<{
+    instrument: string;
+    units: string | null;
+    unit_price: string | null;
+    market_value: Money;
+    allocation: string | null;
+  }>;
 }

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import csv
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -198,21 +199,23 @@ def convert(conn, money: Money, to_currency: str, on: date | str | None = None) 
                      rate, rate_date, True)
 
 
-def convert_rows(conn, rows: list[dict], *, field: str, to_currency: str,
+def convert_rows(conn, rows: list[dict], *, fields: Sequence[str], to_currency: str,
                  on: date | str | None = None) -> list[dict]:
-    """Attach a converted figure to report rows without replacing the original.
+    """Attach converted figures to report rows without replacing the originals.
 
-    The native amount always stays. Conversion is additive, so a client can show
-    both and label the converted one.
+    The native amounts always stay. Conversion is additive, so a client can show
+    both and label the converted one. Spend and income are converted alongside
+    net because a normalised breakdown is ranked on what was spent.
     """
     out = []
     for r in rows:
         item = dict(r)
-        m = r.get(field)
-        if isinstance(m, dict) and "amount" in m:
-            item[f"{field}_converted"] = convert(
-                conn, Money(amount=m["amount"], currency=m["currency"]),
-                to_currency, on).as_dict()
+        for field in fields:
+            m = r.get(field)
+            if isinstance(m, dict) and "amount" in m:
+                item[f"{field}_converted"] = convert(
+                    conn, Money(amount=m["amount"], currency=m["currency"]),
+                    to_currency, on).as_dict()
         out.append(item)
     return out
 

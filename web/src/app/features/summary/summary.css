@@ -74,3 +74,26 @@ tr:hover .bar-col .bar-fill { background: var(--fg-3); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.head-controls { display: flex; align-items: baseline; gap: 8px; }
+.head-controls label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+
+.table-wrap.ranked { margin-bottom: 14px; }
+.ranked td.rank, .ranked th.rank { width: 1%; color: var(--fg-4); text-align: right; }
+.ranked td.share { color: var(--fg-2); }
+.ranked tfoot td { border-top: 1px solid var(--line-2, var(--line)); color: var(--fg-2); }
+
+.native-head {
+  margin: 16px 0 8px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}

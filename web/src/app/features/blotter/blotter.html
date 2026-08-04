@@ -1,6 +1,5 @@
 <div class="page-head">
   <h1>Blotter</h1>
-  <p class="sub">Every row traces back to a line in a file you imported.</p>
 </div>
 
 <app-filter-bar (changed)="load()" />
@@ -40,10 +39,12 @@
         <tbody>
           @for (t of rows(); track t.id) {
             <tr (click)="open(t)" class="clickable" [class.on]="selected()?.id === t.id">
-              <td class="mono small nowrap">{{ t.date | shortDate }}</td>
-              <td>
+              <td class="date mono small nowrap">{{ t.date | shortDate }}</td>
+              <td class="account">
                 {{ t.account_name }}
-                @if (t.card_last4) {
+                @if (t.cardholder_name) {
+                  <span class="holder small block">{{ t.cardholder_name }}</span>
+                } @else if (t.card_last4) {
                   <span class="muted small mono">·{{ t.card_last4 }}</span>
                 }
               </td>
@@ -58,7 +59,7 @@
                   }
                 }
               </td>
-              <td>
+              <td class="category">
                 @if (merchantHidden(t)) {
                   via {{ gateway(t) }}
                   <span class="muted small block">gateway payment</span>
@@ -102,7 +103,12 @@
     <header>
       <div class="head-text">
         <h2>{{ txn.merchant || txn.description }}</h2>
-        <p class="muted small mono">{{ txn.account_name }} · {{ txn.date | shortDate }}</p>
+        <p class="muted small mono">
+          {{ txn.account_name }} · {{ txn.date | shortDate }}
+          @if (txn.cardholder_name) { · {{ txn.cardholder_name }}
+            @if (txn.card_last4) { ·{{ txn.card_last4 }} }
+          }
+        </p>
       </div>
       <button class="bare close" (click)="close()" aria-label="Close">×</button>
     </header>
@@ -120,17 +126,9 @@
       <section class="gateway-note">
         <h3>Paid through {{ g }}</h3>
         @if (merchantHidden(txn)) {
-          <p class="muted small">
-            {{ g }} settled this charge and did not pass the merchant's name to
-            the card, so the statement records the gateway and nothing more.
-            This is what the source says, not a gap in the import — the name is
-            only recoverable from {{ g }}'s own history.
-          </p>
+          <p class="muted small">Merchant not passed through by {{ g }}.</p>
         } @else {
-          <p class="muted small">
-            {{ g }} settled this charge on behalf of
-            <strong>{{ txn.merchant }}</strong>, which the statement did name.
-          </p>
+          <p class="muted small">Settled for <strong>{{ txn.merchant }}</strong>.</p>
         }
       </section>
     }
@@ -165,7 +163,6 @@
       <button class="primary" [disabled]="saving()" (click)="save()">
         {{ saving() ? 'Saving…' : 'Save' }}
       </button>
-      <p class="muted small">Manual edits outrank rules and the model, permanently.</p>
     </section>
 
     @if (detailEntries(txn).length) {
@@ -174,7 +171,12 @@
         <dl class="details">
           @for (d of detailEntries(txn); track d.key) {
             <dt>{{ d.key | detailKey }}</dt>
-            <dd>{{ d.value }}</dd>
+            <dd>
+              <button class="bare fact" (click)="filterByDetail(d.key, d.value)"
+                      [title]="'Show every transaction with this ' + (d.key | detailKey)">
+                {{ d.value }}
+              </button>
+            </dd>
           }
         </dl>
       </section>
@@ -194,10 +196,6 @@
             </span>
           </button>
         }
-        <p class="muted small">
-          Both legs are one movement of your own money, so neither counts as
-          spending or income.
-        </p>
       </section>
     }
 
