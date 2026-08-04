@@ -143,6 +143,128 @@ def detail_values(conn, key: str, limit: int = 200) -> dict:
         (key, int(limit)))]}
 
 
+def composition(conn, *, dimension: str = "category", to_currency: str,
+                filters: dict | None = None, limit: int = 8) -> dict:
+    """Spend by `dimension` per month, normalised to one currency.
+
+    Ranking spend needs a single unit, so this only exists converted. The top
+    `limit` buckets over the whole span are tracked by name; the rest fold into
+    "other", because a stacked chart with forty bands says nothing.
+    """
+    expr = GROUP_BY_SQL.get(dimension)
+    if expr is None:
+        raise ValueError(f"unknown dimension: {dimension}")
+
+    where, params = build_where(filters)
+    rows = conn.execute(f"""
+        SELECT substr(t.txn_date, 1, 7) AS month, {expr} AS bucket,
+               t.currency_booked AS currency,
+               SUM(CASE WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS spend
+        FROM txn t JOIN account a ON a.id = t.account_id
+        LEFT JOIN card c ON c.id = t.card_id
+        WHERE {where}
+        GROUP BY 1, 2, 3
+    """, params).fetchall()
+
+    # Convert each (bucket, month) spend into the target currency, dropping what
+    # has no rate rather than guessing one.
+    from .fx import convert
+    from .models import Money
+    per_bucket: dict[str, int] = {}
+    grid: dict[tuple[str, str], int] = {}
+    months: set[str] = set()
+    unconvertible: set[str] = set()
+    for r in rows:
+        c = convert(conn, Money(amount=r["spend"], currency=r["currency"]),
+                    to_currency, f"{r['month']}-15", nearest=True)
+        if not c.ok:
+            unconvertible.add(r["currency"])
+            continue
+        months.add(r["month"])
+        grid[(r["bucket"], r["month"])] = grid.get((r["bucket"], r["month"]), 0) + c.amount
+        per_bucket[r["bucket"]] = per_bucket.get(r["bucket"], 0) + c.amount
+
+    top = [b for b, _ in sorted(per_bucket.items(), key=lambda kv: -kv[1])[:limit]]
+    keep = set(top)
+    ordered_months = sorted(months)
+    series = {b: {m: 0 for m in ordered_months} for b in [*top, "other"]}
+    for (bucket, month), amount in grid.items():
+        series[bucket if bucket in keep else "other"][month] += amount
+
+    buckets = [*top] + (["other"] if any(series["other"].values()) else [])
+    return {
+        "dimension": dimension,
+        "currency": to_currency.upper(),
+        "months": ordered_months,
+        "series": [{
+            "bucket": b,
+            "total": sum(series[b].values()),
+            "values": [series[b][m] for m in ordered_months],
+        } for b in buckets],
+        "unconvertible_currencies": sorted(unconvertible),
+    }
+
+
+def coverage(conn) -> dict:
+    """Per account, month by month, what data backs it.
+
+    All sources are the issuer's own; the distinction is whether a month is
+    backed by a statement that printed a balance — so capture is proven — or
+    only by an export or loose rows, which carry no balance to check against.
+    A month with neither, inside the account's life, is a hole to go fill.
+    """
+    months = [r["m"] for r in conn.execute(
+        "SELECT DISTINCT substr(txn_date, 1, 7) AS m FROM txn "
+        "WHERE duplicate_of_id IS NULL AND status <> 'void' ORDER BY m")]
+    if not months:
+        return {"months": [], "accounts": []}
+
+    # A PDF statement covers every month its period touches.
+    stmt: dict[str, set[str]] = {}
+    for r in conn.execute(
+            "SELECT account_id, period_start, period_end, statement_date "
+            "FROM statement_file WHERE file_format = 'pdf' AND account_id IS NOT NULL"):
+        covered = stmt.setdefault(r["account_id"], set())
+        if r["period_start"] and r["period_end"]:
+            covered |= {m for m in months
+                        if r["period_start"][:7] <= m <= r["period_end"][:7]}
+        elif r["statement_date"]:
+            covered.add(r["statement_date"][:7])
+
+    active: dict[str, set[str]] = {}
+    for r in conn.execute(
+            "SELECT account_id, substr(txn_date, 1, 7) AS m, COUNT(*) AS n FROM txn "
+            "WHERE duplicate_of_id IS NULL AND status <> 'void' GROUP BY 1, 2"):
+        active.setdefault(r["account_id"], set()).add(r["m"])
+
+    names = {r["id"]: r["display_name"]
+             for r in conn.execute("SELECT id, display_name FROM account")}
+    out = []
+    for account_id in sorted(set(stmt) | set(active)):
+        covered, seen = stmt.get(account_id, set()), active.get(account_id, set())
+        # Before an account's first activity it did not exist, which is not a
+        # gap. Statement coverage can still precede activity — an opening
+        # balance the statement carries — so the account starts at the earlier
+        # of the two.
+        start = min([*seen, *covered], default=months[-1])
+        cells = [
+            "pre" if m < start
+            else "statement" if m in covered
+            else "export" if m in seen
+            else "none"
+            for m in months
+        ]
+        out.append({
+            "account_id": account_id,
+            "account_name": names.get(account_id, account_id),
+            "cells": cells,
+            "statement_months": sum(c == "statement" for c in cells),
+            "export_months": sum(c == "export" for c in cells),
+            "gap_months": sum(c == "none" for c in cells),
+        })
+    return {"months": months, "accounts": out}
+
+
 def flows(conn, *, filters: dict | None = None) -> dict:
     """Where money moved: between your own accounts, and across the boundary.
 

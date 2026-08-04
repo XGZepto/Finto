@@ -332,3 +332,26 @@ export interface Flows {
     net: Money;
   }>;
 }
+
+
+/** Spend by a dimension over months, normalised to one currency. */
+export interface Composition {
+  dimension: string;
+  currency: string;
+  months: string[];
+  series: Array<{ bucket: string; total: number; values: number[] }>;
+  unconvertible_currencies: string[];
+}
+
+/** Per account, month by month, what data backs it. */
+export interface Coverage {
+  months: string[];
+  accounts: Array<{
+    account_id: string;
+    account_name: string;
+    cells: Array<'statement' | 'export' | 'none' | 'pre'>;
+    statement_months: number;
+    export_months: number;
+    gap_months: number;
+  }>;
+}

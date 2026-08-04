@@ -13,6 +13,11 @@ export const routes: Routes = [
     title: 'Blotter · Finto',
   },
   {
+    path: 'timeline',
+    loadComponent: () => import('./features/timeline/timeline').then((m) => m.TimelinePage),
+    title: 'Timeline · Finto',
+  },
+  {
     path: 'accounts',
     loadComponent: () => import('./features/accounts/accounts').then((m) => m.AccountsPage),
     title: 'Accounts · Finto',

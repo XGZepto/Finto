@@ -2,7 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  Account, Card, DetailKey, DetailValue, Facets, Flows, InstallmentPlan,
+  Account, Card, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
+  InstallmentPlan,
   IntegrityReport, InvestmentDetail, InvestmentSnapshot, Job, LedgerFilter,
   Page, Position, QueryResult, StagePreview, SummaryRow, TotalRow, Txn,
 } from './models';
@@ -172,6 +173,15 @@ export class Api {
   detailValues(key: string): Observable<{ key: string; values: DetailValue[] }> {
     return this.http.get<{ key: string; values: DetailValue[] }>(
       `${this.base}/details/${encodeURIComponent(key)}`);
+  }
+
+  composition(convertTo: string, dimension: string, f: LedgerFilter = {}): Observable<Composition> {
+    const p = filterToParams(f).set('convert_to', convertTo).set('dimension', dimension);
+    return this.http.get<Composition>(`${this.base}/composition`, { params: p });
+  }
+
+  coverage(): Observable<Coverage> {
+    return this.http.get<Coverage>(`${this.base}/coverage`);
   }
 
   flows(f: LedgerFilter = {}): Observable<Flows> {

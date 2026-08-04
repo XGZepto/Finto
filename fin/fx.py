@@ -158,12 +158,17 @@ class Converted:
         }
 
 
-def convert(conn, money: Money, to_currency: str, on: date | str | None = None) -> Converted:
+def convert(conn, money: Money, to_currency: str, on: date | str | None = None,
+            *, nearest: bool = False) -> Converted:
     """Convert one amount, reporting the rate used and whether it succeeded.
 
     Never raises and never guesses: when no rate is available `ok` is False and
     the original amount is passed through unchanged, so a caller cannot
     accidentally treat an unconverted figure as converted.
+
+    `nearest` relaxes the as-of rule to the closest observation in either
+    direction — for a presentation chart normalised to one currency, where a
+    date just before the first rate should still plot rather than vanish.
     """
     to_currency = to_currency.upper()
     if money.currency == to_currency:
@@ -187,6 +192,18 @@ def convert(conn, money: Money, to_currency: str, on: date | str | None = None) 
             (to_currency, money.currency, when.isoformat())).fetchone()
         if inv and Decimal(inv["rate"]) != 0:
             rate, rate_date = Decimal(1) / Decimal(inv["rate"]), inv["rate_date"]
+
+    if rate is None and nearest:
+        near = conn.execute(
+            "SELECT base, rate, rate_date, ABS(JULIANDAY(rate_date) - JULIANDAY(?)) AS d "
+            "FROM fx_rate WHERE (base=? AND quote=?) OR (base=? AND quote=?) "
+            "ORDER BY d LIMIT 1",
+            (when.isoformat(), money.currency, to_currency,
+             to_currency, money.currency)).fetchone()
+        if near and Decimal(near["rate"]) != 0:
+            r = Decimal(near["rate"])
+            rate = r if near["base"] == money.currency else Decimal(1) / r
+            rate_date = near["rate_date"]
 
     if rate is None:
         return Converted(money.amount, money.currency, money.amount,

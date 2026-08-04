@@ -8,6 +8,7 @@ look identical.
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
@@ -424,4 +425,53 @@ def test_flows_separate_your_own_accounts_from_the_boundary(tmp_path):
     hkd = next(e for e in f["external"] if e["currency"] == "HKD")
     assert hkd["in"]["amount"] == 9000
     assert hkd["out"]["amount"] == 0
+    conn.close()
+
+
+def test_composition_normalises_and_folds_the_tail(tmp_path):
+    from fin import db as dbm
+    from fin.models import FxRate
+    from fin.reporting import composition
+
+    conn = _seeded(tmp_path)
+    dbm.upsert_fx_rate(conn, FxRate(rate_date=date(2026, 3, 1), base="USD",
+                                    quote="HKD", rate=Decimal("7.8")))
+    rows = [
+        _txn(account_id="card", txn_date=date(2026, 3, 5),
+             booked=Money(amount=-10000, currency="HKD"), category="dining"),
+        _txn(account_id="card", txn_date=date(2026, 3, 6),
+             booked=Money(amount=-1000, currency="USD"), category="travel"),
+        _txn(account_id="card", txn_date=date(2026, 3, 7),
+             booked=Money(amount=-500, currency="NZD"), category="misc"),
+    ]
+    dbm.insert_txns(conn, rows)
+    conn.commit()
+
+    comp = composition(conn, dimension="category", to_currency="HKD", limit=8)
+    got = {s["bucket"]: s["total"] for s in comp["series"]}
+    assert got["dining"] == 10000            # HKD, unchanged
+    assert got["travel"] == 7800             # 1000 USD * 7.8
+    # NZD had no rate at all, so it is dropped and declared, never guessed.
+    assert comp["unconvertible_currencies"] == ["NZD"]
+    assert "misc" not in got
+    conn.close()
+
+
+def test_coverage_marks_pre_life_apart_from_a_gap(tmp_path):
+    from fin import db as dbm
+    from fin.reporting import coverage
+
+    conn = _seeded(tmp_path)
+    # A card that only ever transacted in one month.
+    dbm.insert_txns(conn, [
+        _txn(account_id="card", txn_date=date(2026, 3, 10),
+             booked=Money(amount=-100, currency="HKD"))])
+    conn.commit()
+
+    cov = coverage(conn)
+    row = next(a for a in cov["accounts"] if a["account_id"] == "card")
+    cells = dict(zip(cov["months"], row["cells"]))
+    assert cells["2026-03"] == "export"      # activity, no PDF statement
+    # Every month before its first activity is pre-life, not a hole.
+    assert all(v == "pre" for m, v in cells.items() if m < "2026-03")
     conn.close()

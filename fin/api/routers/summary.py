@@ -71,6 +71,27 @@ def post_summary(req: SummaryRequest, conn=Depends(get_conn)) -> dict:
     return {"group_by": req.group_by, "rows": rows, "totals": totals}
 
 
+@router.get("/coverage")
+def get_coverage(conn=Depends(get_conn)) -> dict:
+    """Per account, month by month, what data backs it."""
+    return reporting.coverage(conn)
+
+
+@router.get("/composition")
+def get_composition(convert_to: str = Query(...),
+                    dimension: str = Query("category"),
+                    limit: int = Query(8, le=20),
+                    f: LedgerFilter = Depends(filter_from_query),
+                    conn=Depends(get_conn)) -> dict:
+    """Spend by a dimension over time, normalised to one currency."""
+    if dimension not in reporting.GROUP_BY_SQL:
+        raise HTTPException(
+            400, f"dimension must be one of: {sorted(reporting.GROUP_BY_SQL)}")
+    return reporting.composition(
+        conn, dimension=dimension, to_currency=convert_to,
+        filters=f.to_query(), limit=limit)
+
+
 @router.get("/flows")
 def get_flows(f: LedgerFilter = Depends(filter_from_query),
               conn=Depends(get_conn)) -> dict:

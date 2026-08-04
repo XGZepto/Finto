@@ -1,0 +1,85 @@
+<div class="page-head">
+  <h1>Timeline</h1>
+  <div class="head-controls">
+    <select [ngModel]="dimension()" (ngModelChange)="set(dimension, $event)">
+      @for (d of dimensions; track d) { <option [value]="d">{{ d }}</option> }
+    </select>
+    <select [ngModel]="convertTo()" (ngModelChange)="set(convertTo, $event)">
+      @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
+    </select>
+    <div class="seg">
+      <button [class.on]="mode() === 'share'" (click)="mode.set('share')">share</button>
+      <button [class.on]="mode() === 'amount'" (click)="mode.set('amount')">amount</button>
+    </div>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="spinner">loading </div>
+} @else if (comp(); as c) {
+  <div class="card">
+    @if (c.unconvertible_currencies.length) {
+      <p class="small muted">
+        {{ c.unconvertible_currencies.join(', ') }} omitted — no {{ c.currency }} rate.
+      </p>
+    }
+
+    <div class="chart">
+      <div class="cols">
+        @for (col of columns(); track col.month) {
+          <div class="col" (mouseenter)="hovered.set($index)" (mouseleave)="hovered.set(null)">
+            <div class="stack">
+              @for (b of col.bands; track b.bucket) {
+                <span class="band"
+                      [style.bottom.%]="b.bottom" [style.height.%]="b.height"
+                      [style.background]="b.colour"
+                      (click)="drill(col.month, b.bucket)"
+                      [title]="b.bucket + ' · ' + ({ amount: b.amount, currency: c.currency } | money)"></span>
+              }
+            </div>
+            <span class="tick mono" [class.on]="hovered() === $index">{{ col.label }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="legend">
+      @for (l of legend(); track l.bucket) {
+        <span class="key">
+          <span class="swatch" [style.background]="l.colour"></span>
+          {{ l.bucket }}
+          <span class="mono muted">{{ { amount: -l.total, currency: c.currency } | money: 'bare' }}</span>
+        </span>
+      }
+    </div>
+  </div>
+}
+
+@if (coverage(); as cov) {
+  <div class="card">
+    <div class="section-head">
+      <h2>Data by month</h2>
+      <span class="legend-inline small">
+        <span class="cell statement"></span> statement
+        <span class="cell export"></span> export only
+        <span class="cell none"></span> none
+      </span>
+    </div>
+    <div class="coverage">
+      <div class="cov-scale mono">
+        <span>{{ cov.months[0] }}</span>
+        <span>{{ cov.months[cov.months.length - 1] }}</span>
+      </div>
+      @for (a of cov.accounts; track a.account_id) {
+        <div class="cov-row">
+          <span class="cov-name" [title]="a.account_id">{{ a.account_name }}</span>
+          <div class="cov-band">
+            @for (cell of a.cells; track $index) {
+              <span class="cell" [class]="cell" [title]="cov.months[$index] + ' · ' + cell"></span>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+}
