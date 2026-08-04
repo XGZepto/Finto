@@ -31,6 +31,7 @@ export function filterToParams(f: LedgerFilter): HttpParams {
   put('maxAmount', f.maxAmount);
   put('q', f.q);
   put('detail', f.detail);
+  put('tags', f.tags);
   if (f.includeTransfers) put('includeTransfers', true);
   if (f.includeDuplicates) put('includeDuplicates', true);
   if (f.uncategorisedOnly) put('uncategorisedOnly', true);
@@ -57,6 +58,15 @@ export class Api {
 
   transaction(id: string): Observable<Txn> {
     return this.http.get<Txn>(`${this.base}/transactions/${id}`);
+  }
+
+addTag(id: string, tag: string): Observable<Txn> {
+    return this.http.post<Txn>(`${this.base}/transactions/${id}/tags`, { tag });
+  }
+
+  removeTag(id: string, tag: string): Observable<Txn> {
+    return this.http.delete<Txn>(
+      `${this.base}/transactions/${id}/tags/${encodeURIComponent(tag)}`);
   }
 
   patchTransaction(id: string, patch: Partial<Txn>): Observable<Txn> {

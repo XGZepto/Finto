@@ -165,3 +165,22 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 .scope-item .out { color: var(--neg); }
 .scope-item .in { color: var(--pos); }
 .scope-item .net { border-left: 1px solid var(--line); padding-left: 8px; }
+
+.row-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.tag.tagchip {
+  border-color: var(--c4, var(--info));
+  color: var(--c4, var(--info));
+  font-size: 10px;
+}
+.tag-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tag.removable { display: inline-flex; align-items: center; gap: 4px; }
+.tag.removable .x { color: var(--fg-3); font-size: 13px; line-height: 1; }
+.tag.removable .x:hover { color: var(--neg); }
+.tag-input {
+  width: 100px;
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--panel-2);
+  border: 1px dashed var(--line-2, var(--line));
+  color: inherit;
+}

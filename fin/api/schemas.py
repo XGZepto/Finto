@@ -35,6 +35,7 @@ class LedgerFilter(BaseModel):
     q: str | None = None
     #: Exact structured-fact filters, each "key" or "key=value".
     detail: list[str] | None = None
+    tags: list[str] | None = None
     # Transfers are money moved between your own accounts. Counting them as
     # spending is the specific error transfer linking exists to prevent, so the
     # caller has to opt in.
@@ -56,6 +57,10 @@ class SummaryRequest(BaseModel):
     # Optional presentation-only normalisation. The native figures are always
     # returned regardless; this adds a converted companion field.
     convert_to: str | None = None
+
+
+class TagBody(BaseModel):
+    tag: str
 
 
 class TransactionPatch(BaseModel):

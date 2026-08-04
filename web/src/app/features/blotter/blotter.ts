@@ -41,6 +41,7 @@ export class BlotterPage {
   selected = signal<Txn | null>(null);
   detailLoading = signal(false);
   editCategory = signal('');
+  newTag = signal('');
   editNotes = signal('');
   saving = signal(false);
 
@@ -156,6 +157,37 @@ export class BlotterPage {
         },
         error: () => this.saving.set(false),
       });
+  }
+
+  addTag(): void {
+    const txn = this.selected();
+    const tag = this.newTag().trim();
+    if (!txn || !tag) return;
+    this.api.addTag(txn.id, tag).subscribe({
+      next: (updated) => {
+        this.selected.set(updated);
+        this.newTag.set('');
+        this.load();
+      },
+    });
+  }
+
+  removeTag(tag: string): void {
+    const txn = this.selected();
+    if (!txn) return;
+    this.api.removeTag(txn.id, tag).subscribe({
+      next: (updated) => {
+        this.selected.set(updated);
+        this.load();
+      },
+    });
+  }
+
+  filterByTag(tag: string): void {
+    this.close();
+    this.filters.patch({ tags: [tag] });
+    this.offset.set(0);
+    this.load();
   }
 
   detailEntries(txn: Txn): Array<{ key: string; value: string }> {

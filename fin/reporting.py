@@ -142,6 +142,11 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
     # Exact detail lookup: "travel.passenger_name=YIXIANG ZHOU". This is what
     # txn_detail exists for — a JSON blob cannot answer "every flight booked
     # for this passenger", and `q` only does substrings across every key.
+    for tag in f.get("tags") or []:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM txn_tag tg WHERE tg.txn_id = t.id AND tg.tag = ?)")
+        params.append(tag)
+
     for pair in f.get("detail") or []:
         key, _, value = str(pair).partition("=")
         clauses.append(
@@ -440,20 +445,29 @@ def summary(conn, *, group_by: str = "month", filters: dict | None = None) -> li
     spend" that mixes currencies would be meaningless, so the shape of the
     result makes mixing impossible rather than merely discouraged.
     """
-    if group_by not in GROUP_BY_SQL:
+    if group_by != "tag" and group_by not in GROUP_BY_SQL:
         raise ValueError(f"unknown group_by: {group_by}")
-    expr = GROUP_BY_SQL[group_by]
     where, params = build_where(filters)
 
+    # A tag fans out: a transaction under two tags counts under each. Every
+    # other dimension is one value per row, so it groups on an expression.
+    if group_by == "tag":
+        bucket = "COALESCE(tg.tag, '(untagged)')"
+        source = ("FROM txn t JOIN account a ON a.id = t.account_id "
+                  "LEFT JOIN card c ON c.id = t.card_id "
+                  "LEFT JOIN txn_tag tg ON tg.txn_id = t.id")
+    else:
+        bucket = GROUP_BY_SQL[group_by]
+        source = ("FROM txn t JOIN account a ON a.id = t.account_id "
+                  "LEFT JOIN card c ON c.id = t.card_id")
+
     sql = f"""
-        SELECT {expr} AS bucket, t.currency_booked AS currency,
+        SELECT {bucket} AS bucket, t.currency_booked AS currency,
                COUNT(*) AS txn_count,
                SUM(t.amount_booked) AS net_minor,
                SUM(CASE WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS spend_minor,
                SUM(CASE WHEN t.amount_booked > 0 THEN t.amount_booked ELSE 0 END) AS income_minor
-        FROM txn t
-        JOIN account a ON a.id = t.account_id
-        LEFT JOIN card c ON c.id = t.card_id
+        {source}
         WHERE {where}
         GROUP BY bucket, t.currency_booked
         ORDER BY bucket, t.currency_booked
@@ -534,18 +548,22 @@ def transactions(conn, *, filters: dict | None = None, limit: int = 100,
                 ids):
             details.setdefault(d["txn_id"], {})[d["key"]] = d["value"]
 
+    from . import db as _dbm
+    tags = _dbm.load_tags(conn, ids)
+
     return {
         "total": total,
         "limit": limit,
         "offset": offset,
-        "items": [_txn_dict(r, details.get(r["id"], {})) for r in rows],
+        "items": [_txn_dict(r, details.get(r["id"], {}), tags.get(r["id"], []))
+                  for r in rows],
         # The filtered set, not the page: the question a filter asks is what
         # the matching rows come to.
         "totals": totals(conn, filters=filters),
     }
 
 
-def _txn_dict(r, details: dict[str, str]) -> dict:
+def _txn_dict(r, details: dict[str, str], tags: list[str] | None = None) -> dict:
     return {
         "id": r["id"],
         "date": r["txn_date"],
@@ -580,6 +598,7 @@ def _txn_dict(r, details: dict[str, str]) -> dict:
         "review_state": r["review_state"],
         "notes": r["notes"],
         "details": details,
+        "tags": tags or [],
     }
 
 
@@ -595,7 +614,8 @@ def transaction_detail(conn, txn_id: str) -> dict | None:
 
     details = {d["key"]: d["value"] for d in conn.execute(
         "SELECT key, value FROM txn_detail WHERE txn_id=?", (txn_id,))}
-    out = _txn_dict(r, details)
+    from . import db as _dbm
+    out = _txn_dict(r, details, _dbm.load_tags(conn, [txn_id]).get(txn_id, []))
 
     raw = conn.execute(
         "SELECT rr.payload, sf.source_path, sf.parser_id, sf.imported_at "

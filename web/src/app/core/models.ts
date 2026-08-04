@@ -40,6 +40,7 @@ export interface LedgerFilter {
   minAmount?: number;
   maxAmount?: number;
   q?: string;
+  tags?: string[];
   /** Structured facts, each "key" or "key=value". */
   detail?: string[];
   /** Transfers between your own accounts are not spending. Default false. */
@@ -78,6 +79,7 @@ export interface Txn {
   review_state: string;
   notes: string | null;
   details: Record<string, string>;
+  tags: string[];
   provenance?: {
     source_path: string;
     parser_id: string;
@@ -145,7 +147,6 @@ export interface Position {
   basis_date: string | null;
   first_date: string;
   last_date: string;
-  balance_converted?: ConvertedMoney;
 }
 
 export interface Account {

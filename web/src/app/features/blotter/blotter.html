@@ -73,6 +73,11 @@
                     <span class="muted small block">{{ t.description }}</span>
                   }
                 }
+                @if (t.tags.length) {
+                  <span class="row-tags">
+                    @for (tg of t.tags; track tg) { <span class="tag tagchip">{{ tg }}</span> }
+                  </span>
+                }
               </td>
               <td class="category">
                 @if (merchantHidden(t)) {
@@ -178,6 +183,20 @@
       <button class="primary" [disabled]="saving()" (click)="save()">
         {{ saving() ? 'Saving…' : 'Save' }}
       </button>
+    </section>
+
+    <section>
+      <h3>Tags</h3>
+      <div class="tag-edit">
+        @for (tg of txn.tags; track tg) {
+          <span class="tag tagchip removable">
+            <button class="bare" (click)="filterByTag(tg)">{{ tg }}</button>
+            <button class="bare x" (click)="removeTag(tg)" aria-label="Remove">×</button>
+          </span>
+        }
+        <input class="tag-input" [ngModel]="newTag()" (ngModelChange)="newTag.set($event)"
+               (keyup.enter)="addTag()" placeholder="add tag" />
+      </div>
     </section>
 
     @if (detailEntries(txn).length) {

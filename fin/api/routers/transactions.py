@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ... import reporting
 from ..deps import get_conn
-from ..schemas import LedgerFilter, TransactionPatch
+from ..schemas import LedgerFilter, TagBody, TransactionPatch
 
 router = APIRouter(tags=["transactions"])
 
@@ -26,6 +26,7 @@ def filter_from_query(
     maxAmount: int | None = Query(None),
     q: str | None = Query(None),
     detail: list[str] | None = Query(None),
+    tags: list[str] | None = Query(None),
     includeTransfers: bool = Query(False),
     includeDuplicates: bool = Query(False),
     uncategorisedOnly: bool = Query(False),
@@ -35,7 +36,7 @@ def filter_from_query(
         **{"from": date_from, "to": date_to}, accounts=accounts, cards=cards,
         institutions=institutions, categories=categories, kinds=kinds,
         currency=currency, minAmount=minAmount, maxAmount=maxAmount, q=q,
-        detail=detail,
+        detail=detail, tags=tags,
         includeTransfers=includeTransfers, includeDuplicates=includeDuplicates,
         uncategorisedOnly=uncategorisedOnly, installmentsOnly=installmentsOnly,
     )
@@ -108,6 +109,32 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
                 "ON CONFLICT(txn_id, field) DO UPDATE SET value=excluded.value, "
                 "source='manual', confidence=1.0, created_at=excluded.created_at",
                 (txn_id, key, str(value), now))
+    conn.commit()
+    return reporting.transaction_detail(conn, txn_id)
+
+
+@router.get("/tags")
+def list_tags(conn=Depends(get_conn)) -> dict:
+    from ... import db as dbm
+    return {"tags": dbm.all_tags(conn)}
+
+
+@router.post("/transactions/{txn_id}/tags")
+def add_txn_tag(txn_id: str, body: TagBody, conn=Depends(get_conn)) -> dict:
+    from ... import db as dbm
+    if conn.execute("SELECT 1 FROM txn WHERE id=?", (txn_id,)).fetchone() is None:
+        raise HTTPException(404, "no such transaction")
+    if not body.tag.strip():
+        raise HTTPException(400, "empty tag")
+    dbm.add_tag(conn, txn_id, body.tag, source="manual")
+    conn.commit()
+    return reporting.transaction_detail(conn, txn_id)
+
+
+@router.delete("/transactions/{txn_id}/tags/{tag}")
+def delete_txn_tag(txn_id: str, tag: str, conn=Depends(get_conn)) -> dict:
+    from ... import db as dbm
+    dbm.remove_tag(conn, txn_id, tag)
     conn.commit()
     return reporting.transaction_detail(conn, txn_id)
 

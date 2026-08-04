@@ -475,3 +475,42 @@ def test_coverage_marks_pre_life_apart_from_a_gap(tmp_path):
     # Every month before its first activity is pre-life, not a hole.
     assert all(v == "pre" for m, v in cells.items() if m < "2026-03")
     conn.close()
+
+
+def test_tags_filter_and_aggregate(tmp_path):
+    from fin import db as dbm
+    from fin.reporting import summary, transactions
+
+    conn = _seeded(tmp_path)
+    a = _txn(account_id="card", description_raw="MARRIOTT HK",
+             booked=Money(amount=-30000, currency="HKD"), category="travel")
+    b = _txn(account_id="card", description_raw="TAXI",
+             booked=Money(amount=-5000, currency="HKD"), category="transport")
+    dbm.insert_txns(conn, [a, b])
+    dbm.add_tag(conn, a.id, "Marriott")
+    dbm.add_tag(conn, a.id, "Japan trip")
+    dbm.add_tag(conn, b.id, "Japan trip")
+    conn.commit()
+
+    # A tag is orthogonal to category: two categories under one trip.
+    trip = transactions(conn, filters={"tags": ["Japan trip"]})
+    assert trip["total"] == 2
+    # Two named tags must both be present.
+    assert transactions(conn, filters={"tags": ["Japan trip", "Marriott"]})["total"] == 1
+
+    by_tag = {r["bucket"]: r for r in summary(conn, group_by="tag")}
+    assert by_tag["Marriott"]["spend"]["amount"] == 30000
+    # A row's tags each count it — one txn under both its tags.
+    assert "Japan trip" in by_tag
+    conn.close()
+
+
+def test_tags_reach_the_wire_and_round_trip(client):
+    tid = client.txn_id
+    client.post(f"/api/transactions/{tid}/tags", json={"tag": "Barcelona"})
+    item = client.get(f"/api/transactions/{tid}").json()
+    assert item["tags"] == ["Barcelona"]
+    assert client.get("/api/transactions?tags=Barcelona").json()["total"] == 1
+
+    client.delete(f"/api/transactions/{tid}/tags/Barcelona")
+    assert client.get(f"/api/transactions/{tid}").json()["tags"] == []

@@ -27,7 +27,7 @@ def get_summary(
     `convert_to` is given, each row gains a *companion* converted figure; the
     native amount is never replaced.
     """
-    if group_by not in reporting.GROUP_BY_SQL:
+    if group_by not in reporting.GROUP_BY_SQL and group_by != "tag":
         raise HTTPException(
             400, f"group_by must be one of: {sorted(reporting.GROUP_BY_SQL)}")
 
@@ -38,7 +38,7 @@ def get_summary(
         "group_by": group_by,
         "rows": rows,
         "totals": headline,
-        "dimensions": sorted(reporting.GROUP_BY_SQL),
+        "dimensions": sorted([*reporting.GROUP_BY_SQL, "tag"]),
     }
 
     if convert_to:
@@ -61,7 +61,7 @@ def get_summary(
 
 @router.post("/summary")
 def post_summary(req: SummaryRequest, conn=Depends(get_conn)) -> dict:
-    if req.group_by not in reporting.GROUP_BY_SQL:
+    if req.group_by not in reporting.GROUP_BY_SQL and req.group_by != "tag":
         raise HTTPException(
             400, f"group_by must be one of: {sorted(reporting.GROUP_BY_SQL)}")
     rows = reporting.summary(conn, group_by=req.group_by,

@@ -132,6 +132,39 @@ def upsert_party(conn, p) -> None:
     )
 
 
+def add_tag(conn, txn_id: str, tag: str, *, source: str = "manual") -> None:
+    from datetime import datetime
+    conn.execute(
+        "INSERT OR IGNORE INTO txn_tag (txn_id, tag, source, created_at) "
+        "VALUES (?,?,?,?)", (txn_id, tag.strip(), source, datetime.now().isoformat()))
+
+
+def remove_tag(conn, txn_id: str, tag: str) -> None:
+    conn.execute("DELETE FROM txn_tag WHERE txn_id=? AND tag=?", (txn_id, tag))
+
+
+def load_tags(conn, txn_ids) -> dict:
+    ids = list(txn_ids)
+    if not ids:
+        return {}
+    out: dict[str, list[str]] = {}
+    for chunk in (ids[i:i + 500] for i in range(0, len(ids), 500)):
+        q = ",".join("?" * len(chunk))
+        for r in conn.execute(
+                f"SELECT txn_id, tag FROM txn_tag WHERE txn_id IN ({q}) ORDER BY tag",
+                tuple(chunk)):
+            out.setdefault(r["txn_id"], []).append(r["tag"])
+    return out
+
+
+def all_tags(conn) -> list[dict]:
+    return [dict(r) for r in conn.execute(
+        "SELECT tag, COUNT(*) AS transactions FROM txn_tag t "
+        "JOIN txn x ON x.id = t.txn_id "
+        "WHERE x.duplicate_of_id IS NULL AND x.status <> 'void' "
+        "GROUP BY tag ORDER BY transactions DESC, tag")]
+
+
 def statement_txn_ids(conn) -> set[str]:
     """Transactions from an issuer's own statement rather than a CSV export."""
     return {r["id"] for r in conn.execute(

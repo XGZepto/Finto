@@ -227,6 +227,20 @@ GROUP BY t.account_id, t.currency_booked;
 -- re-derive from raw_record, but only if we noticed the field existed.
 -- ---------------------------------------------------------------------------
 
+-- User tags: free labels for slicing spend the categories don't capture — a
+-- trip ("Marriott"), a project, a person reimbursing. Many per transaction,
+-- and orthogonal to category, which is one value chosen from a taxonomy.
+CREATE TABLE IF NOT EXISTS txn_tag (
+    txn_id     TEXT NOT NULL REFERENCES txn(id) ON DELETE CASCADE,
+    tag        TEXT NOT NULL,
+    source     TEXT NOT NULL DEFAULT 'manual'
+                 CHECK (source IN ('manual','rule','llm')),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (txn_id, tag)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_txn_tag_tag ON txn_tag(tag);
+
 CREATE TABLE IF NOT EXISTS txn_detail (
     txn_id  TEXT NOT NULL REFERENCES txn(id) ON DELETE CASCADE,
     key     TEXT NOT NULL,
