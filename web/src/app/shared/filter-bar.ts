@@ -10,9 +10,7 @@ import { Facets } from '../core/models';
  * Writes through FilterState, which keeps everything in the URL — so a filtered
  * view is bookmarkable and the back button works.
  *
- * `includeTransfers` defaults to off and is presented as an explicit opt-in:
- * money moved between your own accounts is not spending, and counting it as
- * such is the exact error transfer linking exists to prevent.
+ * `includeTransfers` defaults to off.
  */
 @Component({
   selector: 'app-filter-bar',
@@ -82,7 +80,6 @@ import { Facets } from '../core/models';
           <input type="checkbox" [ngModel]="filters.filter().includeTransfers ?? false"
                  (ngModelChange)="patch({ includeTransfers: $event || undefined })" />
           <span>Include transfers</span>
-          <small class="muted">moving your own money isn't spending</small>
         </label>
         <label class="check">
           <input type="checkbox" [ngModel]="filters.filter().uncategorisedOnly ?? false"

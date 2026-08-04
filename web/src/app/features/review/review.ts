@@ -151,11 +151,11 @@ export class ReviewPage {
   consequence(): string {
     switch (this.queue()) {
       case 'duplicates':
-        return 'Accepting hides the second row as a duplicate of the first. It stays in the database and can be unmerged.';
+        return 'Hides the second row as a duplicate. Reversible.';
       case 'transfers':
-        return 'Accepting links both legs into one transfer group, so neither counts as spending or income.';
+        return 'Links both legs into one transfer.';
       default:
-        return 'Accepting creates an instalment plan from these charges and books the outstanding balance against it.';
+        return 'Groups these charges into one instalment plan.';
     }
   }
 }
