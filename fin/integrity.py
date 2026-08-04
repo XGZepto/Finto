@@ -23,8 +23,12 @@ from .models import Money
 def record_balance(conn, *, account_id: str, as_of, balance: Money,
                    source: str = "statement_running",
                    statement_file_id: str | None = None) -> None:
+    # First write wins for a given (account, date, source, currency). HSBC and
+    # Wise export newest-first, so the first running-balance we see for a date
+    # is the end-of-day figure; later same-day rows are mid-day snapshots that
+    # would make check_account invent a phantom delta.
     conn.execute(
-        "INSERT OR REPLACE INTO balance_assertion (id, account_id, as_of_date, "
+        "INSERT OR IGNORE INTO balance_assertion (id, account_id, as_of_date, "
         "balance, currency, source, statement_file_id) VALUES (?,?,?,?,?,?,?)",
         (str(uuid.uuid4()), account_id,
          as_of.isoformat() if hasattr(as_of, "isoformat") else str(as_of),

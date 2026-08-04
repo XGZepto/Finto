@@ -265,7 +265,17 @@ def ingest_file(
         return alias_index.get(normalize_alias(hint)) if hint else None
 
     routed = [route((p.extra or {}).get("account_hint", "")) for p in result.txns]
-    sf_account = resolved_account or next((a for a in routed if a), None)
+    # Idle consolidated months have no rows but still carry per-account
+    # balance figures — use those hints so the file can import without
+    # a forced --account.
+    balance_routes = [
+        route(hint) for _as_of, _bal, hint in result.balances if hint
+    ]
+    sf_account = (
+        resolved_account
+        or next((a for a in routed if a), None)
+        or next((a for a in balance_routes if a), None)
+    )
     if sf_account is None:
         return {"path": str(path), "status": "error",
                 "reason": "account_id unknown — pass --account"}

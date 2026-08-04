@@ -472,11 +472,12 @@ def _apply_section(
             if desc:
                 if (spec.continuation == "below" and last_row is not None
                         and found_date is None):
-                    # AMEX HK puts FX details under their transaction, so
-                    # trailing text belongs to the row just emitted rather
-                    # than the one to come.
-                    last_row.description = re.sub(
-                        r"\s{2,}", " ", f"{last_row.description} {desc}").strip()
+                    # Only FX / reference detail lines attach below. Boilerplate
+                    # ("Important Information", page headers) must not pollute
+                    # the merchant text — that breaks CSV↔PDF dedup.
+                    if _is_detail_continuation(raw, desc):
+                        last_row.description = re.sub(
+                            r"\s{2,}", " ", f"{last_row.description} {desc}").strip()
                 else:
                     pending_desc.append(desc)
             continue
@@ -733,9 +734,23 @@ def _describe(cells: dict[str, str], spec: SectionSpec) -> str:
         spec.amount.debit_column,
         spec.amount.balance_column,
         spec.settlement_column,
+        spec.currency_column,
         "date",
+        "fx",          # handled below: keep words, drop foreign-amount figures
     }
     parts = [v.strip() for k, v in cells.items() if k not in skip and v.strip()]
+    # AMEX HK's FOREIGN SPEND header sits far enough left that city/country
+    # tokens at the end of a merchant name fall into the fx column. Keep the
+    # words; drop anything money-shaped so a foreign amount never becomes part
+    # of the description (or a phantom transaction).
+    fx = cells.get("fx", "").strip()
+    if fx:
+        keep = [
+            t for t in fx.split()
+            if not is_money(t) and not BARE_INT_TOKEN.match(t)
+        ]
+        if keep:
+            parts.append(" ".join(keep))
     return " ".join(parts)
 
 
@@ -793,6 +808,23 @@ _CR_MARKER = re.compile(r"(?:^|[^A-Za-z])CR(?![A-Za-z])", re.IGNORECASE)
 #: A continuation line that carries nothing but, or ends with, a standalone
 #: CR marker: "CR", "(CR)", "UNITED STATES DOLLAR CR".
 _CR_LINE = re.compile(r"^(?:\(?\s*CR\s*\)?|.*?[^A-Za-z]\(?CR\)?)$", re.IGNORECASE)
+
+#: Currency-name lines AMEX HK drops under a foreign-currency charge
+#: ("JAPANESE YEN", "UNITED STATES DOLLAR CR"). Bare FX figures and prose
+#: (footers, page headers) are deliberately excluded — attaching those to
+#: the merchant text is what broke CSV↔PDF dedup.
+_DETAIL_CONTINUATION = re.compile(
+    r"^[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,3}\s*(?:CR)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_detail_continuation(raw: str, desc: str) -> bool:
+    """True when a no-amount line under a charge is FX detail, not boilerplate."""
+    text = (desc or raw).strip()
+    if not text or len(text) > 60:
+        return False
+    return bool(_DETAIL_CONTINUATION.match(text))
 
 
 def _maybe_money(token: str, currency: str) -> Money | None:

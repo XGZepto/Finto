@@ -248,10 +248,11 @@ def test_cr_beneath_a_fx_continuation_flips_the_row():
                     "cr_on_following_line": True},
                    continuation="below"))
     assert [r.amount.amount for r in result.rows] == [-45468, 44577]
-    # The FX details attach to the row above them, not the one below.
-    assert "56.94" in result.rows[0].description
-    assert "56.94" in result.rows[1].description
-    assert not result.rows[1].description.startswith("56.94")
+    # Bare FX figures stay out of the description (they broke CSV↔PDF dedup);
+    # only currency-name lines attach below.
+    assert "56.94" not in result.rows[0].description
+    assert "56.94" not in result.rows[1].description
+    assert "UNITED STATES DOLLAR" not in result.rows[0].description
 
 
 def test_cr_beneath_the_summary_marks_a_credit_balance():

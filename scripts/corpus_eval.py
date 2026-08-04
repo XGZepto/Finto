@@ -38,7 +38,7 @@ def account_for(path: Path) -> str | None:
     parts = [p.lower() for p in path.parts]
 
     # Consolidated multi-account statements — route by account_hint.
-    if "chase" in parts and "consolidated" in name:
+    if "consolidated" in name and ("chase" in name or any("chase" in p for p in parts)):
         return ROUTED
     if "hsbc_one" in name and name.endswith(".pdf"):
         return ROUTED
@@ -164,13 +164,13 @@ def main() -> int:
 
     checks = conn.execute("""
         SELECT a.id,
-               COUNT(DISTINCT ba.as_of_date) AS balance_dates,
-               SUM(CASE WHEN rc.status = 'discrepancy' THEN 1 ELSE 0 END) AS discrepancies,
-               SUM(CASE WHEN rc.status = 'ok' THEN 1 ELSE 0 END) AS ok_checks
+               (SELECT COUNT(DISTINCT ba.as_of_date) FROM balance_assertion ba
+                WHERE ba.account_id = a.id) AS balance_dates,
+               (SELECT COUNT(*) FROM reconciliation_check rc
+                WHERE rc.account_id = a.id AND rc.status = 'discrepancy') AS discrepancies,
+               (SELECT COUNT(*) FROM reconciliation_check rc
+                WHERE rc.account_id = a.id AND rc.status = 'ok') AS ok_checks
         FROM account a
-        LEFT JOIN balance_assertion ba ON ba.account_id = a.id
-        LEFT JOIN reconciliation_check rc ON rc.account_id = a.id
-        GROUP BY a.id
     """).fetchall()
 
     unlinked = conn.execute(

@@ -2,7 +2,7 @@
   "template_id": "amex_hk_card",
   "institution_id": "amex_hk",
   "label": "American Express Hong Kong card statement",
-  "version": "1.3.0",
+  "version": "1.4.1",
   "match_all": [
     "American Express",
     "STATEMENT PERIOD",
@@ -46,8 +46,14 @@
         "^PAGE \\d+ OF\\d*",
         "^Total of ",
         "All-inclusive exchange rate",
+        "^#?The All-Inclusive",
         "^Reference ",
-        "American Express International"
+        "American Express International",
+        "Important Information",
+        "Statement of Account",
+        "Cardmember Name",
+        "Cardmember Hotline",
+        "^DETAILS\\b"
       ],
       "balances": [
         {
@@ -107,8 +113,14 @@
         "^PAGE \\d+ OF\\d*",
         "^Total of ",
         "All-inclusive exchange rate",
+        "^#?The All-Inclusive",
         "^Reference ",
-        "American Express International"
+        "American Express International",
+        "Important Information",
+        "Statement of Account",
+        "Cardmember Name",
+        "Cardmember Hotline",
+        "^DETAILS\\b"
       ],
       "stop_at": [
         "AMEX ACCESS IT SUMMARY",

@@ -143,14 +143,25 @@ def _score_duplicate(a: Txn, b: Txn, date_delta: int) -> tuple[float, list[str]]
     score += 0.15 * date_score
     reasons.append(f"date delta {date_delta}d")
 
-    # Description similarity
+    # Description similarity. Same-day same-account pairs whose norms share a
+    # long common prefix (CSV "HIGHWAY BUS DOTCOM JAPAN" vs a PDF that picked
+    # up trailing FX noise) are still the same charge.
     sim = SequenceMatcher(None, a.description_norm, b.description_norm).ratio()
-    if sim >= FUZZY_DESC_THRESHOLD:
-        score += 0.25 * sim
-        reasons.append(f"description similarity {sim:.2f}")
+    prefix = _common_prefix_ratio(a.description_norm, b.description_norm)
+    if sim >= FUZZY_DESC_THRESHOLD or prefix >= 0.85:
+        score += 0.25 * max(sim, prefix)
+        reasons.append(f"description similarity {max(sim, prefix):.2f}")
     else:
         score -= 0.15
         reasons.append(f"weak description similarity {sim:.2f}")
+
+    # Same calendar day on the same account + exact amount is almost always
+    # a CSV↔PDF restatement. Boost it over the auto-merge line when the
+    # descriptions at least share a prefix.
+    if (date_delta == 0 and a.account_id == b.account_id
+            and prefix >= 0.70):
+        score += 0.12
+        reasons.append("same-day same-account restatement")
 
     # Pending/posted pair is the classic case — boost it.
     if {a.status, b.status} == {TxnStatus.PENDING, TxnStatus.POSTED}:
@@ -167,6 +178,17 @@ def _score_duplicate(a: Txn, b: Txn, date_delta: int) -> tuple[float, list[str]]
         reasons.append("same merchant")
 
     return max(0.0, min(score, 1.0)), reasons
+
+
+def _common_prefix_ratio(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    n = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        n += 1
+    return n / max(len(a), len(b))
 
 
 def apply_candidates(
