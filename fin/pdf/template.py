@@ -982,7 +982,30 @@ def _find_period(text: str, pattern: str, dayfirst: bool) -> tuple[date | None, 
     m = re.search(pattern, text, re.IGNORECASE)
     if not m or len(m.groups()) < 2:
         return None, None
-    return _loose_date(m.group(1), dayfirst), _loose_date(m.group(2), dayfirst)
+    end = _loose_date(m.group(2), dayfirst)
+    start = _loose_date(m.group(1), dayfirst)
+    # AMEX HK writes "From February 9 to March 8, 2025" — the start has no
+    # year. Borrow the end's year, stepping back one when the start month
+    # sits after the end month (a Dec→Jan period).
+    if start is None and end is not None:
+        start = _loose_date_with_year(m.group(1), end.year, dayfirst)
+        if start is not None and start > end:
+            start = _loose_date_with_year(m.group(1), end.year - 1, dayfirst)
+    return start, end
+
+
+def _loose_date_with_year(value: str, year: int, dayfirst: bool) -> date | None:
+    """Parse a day-month token by attaching an explicit year."""
+    v = re.sub(r"\s+", " ", value.strip().rstrip(","))
+    formats = ["%d %B", "%d %b", "%B %d", "%b %d", "%d/%m", "%m/%d"]
+    from datetime import datetime
+    for fmt in formats:
+        try:
+            d = datetime.strptime(v, fmt).date()
+            return d.replace(year=year)
+        except ValueError:
+            continue
+    return _loose_date(f"{v} {year}", dayfirst) or _loose_date(f"{v}, {year}", dayfirst)
 
 
 def _loose_date(value: str, dayfirst: bool) -> date | None:

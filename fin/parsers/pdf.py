@@ -163,10 +163,16 @@ def _to_parse_result(
     for when, money, kind, _section, hint in result.balances:
         as_of = when
         if as_of is None:
-            as_of = (result.period_end if kind == "closing"
-                     else result.period_start or result.statement_date)
+            if kind == "closing":
+                as_of = result.period_end or result.statement_date
+            else:
+                # Never date an opening on the statement day — that collides
+                # with the closing, INSERT OR IGNORE keeps the opening, and
+                # check_account then compares the wrong period's activity.
+                as_of = result.period_start
         if as_of is not None:
-            balances.append((as_of, money, hint))
+            source = "statement_closing" if kind == "closing" else "statement_running"
+            balances.append((as_of, money, hint, source))
 
     return ParseResult(
         txns=txns,

@@ -269,7 +269,7 @@ def ingest_file(
     # balance figures — use those hints so the file can import without
     # a forced --account.
     balance_routes = [
-        route(hint) for _as_of, _bal, hint in result.balances if hint
+        route(hint) for _as_of, _bal, hint, *_rest in result.balances if hint
     ]
     sf_account = (
         resolved_account
@@ -339,9 +339,11 @@ def ingest_file(
 
     # Store the statement's own balance figures — the independent check that we
     # captured every row. Consolidated files route each figure to its account.
-    for as_of, bal, hint in result.balances:
+    for entry in result.balances:
+        as_of, bal, hint = entry[0], entry[1], entry[2]
+        source = entry[3] if len(entry) > 3 else "statement_running"
         record_balance(conn, account_id=route(hint) or sf_account, as_of=as_of,
-                       balance=bal, source="statement_running",
+                       balance=bal, source=source,
                        statement_file_id=sf.id)
     conn.commit()
 
@@ -467,6 +469,11 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
     refunds = find_refunds(live)
     refunds_linked = apply_refund_links(live, refunds)
 
+    # Regular income on top of whatever the parsers already labelled.
+    from .income import apply_income_labels, detect_regular_income
+    income_streams = detect_regular_income(live)
+    income_labelled = apply_income_labels(live, income_streams)
+
     dbm.update_txn_links(conn, txns)
     conn.commit()
 
@@ -481,6 +488,8 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
         "installment_originations": len(origination_groups),
         "refunds_linked": refunds_linked,
         "refunds_unmatched": len(refunds.unmatched),
+        "income_streams": len(income_streams),
+        "income_labelled": income_labelled,
     }
 
     if use_llm:

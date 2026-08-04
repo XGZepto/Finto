@@ -503,7 +503,7 @@ def _balance_at(row: dict, d: date, ccy: str) -> list[tuple]:
     if not bal:
         return []
     try:
-        return [(d, parse_amount(bal, ccy), "")]
+        return [(d, parse_amount(bal, ccy), "", "statement_running")]
     except ValueError:
         return []
 
