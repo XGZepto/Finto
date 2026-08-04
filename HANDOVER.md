@@ -63,21 +63,28 @@ A personal finance ledger. Key design rules (do not violate):
 
 ## 5. Known gaps / next steps
 
-**CRITICAL — run the final corpus eval.** The last full `scripts/corpus_eval.py` run hung (>6 min, had to be killed) after the period/income changes, which suggests a reconcile path now scales badly somewhere (possibly the new income detection bucketing, or the prefix-similarity in dedup on a larger graph). Before anything else:
+**Final corpus eval (2026-08-04, ~3.5 min):** 192 imported, 0 errors, 5,988 txns, 267 unlinked transfer candidates, EXIT=0. A full run takes 2.5–4 minutes; do not mistake it for a hang (running several evals concurrently will slow it further).
 
-```bash
-cd /Users/zepto/projects/Finto
-source .venv/bin/activate
-python scripts/corpus_eval.py --db /tmp/finto_corpus.db
-```
+Remaining reconciliation gaps from that run (ok/discrepancy intervals):
 
-If it hangs, profile: ingest is fast (per-file), so it's `reconcile(conn)` — bisect by running `reconcile` after only the Amex Explorer account, then add accounts. `detect_regular_income` and `_score_duplicate` are the suspects.
+| Account | ok | disc | Note |
+|---|---|---|---|
+| amex_hk_explorer | 9 | 28 | Card statements — see below |
+| amex_hk_platinum | 1 | 20 | " |
+| amex_us_marriott | 0 | 18 | " |
+| amex_us_platinum | 0 | 18 | " |
+| hsbc_hk_everymile | 0 | 10 | " |
+| hsbc_hk_savings_cny | 15 | 12 | CNY sub-account coverage |
+| mox_hkd | 15 | 22 | partial-month CSV/PDF overlap |
+| hsbc_hk_savings_hkd | 89 | 1 | nearly clean |
+| amex_us_savings | 35 | 2 | nearly clean |
+| everything else | — | 0 | clean |
 
 Then:
 
 1. **Re-import everything from scratch** (schema rebuilt anyway) — Amex date-shift bug means any DB built before commit `01fa2a1` has corrupted Amex CSV dates.
-2. **Close remaining reconciliation gaps** (§2 list). Amex cards: opening/closing balance handling for card statements — these are single closing-balance documents (no opening), so `check_account` may need a "card" mode that anchors on the previous statement's closing rather than a paired opening+closing.
-3. **Unlinked transfer candidates** (~267 before the last fixes) — review `transfer_candidate` scoring in `fin/transfers.py`; many are same-name FPS moves.
+2. **Close the card-account reconciliation gaps.** Card statements provide only opening+closing balances dated at period bounds; `check_account` needs a card mode that anchors on consecutive statement closings and tolerates the payment-cutoff window. The remaining mismatches are likely a mix of that anchoring and residual CSV↔PDF dedup misses.
+3. **Unlinked transfer candidates** (267) — review `transfer_candidate` scoring in `fin/transfers.py`; many are same-name FPS moves.
 4. **Frontend polish** — Angular app in `web/`; MPF/investment positions page is the main missing view; cardholder breakdown exists via `group_by=cardholder`.
 
 ## 6. How to validate (the acceptance harness)
