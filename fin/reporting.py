@@ -112,14 +112,13 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
         if value:
             params.append(value)
 
-    if f.get("q"):
+    for term in str(f.get("q") or "").split():
         clauses.append(
             "(t.description_raw LIKE ? OR t.description_norm LIKE ? "
             " OR COALESCE(t.merchant,'') LIKE ? OR COALESCE(t.counterparty,'') LIKE ? "
             " OR EXISTS (SELECT 1 FROM txn_detail d "
             "            WHERE d.txn_id = t.id AND d.value LIKE ?))")
-        like = f"%{f['q']}%"
-        params.extend([like] * 5)
+        params.extend([f"%{term}%"] * 5)
 
     return " AND ".join(clauses), params
 
@@ -330,6 +329,9 @@ def transactions(conn, *, filters: dict | None = None, limit: int = 100,
         "limit": limit,
         "offset": offset,
         "items": [_txn_dict(r, details.get(r["id"], {})) for r in rows],
+        # The filtered set, not the page: the question a filter asks is what
+        # the matching rows come to.
+        "totals": totals(conn, filters=filters),
     }
 
 

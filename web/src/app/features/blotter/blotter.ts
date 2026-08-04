@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { FilterState } from '../../core/filter-state';
 import { DetailKeyPipe, MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { Txn } from '../../core/models';
+import { TotalRow, Txn } from '../../core/models';
 import { FilterBar } from '../../shared/filter-bar';
 
 /**
@@ -32,6 +32,7 @@ export class BlotterPage {
   loading = signal(true);
   rows = signal<Txn[]>([]);
   total = signal(0);
+  scopeTotals = signal<TotalRow[]>([]);
   limit = signal(100);
   offset = signal(0);
   sort = signal('date');
@@ -69,6 +70,7 @@ export class BlotterPage {
         next: (page) => {
           this.rows.set(page.items);
           this.total.set(page.total);
+          this.scopeTotals.set(page.totals ?? []);
           this.loading.set(false);
         },
         error: () => this.loading.set(false),

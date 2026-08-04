@@ -38,6 +38,8 @@ export class SummaryPage {
 
   groupBy = signal('month');
   convertTo = signal('');
+  /** Positions as they stood on a chosen day, rather than now. */
+  asOf = signal('');
   loading = signal(true);
   rows = signal<SummaryRow[]>([]);
   totals = signal<TotalRow[]>([]);
@@ -131,18 +133,36 @@ export class SummaryPage {
    * Only one currency at a time. Bars are comparable because they share a scale,
    * and two currencies on one scale would imply an exchange rate nobody chose.
    */
+  /**
+   * Out and in per period, on a shared scale so the two are comparable and a
+   * month that earned more than it spent is visible as such.
+   */
   trend = computed(() => {
     if (!this.isTimeDimension()) return [];
     const ccy = this.shownCurrency();
     const rows = this.rows()
       .filter((r) => r.currency === ccy)
       .sort((a, b) => a.bucket.localeCompare(b.bucket));
-    const peak = Math.max(1, ...rows.map((r) => Math.abs(r.spend.amount)));
+    const peak = Math.max(
+      1, ...rows.map((r) => Math.max(Math.abs(r.spend.amount), r.income.amount)));
     return rows.map((r) => ({
       bucket: r.bucket,
       row: r,
-      height: `${Math.max(1, (Math.abs(r.spend.amount) / peak) * 100)}%`,
+      label: r.bucket.replace(/^\d{2}(\d{2})-/, "$1-"),
+      out: `${Math.max(1, (Math.abs(r.spend.amount) / peak) * 100)}%`,
+      in: `${Math.max(1, (r.income.amount / peak) * 100)}%`,
     }));
+  });
+
+  /** The scale the bars are drawn against. */
+  trendPeak = computed(() => {
+    const ccy = this.shownCurrency();
+    const rows = this.rows().filter((r) => r.currency === ccy);
+    return {
+      amount: Math.max(0, ...rows.map(
+        (r) => Math.max(Math.abs(r.spend.amount), r.income.amount))),
+      currency: ccy,
+    };
   });
 
   constructor() {
@@ -166,7 +186,7 @@ export class SummaryPage {
       error: () => this.loading.set(false),
     });
 
-    this.api.positions(convert).subscribe({
+    this.api.positions(convert, this.asOf() || undefined).subscribe({
       next: (res) => this.positions.set(res.positions),
     });
 
@@ -177,6 +197,11 @@ export class SummaryPage {
 
   setGroupBy(value: string): void {
     this.groupBy.set(value);
+    this.load();
+  }
+
+  setAsOf(value: string): void {
+    this.asOf.set(value);
     this.load();
   }
 

@@ -17,6 +17,21 @@
     </div>
   </div>
 
+  @if (scopeTotals().length) {
+    <div class="scope">
+      @for (t of scopeTotals(); track t.currency) {
+        <div class="scope-item">
+          <span class="ccy mono">{{ t.currency }}</span>
+          <span class="out mono">{{ t.spend | money: 'bare' }}</span>
+          <span class="in mono">{{ t.income | money: 'bare' }}</span>
+          <span class="net mono" [class.neg]="t.net.amount < 0" [class.pos]="t.net.amount > 0">
+            {{ t.net | money: 'bare' }}
+          </span>
+        </div>
+      }
+    </div>
+  }
+
   @if (loading()) {
     <div class="spinner">loading </div>
   } @else {

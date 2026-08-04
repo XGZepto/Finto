@@ -97,6 +97,8 @@ export interface Txn {
 
 export interface Page<T> {
   total: number;
+  /** What every matching row comes to, not just this page. */
+  totals?: TotalRow[];
   limit: number;
   offset: number;
   items: T[];

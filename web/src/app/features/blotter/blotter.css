@@ -150,3 +150,18 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 }
 
 .holder { color: var(--c4, var(--info)); }
+
+/* What the filter adds up to — the question a filter asks. */
+.scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.scope-item { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.scope-item .ccy { color: var(--fg-4); font-size: 10px; letter-spacing: 0.1em; }
+.scope-item .out { color: var(--neg); }
+.scope-item .in { color: var(--pos); }
+.scope-item .net { border-left: 1px solid var(--line); padding-left: 8px; }

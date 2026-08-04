@@ -64,6 +64,13 @@
 <section class="card">
   <div class="section-head">
     <h2>Positions</h2>
+    <div class="row">
+      <label for="asof">As at</label>
+      <input id="asof" type="date" [ngModel]="asOf()" (ngModelChange)="setAsOf($event)" />
+      @if (asOf()) {
+        <button class="ghost" (click)="setAsOf('')">now</button>
+      }
+    </div>
   </div>
 
   @if (conversion(); as conv) {
@@ -153,11 +160,21 @@
     <div class="spinner">loading </div>
   } @else {
     @if (trend().length > 1) {
+      <div class="trend-head">
+        <span class="peak mono">{{ trendPeak() | money: 'bare' }}</span>
+        <span class="legend">
+          <span class="key out"></span>out
+          <span class="key in"></span>in
+        </span>
+      </div>
       <div class="trend">
         @for (b of trend(); track b.bucket) {
           <div class="col" (click)="drill(b.bucket)" [title]="barTitle(b.row, b.bucket)">
-            <div class="stem"><span class="fill" [style.height]="b.height"></span></div>
-            <span class="tick mono">{{ b.bucket }}</span>
+            <div class="stem">
+              <span class="fill out" [style.height]="b.out"></span>
+              <span class="fill in" [style.height]="b.in"></span>
+            </div>
+            <span class="tick mono">{{ b.label }}</span>
           </div>
         }
       </div>

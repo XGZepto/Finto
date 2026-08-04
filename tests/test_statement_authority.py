@@ -332,3 +332,61 @@ def test_an_existing_category_is_never_overwritten_by_the_gateway_label():
     label_payment_gateways([already])
     assert already.category == "dining"
     assert already.details["payment.gateway"] == "Alipay"
+
+
+# ---------------------------------------------------------------------------
+# Querying
+# ---------------------------------------------------------------------------
+
+def _seeded(tmp_path):
+    conn = dbm.connect(tmp_path / "q.db")
+    dbm.init_db(conn)
+    dbm.upsert_institution(conn, Institution(
+        id="amex_hk", display_name="AMEX HK", country="HK"))
+    dbm.upsert_account(conn, Account(
+        id="card", institution_id="amex_hk", display_name="Card",
+        account_type="credit_card", primary_currency="HKD"))
+    conn.execute(
+        "INSERT INTO statement_file (id, source_path, file_sha256, institution_id, "
+        "account_id, file_format, parser_id, parser_version, imported_at, row_count) "
+        "VALUES ('stmt','/tmp/s.pdf','abc','amex_hk','card','pdf','p','1','2026-08-04',0)")
+    return conn
+
+
+def test_search_narrows_on_every_term(tmp_path):
+    from fin.reporting import transactions
+
+    conn = _seeded(tmp_path)
+    dbm.insert_txns(conn, [
+        _txn(account_id="card", description_raw="UBER TRIP SHANGHAI"),
+        _txn(account_id="card", description_raw="UBER TRIP LONDON"),
+        _txn(account_id="card", description_raw="TAXI SHANGHAI"),
+    ])
+    conn.commit()
+
+    assert transactions(conn, filters={"q": "uber"})["total"] == 2
+    assert transactions(conn, filters={"q": "uber shanghai"})["total"] == 1
+    conn.close()
+
+
+def test_a_filtered_page_reports_what_the_whole_match_comes_to(tmp_path):
+    """The page shows 100 rows; the question is what all of them add up to."""
+    from fin.reporting import transactions
+
+    conn = _seeded(tmp_path)
+    dbm.insert_txns(conn, [
+        _txn(account_id="card", booked=Money(amount=-1000, currency="HKD"),
+             description_raw="UBER ONE"),
+        _txn(account_id="card", booked=Money(amount=-2500, currency="HKD"),
+             description_raw="UBER TWO"),
+        _txn(account_id="card", booked=Money(amount=-9999, currency="HKD"),
+             description_raw="SOMETHING ELSE"),
+    ])
+    conn.commit()
+
+    page = transactions(conn, filters={"q": "uber"}, limit=1)
+    assert len(page["items"]) == 1              # one row on the page
+    assert page["total"] == 2                   # two matched
+    hkd = next(t for t in page["totals"] if t["currency"] == "HKD")
+    assert hkd["spend"]["amount"] == 3500       # both, not just the page
+    conn.close()
