@@ -17,7 +17,7 @@ A personal finance ledger. Key design rules (do not violate):
 
 ## 2. Current state (verified 2026-08-04)
 
-- **Tests: 275 passing.** Lint clean.
+- **Tests: 283 passing.** Lint clean.
 - **Extraction is exact.** Every statement that prints an opening and a closing reproduces them from the rows we pulled out of it — 226/226 across AMEX HK (32), AMEX US (38), AMEX US savings (19), Chase (38), HSBC cards (49), HSBC One (19), Mox Bank (31). Mox Credit prints no opening; its 19 statements chain closing-to-closing.
 - **Corpus: 192 files imported, 0 errors, 5,494 transactions.**
 - **Classification: 5,102/5,494 have a kind; 3,301 have a category.**

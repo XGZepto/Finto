@@ -7,9 +7,10 @@ particular issuer's file says.
 
 from __future__ import annotations
 
+import pytest
 from pdf_synth import amounts, make_document, right, row
 
-from fin.pdf.template import StatementTemplate, apply_template
+from fin.pdf.template import StatementTemplate, TemplateError, apply_template
 from fin.pdf.verify import verify_extraction
 
 
@@ -245,11 +246,9 @@ def test_cr_beneath_a_fx_continuation_flips_the_row():
     ))
     result = apply_template(
         doc, build({"mode": "cr_marker", "column": "amount",
-                    "cr_on_following_line": True},
-                   continuation="below"))
+                    "cr_on_following_line": True}))
     assert [r.amount.amount for r in result.rows] == [-45468, 44577]
-    # Bare FX figures stay out of the description (they broke CSV↔PDF dedup);
-    # only currency-name lines attach below.
+    # FX detail is captured as detail, never as merchant text.
     assert "56.94" not in result.rows[0].description
     assert "56.94" not in result.rows[1].description
     assert "UNITED STATES DOLLAR" not in result.rows[0].description
@@ -302,3 +301,9 @@ def test_cr_beneath_another_column_does_not_touch_the_figure():
     )
     result = apply_template(doc, tpl)
     assert result.balances[0][1].amount == -4624814
+
+
+def test_an_unknown_section_key_is_rejected():
+    """A template is data; a typo must fail rather than disable a rule."""
+    with pytest.raises(TemplateError, match="continuation"):
+        build({"mode": "signed", "column": "amount"}, continuation="below")

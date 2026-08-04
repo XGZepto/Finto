@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -298,6 +298,11 @@ class StatementTemplate:
 
 
 def _section_from_dict(s: dict) -> SectionSpec:
+    # Templates are data, and every field here is read with a default, so an
+    # unrecognised key would otherwise disable a rule in silence.
+    unknown = set(s) - {f.name for f in fields(SectionSpec)}
+    if unknown:
+        raise TemplateError(f"unknown section keys: {', '.join(sorted(unknown))}")
     return SectionSpec(
         name=s["name"],
         start=s.get("start", ""),

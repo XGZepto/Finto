@@ -72,19 +72,28 @@ harder to notice six months later than a wrongly-kept one.
 
 ## How dedup works
 
-Duplicates come from four different places and need different handling:
+**The statement is authoritative.** A CSV export of an account restates the
+same movements in different words — the payee and the reference swap places,
+names get masked — so where both cover a period the statement wins.
 
 | Source | Detection |
 |---|---|
 | Same file imported twice | `file_sha256` on `statement_file` — refuses at the door |
 | A file that parsed to nothing | *not* recorded, so it stays re-importable once fixed |
-| Overlapping statement periods | exact `dedup_key` collision → auto-merge |
-| Pending row later posted | `dedup_key` excludes `posted_date`/`status`, so they collide by design; date drift is caught by the fuzzy pass |
-| Supplementary card on two statements | cross-account pass, scoped to whitelisted account pairs only |
+| Export copy of a statement row | `supersede_with_statements`: exact match on account, date, signed amount, currency |
+| Overlapping statement periods | exact `dedup_key` collision, **across files only** |
+| Pending row later posted | `dedup_key` excludes `posted_date`/`status`; date drift is caught by the fuzzy pass, between exports |
+| One provider reporting a movement twice | cross-account pass, scoped to accounts sharing a `balance_group` |
 
-The `dedup_key` prefers the issuer's own reference when one exists (Wise gives
-you `TransferWise ID` — authoritative and stable). Otherwise it hashes
-`account + date + signed amount + currency + normalised description`.
+Supersession is counted, not scored: two statement rows suppress two export
+rows and a third export row survives. Two identical rows *within* one file are
+two movements — an issuer lists each once, and the key cannot tell two HK$18
+MTR rides from one ride listed twice.
+
+`dedup_key` hashes `account + date + signed amount + currency + normalised
+description`. It excludes the issuer's reference on purpose: the key exists to
+make one charge collide across sources, and a reference printed on a statement
+is absent from the same issuer's CSV. Dedup scores on the reference instead.
 
 Normalisation strips exactly the fields that differ between two copies of the
 same charge: embedded dates, auth/trace/reference numbers, masked card
@@ -203,9 +212,16 @@ The most important question this system answers is not "are there duplicates?"
 but **"did I capture every transaction?"** Dedup and linking can both be
 perfect while the ledger is wrong, because a parser silently skipped rows.
 
-Statements print a running balance. That number is the bank's, independent of
-our parsing. `balance_assertion` stores it, and `fin.cli check` verifies that
-the transactions we hold reproduce the balance movement between any two dates.
+The figures a statement prints are the bank's, independent of our parsing.
+`balance_assertion` stores them, and `fin.cli check` verifies the transactions
+we hold reproduce them — in whichever of two shapes the statement supports.
+
+A statement printing an opening and a closing is checked against **its own
+rows**. This is the only correct check for a card: the issuer assigns a charge
+to a statement by posting date, so one dated inside the period may be billed on
+the next, and comparing "everything dated in the period" disagrees with the
+bank even when nothing is missing. A passbook printing a running balance is
+checked date to date, where consecutive figures do bracket what lies between.
 
 ```
 $ python -m fin.cli check
@@ -214,7 +230,7 @@ $ python -m fin.cli check
 ```
 
 That is a dropped row, located to the day and the cent. Without this check it
-would be invisible forever. `check` also runs seven structural invariants
+would be invisible forever. `check` also runs eight structural invariants
 (orphaned transfer groups, one-legged transfers, duplicate chains, currency
 mismatches) that should always return clean.
 
