@@ -137,6 +137,9 @@ export interface Position {
   net: Money;
   inflow: Money;
   outflow: Money;
+  balance_converted?: ConvertedMoney;
+  inflow_converted?: ConvertedMoney;
+  outflow_converted?: ConvertedMoney;
   /** 'statement' when the bank's own closing figure was available. */
   basis: 'statement' | 'movements';
   basis_date: string | null;

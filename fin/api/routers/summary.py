@@ -47,11 +47,14 @@ def get_summary(
             conn, rows, fields=money_fields, to_currency=convert_to)
         payload["totals"] = fxm.convert_rows(
             conn, headline, fields=money_fields, to_currency=convert_to)
-        # A normalised view that silently drops a currency is worse than one
-        # that admits it cannot show it.
-        payload["conversion"] = {
+        by_bucket = reporting.rollup(
+            conn, rows, fields=money_fields, to_currency=convert_to, key="bucket")
+        payload["normalised"] = {
             "to": convert_to.upper(),
-            "unconvertible_currencies": fxm.missing_pairs(conn, convert_to),
+            "rows": by_bucket["rows"],
+            "total": reporting.rollup(
+                conn, headline, fields=money_fields, to_currency=convert_to),
+            "unconvertible_currencies": by_bucket["unconvertible_currencies"],
         }
     return payload
 
@@ -64,11 +67,23 @@ def post_summary(req: SummaryRequest, conn=Depends(get_conn)) -> dict:
     rows = reporting.summary(conn, group_by=req.group_by,
                              filters=req.filter.to_query())
     totals = reporting.totals(conn, filters=req.filter.to_query())
+    payload = {"group_by": req.group_by, "rows": rows, "totals": totals}
     if req.convert_to:
-        rows = fxm.convert_rows(conn, rows, fields=("net",), to_currency=req.convert_to)
-        totals = fxm.convert_rows(conn, totals, fields=("net",),
-                                  to_currency=req.convert_to)
-    return {"group_by": req.group_by, "rows": rows, "totals": totals}
+        fields = ("net", "spend", "income")
+        payload["rows"] = fxm.convert_rows(conn, rows, fields=fields,
+                                           to_currency=req.convert_to)
+        payload["totals"] = fxm.convert_rows(conn, totals, fields=fields,
+                                             to_currency=req.convert_to)
+        by_bucket = reporting.rollup(conn, rows, fields=fields,
+                                     to_currency=req.convert_to, key="bucket")
+        payload["normalised"] = {
+            "to": req.convert_to.upper(),
+            "rows": by_bucket["rows"],
+            "total": reporting.rollup(conn, totals, fields=fields,
+                                      to_currency=req.convert_to),
+            "unconvertible_currencies": by_bucket["unconvertible_currencies"],
+        }
+    return payload
 
 
 @router.get("/coverage")
@@ -115,12 +130,22 @@ def get_positions(convert_to: str | None = Query(None),
     }
     if convert_to:
         payload["positions"] = fxm.convert_rows(
-            conn, rows, fields=("balance",), to_currency=convert_to, on=as_of)
+            conn, rows, fields=("balance", "inflow", "outflow"),
+            to_currency=convert_to, on=as_of)
         payload["conversion"] = {
             "to": convert_to.upper(),
             "unconvertible_currencies": fxm.missing_pairs(conn, convert_to),
-            "note": "Converted figures are presentation only; the native "
-                    "balance is authoritative.",
+        }
+        net_worth = reporting.rollup(
+            conn, rows, fields=("balance",), to_currency=convert_to, on=as_of)
+        by_type = reporting.rollup(
+            conn, rows, fields=("balance",), to_currency=convert_to,
+            key="account_type", on=as_of)
+        payload["normalised"] = {
+            "to": convert_to.upper(),
+            "net_worth": net_worth["balance"],
+            "by_type": by_type["rows"],
+            "unconvertible_currencies": net_worth["unconvertible_currencies"],
         }
     return payload
 

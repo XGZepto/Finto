@@ -48,11 +48,17 @@ def list_transactions(
     offset: int = 0,
     sort: str = "date",
     direction: str = "desc",
+    convert_to: str | None = Query(None),
     conn=Depends(get_conn),
 ) -> dict:
-    return reporting.transactions(
+    page = reporting.transactions(
         conn, filters=f.to_query(), limit=limit, offset=offset,
         sort=sort, direction=direction)
+    if convert_to and page.get("totals"):
+        page["normalised"] = reporting.rollup(
+            conn, page["totals"], fields=("net", "spend", "income"),
+            to_currency=convert_to)
+    return page
 
 
 @router.get("/transactions/{txn_id}")

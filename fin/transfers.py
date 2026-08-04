@@ -212,29 +212,45 @@ def _score_pair(
     score += 0.20 * max(0.0, 1.0 - date_delta / (max_gap + 1))
     reasons.append(f"date gap {date_delta}d")
 
-    if is_cc_in:
-        score += 0.12
-        reasons.append("inflow lands on a card = likely CC payment")
+    # Evidence that these two legs are one movement rather than two coincidences
+    # of amount and date. A transfer leaves a trace — a payment marker, a name
+    # linking the legs, a shared provider, an FX match. Without any, an exact
+    # amount within the window is just a collision, and pairing it manufactures
+    # a transfer out of, say, an Octopus top-up and a same-sized bar refund.
+    evidence = 0
 
     text = f"{out.description_norm} {inc.description_norm}"
-    if any(w in text for w in ("TRANSFER", "FPS", "FASTER PAYMENT", "AUTOPAY",
-                               "PAYMENT RECEIVED", "THANK YOU", "EPAYMENT",
-                               "ACH PMT", "MOX CREDIT PAYMENT")):
+    has_payment_wording = any(w in text for w in (
+        "TRANSFER", "FPS", "FASTER PAYMENT", "AUTOPAY", "PAYMENT RECEIVED",
+        "THANK YOU", "EPAYMENT", "ACH PMT", "MOX CREDIT PAYMENT", "IFS PAYMENT"))
+    if has_payment_wording:
         score += 0.12
+        evidence += 1
         reasons.append("transfer/payment wording")
 
-    if out_acct and in_acct and out_acct.balance_group and \
-            out_acct.balance_group == in_acct.balance_group:
+    # A card credit is a payment only when it says so; otherwise it is a
+    # merchant refund that happens to land on a card.
+    if is_cc_in and has_payment_wording:
         score += 0.12
+        reasons.append("card payment")
+
+    same_group = bool(out_acct and in_acct and out_acct.balance_group
+                      and out_acct.balance_group == in_acct.balance_group)
+    if same_group:
+        score += 0.12
+        evidence += 1
         reasons.append("same balance group (in-provider conversion)")
 
     if out.kind == TxnKind.FX_CONVERSION or inc.kind == TxnKind.FX_CONVERSION:
         score += 0.08
+        evidence += 1
         reasons.append("parser flagged FX conversion")
 
-    # Description / counterparty names pointing at the other account, or at
-    # yourself. These are the signals that separate "FPS to my Mox" from
-    # "FPS to a friend with the same amount the same day".
+    # A cross-currency pair that reconciles through the day's rate is itself
+    # evidence — an exact FX match is not a coincidence the way a round number is.
+    if not same_ccy:
+        evidence += 1
+
     out_blob = _norm_blob(out.description_raw, out.counterparty, out.description_norm)
     inc_blob = _norm_blob(inc.description_raw, inc.counterparty, inc.description_norm)
 
@@ -243,10 +259,12 @@ def _score_pair(
             continue
         if aid == inc.account_id and alias in out_blob:
             score += 0.15
+            evidence += 1
             reasons.append(f"outflow names destination account ({alias})")
             break
         if aid == out.account_id and alias in inc_blob:
             score += 0.10
+            evidence += 1
             reasons.append(f"inflow names source account ({alias})")
             break
 
@@ -254,19 +272,19 @@ def _score_pair(
         if any(a in out_blob for a in ctx.self_aliases if len(a) >= 4) and \
                 any(a in inc_blob for a in ctx.self_aliases if len(a) >= 4):
             score += 0.08
+            evidence += 1
             reasons.append("both legs name self")
         elif any(a in out_blob for a in ctx.self_aliases if len(a) >= 4):
-            # Outflow labelled with your own name is usually a payment to one
-            # of your other accounts (FPS "to YIXIANG ZHOU"), not a friend.
             score += 0.06
+            evidence += 1
             reasons.append("outflow counterparty is self")
 
-    # A known *other person* on the outflow is evidence AGAINST a self-transfer.
-    # We still allow the pair if amounts scream, but it will usually fall into
-    # the review band rather than auto-link — correct: that money left the house.
     if ctx.person_aliases and any(a in out_blob for a in ctx.person_aliases if len(a) >= 4):
         score -= 0.25
         reasons.append("outflow names a known external person (P2P, not self-transfer)")
+
+    if not evidence:
+        return 0.0, [], delta
 
     return min(max(score, 0.0), 1.0), reasons, delta
 

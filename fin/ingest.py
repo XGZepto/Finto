@@ -331,7 +331,10 @@ def ingest_file(
 
     raws = [RawRecord(statement_file_id=sf.id, line_no=i, payload=row)
             for i, row in enumerate(result.raw_rows)]
-    raw_by_line = {r.line_no: r.id for r in raws}
+    # A txn references its row by the row's own line_no. The PDF path prepends
+    # an extraction blob, shifting the enumerate index off the txn line_no by
+    # one; CSV rows carry no line_no and stay aligned.
+    raw_by_line = {r.payload.get("line_no", i): r.id for i, r in enumerate(raws)}
     cards = dbm.load_cards(conn)
 
     txns = [

@@ -46,6 +46,45 @@ GROUP_BY_SQL: dict[str, str] = {
 }
 
 
+def rollup(conn, rows, *, fields, to_currency, key=None, on=None):
+    """Collapse per-currency rows into one figure per money field, in `to_currency`.
+
+    Every aggregation groups by currency, because HKD and USD cannot be added
+    natively. This sums them once converted, so each bucket — or the whole set,
+    when `key` is None — carries a single normalised number instead of leaving
+    the reader to total the currencies. Rows in a currency with no rate are
+    named in `unconvertible` rather than dropped in silence.
+    """
+    from .fx import convert
+    from .models import Money
+
+    to = to_currency.upper()
+    groups: dict[Any, dict[str, int]] = {}
+    unconvertible: set[str] = set()
+    for r in rows:
+        bucket = r.get(key) if key else None
+        acc = groups.setdefault(bucket, {f: 0 for f in fields})
+        for f in fields:
+            m = r.get(f)
+            if not isinstance(m, dict):
+                continue
+            c = convert(conn, Money(amount=m["amount"], currency=m["currency"]),
+                        to, on, nearest=True)
+            if c.ok:
+                acc[f] += c.amount
+            elif m["amount"]:
+                unconvertible.add(m["currency"])
+
+    out = [{**({key: b} if key else {}), **{f: money(v, to) for f, v in vals.items()}}
+           for b, vals in groups.items()]
+    result = {"unconvertible_currencies": sorted(unconvertible)}
+    if key:
+        result["rows"] = out
+    else:
+        result.update(out[0] if out else {f: money(0, to) for f in fields})
+    return result
+
+
 def money(amount: int | None, currency: str) -> dict[str, Any]:
     return {"amount": int(amount or 0), "currency": currency}
 
