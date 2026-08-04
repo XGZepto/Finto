@@ -12,12 +12,9 @@ module turns those blobs into namespaced key/value facts in `txn_detail`.
 
 Design rules:
 
-* **Never invent.** A field is emitted only where the source labelled it. The
-  tempting shortcuts do not survive contact with real statements: matching
-  SURNAME/FORENAME anywhere on a travel row turns "and/or Private Label" into a
-  passenger 35 times over, and reading AAA/BBB as a route turns "opt out" into a
-  flight from OPT to OUT. Guesses like those are worse than a missing field,
-  because a missing field is visibly missing.
+* **Never invent.** A field is emitted only where the source labelled it.
+  Shape alone does not identify one: SURNAME/FORENAME also matches "and/or
+  Private Label", and AAA/BBB also matches "opt out".
 * **Never discard.** Detail lines we don't recognise are kept under `raw.line_N`.
   A parser that improves later can re-derive from raw_record, but only if we
   noticed the field was there.
@@ -254,20 +251,11 @@ def is_travel(details: dict[str, str]) -> bool:
 # ---------------------------------------------------------------------------
 # Payment gateways
 # ---------------------------------------------------------------------------
-# A charge routed through Alipay, WeChat Pay or UnionPay reaches the card as the
-# gateway's own name. Sometimes the merchant survives — "Alipay*DIDI Taxi" —
-# and sometimes it does not: "Alipay* Shanghai" is the single most common line
-# in this ledger and says only that money went through Alipay in Shanghai.
-#
-# Neither case is "uncategorised". The first is an ordinary purchase that
-# happens to name its rail; the second is a *known* state of affairs — the
-# acquirer did not pass the merchant on — and recording it as such is the
-# difference between "we could not read this" and "the statement does not say".
-# Leaving them blank invites someone to keep trying to categorise rows that
-# contain no answer.
+# A charge routed through Alipay, WeChat Pay or UnionPay reaches the card under
+# the gateway's name. "Alipay*DIDI Taxi" keeps the merchant; "Alipay* Shanghai"
+# does not, and that the acquirer withheld it is itself a fact worth recording.
 
-#: Gateway patterns, longest legal name first so "AlipayHK" is not read as
-#: "Alipay", and the canonical name to record.
+#: Longest legal name first, so "AlipayHK" is not read as "Alipay".
 _GATEWAYS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"^(?:SALES:\s*)?ALIPAYHK\b", re.I), "AlipayHK"),
     (re.compile(r"^(?:SALES:\s*)?ALIPAY(?:\s+NETWORK\s+TECH)?\b", re.I), "Alipay"),
@@ -285,8 +273,8 @@ _GATEWAYS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"^(?:SALES:\s*)?KPAY\b", re.I), "KPay"),
 ]
 
-#: Tokens that are place, legal form, or the gateway naming itself again — none
-#: of which identify a merchant. NUCC is China's clearing house, not a shop.
+#: Place, legal form, or the gateway naming itself. NUCC is China's clearing
+#: house.
 _NOT_A_MERCHANT = re.compile(
     r"^(?:\*+|CHN|CN|HK|HKG|HONGKONG|HONG|KONG|SHANGHAI|SHENZHEN|BEIJING|CHINA|"
     r"MACAU|MO|TW|SG|LIMITED|LIMI|LTD|CO|INC|NUCC|ALIPAY|WECHAT|PAY|MERCHANT)$",
@@ -296,18 +284,16 @@ _NOT_A_MERCHANT = re.compile(
 def payment_gateway(description_raw: str) -> tuple[str, str] | None:
     """The gateway a charge was routed through, and the merchant it disclosed.
 
-    Returns (gateway, merchant) with merchant "" when the acquirer passed no
-    merchant through. Reads the raw description on purpose: normalisation drops
-    the "*" that separates a gateway from the merchant behind it, which is the
-    one character that distinguishes the two cases.
+    Merchant is "" when the acquirer passed none through. Reads the raw
+    description because normalisation drops the "*" separating the two.
     """
     for rx, name in _GATEWAYS:
         m = rx.match(description_raw.strip())
         if m is None:
             continue
         tokens = description_raw.strip()[m.end():].replace("*", " ").split()
-        # Trim place and legal-form tokens from the end only. Dropping them
-        # wherever they appear would turn "Ichiran Hong K" into "Ichiran K".
+        # Place and legal-form tokens only bracket the name: "Ichiran Hong K"
+        # keeps its middle.
         while tokens and _NOT_A_MERCHANT.match(tokens[-1]):
             tokens.pop()
         while tokens and _NOT_A_MERCHANT.match(tokens[0]):

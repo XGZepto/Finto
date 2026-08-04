@@ -133,12 +133,7 @@ def upsert_party(conn, p) -> None:
 
 
 def statement_txn_ids(conn) -> set[str]:
-    """Transactions that came from an issuer's own statement document.
-
-    A statement is what the issuer stands behind; a CSV export is a convenience
-    copy of the same movements. Only PDFs are statements in this corpus — every
-    CSV here is an export — so the file format is the whole distinction.
-    """
+    """Transactions from an issuer's own statement rather than a CSV export."""
     return {r["id"] for r in conn.execute(
         "SELECT t.id FROM txn t JOIN statement_file sf ON sf.id = t.statement_file_id "
         "WHERE sf.file_format = 'pdf'")}
@@ -405,15 +400,9 @@ def load_txns(conn, *, include_duplicates: bool = False) -> list[Txn]:
 def update_txn_links(conn, txns: Sequence[Txn]) -> None:
     """Persist everything the reconcile passes mutate.
 
-    Category, merchant and the detail facts are written as well as the links,
-    because the passes that run after import set them too: gateway labelling
-    recovers a merchant the parser never saw, and income detection tags the
-    stream a credit belongs to. Leaving them out computed those facts on every
-    run and discarded them.
-
-    Every pass already declines to overwrite a value that is present, so
-    writing back what was loaded is a no-op for untouched rows and a manual
-    correction survives.
+    Category, merchant and details as well as the links: gateway labelling
+    recovers merchants and income detection tags streams. Every pass declines
+    to overwrite a value already present, so a manual correction survives.
     """
     conn.executemany(
         "UPDATE txn SET duplicate_of_id=?, transfer_group_id=?, kind=?, "

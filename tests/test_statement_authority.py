@@ -1,15 +1,8 @@
-"""The statement is the truth.
+"""The statement is authoritative; a CSV export restates it in other words.
 
-An issuer's PDF statement is the document the issuer stands behind. A CSV
-export of the same account is a convenience copy of the same movements, and it
-rewords them: the payee moves, the reference moves, names get masked. So where
-both cover a period the statement wins, and the export's rows are suppressed on
-an exact match of the four fields no export rewords — account, date, signed
-amount, currency.
-
-These tests pin that rule and the two ways it can go wrong: suppressing a
+Pins the supersession rule and the two ways it can go wrong: suppressing a
 movement the statement never carried, and collapsing two real movements that
-happen to look identical.
+look identical.
 """
 
 from __future__ import annotations
@@ -64,12 +57,7 @@ def test_export_row_outside_any_statement_survives():
 
 
 def test_counts_are_matched_not_collapsed():
-    """Two identical rides in the statement suppress two export rows, not one.
-
-    A third export row with no statement counterpart stays visible, because it
-    is either a real movement the statement missed or a sign something is
-    wrong — and both need to be noticed.
-    """
+    """Two statement rows suppress two export rows; a third export row stays."""
     statements = [_txn(statement_file_id="stmt") for _ in range(2)]
     exports = [_txn(statement_file_id="export") for _ in range(3)]
     merged = supersede_with_statements(
@@ -88,7 +76,7 @@ def test_a_statement_is_never_superseded_by_an_export():
 
 
 def test_run_dedup_leaves_statements_out_of_fuzzy_matching():
-    """A statement is authoritative, so it is never merged on a similarity score."""
+    """A statement is never merged on a similarity score."""
     statement = _txn(txn_date=date(2026, 3, 1),
                      description_raw="CAFE ABC KOWLOON", statement_file_id="stmt")
     export = _txn(txn_date=date(2026, 3, 3),
@@ -145,12 +133,7 @@ def client(tmp_path, monkeypatch):
 
 
 def test_api_returns_the_foreign_charge_and_the_issuers_rate(client):
-    """A statement prints what the merchant charged and the rate applied.
-
-    Reporting only the HKD figure loses what was actually bought, so both the
-    native pair and the rate have to survive to the wire — as integer minor
-    units, like every other amount.
-    """
+    """The native pair and the rate reach the wire, in integer minor units."""
     item = client.get("/api/transactions").json()["items"][0]
     assert item["booked"] == {"amount": -11743, "currency": "HKD"}
     assert item["native"] == {"amount": -1304, "currency": "EUR"}
@@ -199,13 +182,7 @@ def test_investments_endpoint_is_empty_but_present(client):
 # ---------------------------------------------------------------------------
 
 def test_a_charge_lands_on_the_account_that_settles_its_currency(tmp_path):
-    """A dual-currency card is one statement over two balances.
-
-    HSBC bills the Pulse card's CNY spending to an RMB sub-account and its HKD
-    spending to an HKD one, in a single document. Left on the account the file
-    was imported under, the CNY rows sit where they can be neither settled nor
-    reconciled — and the ledger claims a currency the account cannot hold.
-    """
+    """HSBC bills the Pulse card's CNY and HKD spending in one document."""
     from fin.ingest import _settle_in_currency
 
     conn = dbm.connect(tmp_path / "route.db")
@@ -225,13 +202,13 @@ def test_a_charge_lands_on_the_account_that_settles_its_currency(tmp_path):
         dbm.upsert_account(conn, acct)
     conn.commit()
 
-    assert _settle_in_currency(conn, "pulse_hkd", "CNY") == "pulse_cny"
-    assert _settle_in_currency(conn, "pulse_cny", "HKD") == "pulse_hkd"
+    accounts = dbm.load_accounts(conn)
+    assert _settle_in_currency(accounts, "pulse_hkd", "CNY") == "pulse_cny"
+    assert _settle_in_currency(accounts, "pulse_cny", "HKD") == "pulse_hkd"
     # Its own currency needs no rerouting.
-    assert _settle_in_currency(conn, "pulse_hkd", "HKD") is None
-    # A card with no sibling keeps its rows, so the currency check flags them
-    # rather than them being moved somewhere arbitrary.
-    assert _settle_in_currency(conn, "everymile", "CNY") is None
+    assert _settle_in_currency(accounts, "pulse_hkd", "HKD") is None
+    # No sibling: the rows stay put and the currency check flags them.
+    assert _settle_in_currency(accounts, "everymile", "CNY") is None
     conn.close()
 
 
@@ -241,6 +218,7 @@ def test_a_charge_lands_on_the_account_that_settles_its_currency(tmp_path):
 
 def test_a_card_charge_left_unlabelled_is_a_purchase(tmp_path):
     """Everything else on a card is named by the issuer and labelled already."""
+
     from fin.ingest import assign_default_kinds
     from fin.models import AccountType, TxnKind
 
@@ -260,13 +238,12 @@ def test_a_card_charge_left_unlabelled_is_a_purchase(tmp_path):
     assert charge.kind is TxnKind.PURCHASE
     assert credit.kind is TxnKind.REFUND
     assert fee.kind is TxnKind.FEE            # an existing label is never overwritten
-    # A bank debit could be spending or half of an unmatched transfer. Saying
-    # "unknown" is the honest answer; guessing would hide the transfer.
+    # Spending, or half of an unmatched transfer.
     assert debit.kind is TxnKind.UNKNOWN
 
 
 def test_income_is_never_detected_on_a_credit_card():
-    """AMEX rebates a subscription monthly. That is a benefit, not earnings."""
+    """AMEX rebates a subscription monthly: a benefit, not earnings."""
     from fin.income import detect_regular_income
 
     rebates = [
@@ -280,7 +257,7 @@ def test_income_is_never_detected_on_a_credit_card():
 
 
 def test_issuer_stated_category_drives_a_rule(tmp_path):
-    """AMEX says what the merchant is; mapping its vocabulary is a rename."""
+    """AMEX states the merchant's category; mapping its vocabulary is a rename."""
     from fin.ingest import apply_category_rules
     from fin.models import CategoryRule
 
@@ -307,8 +284,7 @@ def test_gateway_that_names_the_merchant_yields_the_merchant():
     from fin.enrich import payment_gateway
 
     assert payment_gateway("Alipay*DIDI Taxi Shanghai") == ("Alipay", "DIDI Taxi")
-    # Trailing place tokens go; ones inside the name stay, or "Ichiran Hong K"
-    # would become "Ichiran K".
+    # Trailing place tokens go; ones inside the name stay.
     assert payment_gateway("AlipayHK*Ichiran Hong K HKG HK") == (
         "AlipayHK", "Ichiran Hong K")
     assert payment_gateway("UBER TRIP HTTPS://HELP.UB") is None
@@ -327,7 +303,7 @@ def test_gateway_that_names_no_merchant_says_so():
 
 
 def test_undisclosed_gateway_charges_are_categorised_not_left_blank():
-    """The commonest line in the ledger is a fact, not an unread row."""
+    """A withheld merchant is a fact about the statement, not an unread row."""
     from fin.ingest import label_payment_gateways
 
     hidden = _txn(description_raw="Alipay* Shanghai")
@@ -341,8 +317,7 @@ def test_undisclosed_gateway_charges_are_categorised_not_left_blank():
     assert hidden.details["payment.gateway"] == "Alipay"
     assert hidden.details["merchant.disclosed"] == "no"
 
-    # A gateway that named its merchant leaves the category free for the
-    # merchant rules, and recovers a merchant the ledger otherwise lacked.
+    # A named merchant leaves the category free for the merchant rules.
     assert named.merchant == "DIDI Taxi"
     assert named.category is None
     assert named.details["merchant.disclosed"] == "yes"

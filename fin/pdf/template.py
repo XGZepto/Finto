@@ -134,29 +134,19 @@ class BalanceRule:
 class DetailRule:
     """A line carrying facts about a transaction rather than a transaction.
 
-    Statements print far more per charge than date/amount/merchant: AMEX gives
-    the foreign amount's currency and the rate applied, the issuer's reference,
-    the flight's routing and ticket number; HSBC names the cardholder a block
-    belongs to. All of it is real data the ledger has to keep.
-
-    `match` is a regex; each of its capture groups is stored under the
+    `match` is a regex; each capture group is stored under the
     correspondingly-positioned name in `keys`. Naming the facts in the template
-    is what keeps the engine free of issuer knowledge — and what stops it
-    guessing, which is how boilerplate ("Payment Advice") used to end up glued
-    onto a merchant name and break dedup against the same charge in a CSV.
+    keeps issuer knowledge out of the engine.
     """
 
     match: str
     keys: list[str] = field(default_factory=list)
-    #: Match one column's cell instead of the whole line. AMEX writes the
-    #: merchant's category and the tail of the currency name on the same row,
-    #: in different columns — "BAR/NIGHTCLUB" and "Renminbs" — so only the
-    #: column separates them.
+    #: Match one column's cell instead of the whole line. AMEX sets the
+    #: merchant's category and the tail of the currency name on one row, in
+    #: different columns: "BAR/NIGHTCLUB" and "Renminbs".
     column: str = ""
     #: Which line the rule reads. Chase writes a transfer's destination on the
-    #: charge's own row ("row"); AMEX prints the merchant's category on a line
-    #: beneath it ("detail"), where the same pattern would otherwise read a
-    #: payment's description as its category.
+    #: charge's own row; AMEX prints the merchant's category beneath it.
     on: str = "any"                     # "any" | "row" | "detail"
     #: Which rows a marker speaks for. Issuers delimit a block either way:
     #: HSBC opens a cardholder's charges with the card number and name,
@@ -188,25 +178,20 @@ class SectionSpec:
     balances: list[BalanceRule] = field(default_factory=list)
     # Rows matching these are structural totals, not transactions.
     stop_at: list[str] = field(default_factory=list)
-    #: Facts about a transaction: the FX currency and rate, the issuer's
-    #: reference, a travel itinerary, the account a transfer went to. Applied
-    #: both to the transaction's own line — Chase writes "Online Transfer To
-    #: Sav ...9116" inline — and to the lines beneath it.
+    #: Facts about a transaction — FX currency and rate, issuer reference,
+    #: travel itinerary, transfer destination — on its own line or beneath it.
     detail: list[DetailRule] = field(default_factory=list)
     #: Lines that name something true of a whole block of rows rather than of
     #: one — the cardholder a run of charges belongs to.
     markers: list[DetailRule] = field(default_factory=list)
-    #: What a transaction row has to look like, when the layout alone cannot
-    #: tell one from a summary figure. AMEX US opens every charge with its
-    #: posting date and prints "Total New Charges $0.00" in the same columns;
-    #: without this the total is read as a charge of its own.
+    #: What a transaction row looks like, where the layout alone cannot tell
+    #: one from a summary figure: AMEX US prints "Total New Charges $0.00" in
+    #: the same columns as a charge, and opens every charge with a date.
     row_start: str = ""
     #: Whether a description can run over several lines. Mox centres a long
-    #: merchant name on its figures row, so parts of it sit above *and* below;
-    #: each stray line is given to whichever transaction it sits nearest. AMEX
-    #: gives every charge exactly one line, and there the same rule would sweep
-    #: in the payment slip and the correspondence address printed down the foot
-    #: of the page — so for those sections a stray line is detail, not text.
+    #: merchant name on its figures row, so parts sit above *and* below, and
+    #: each stray line goes to the nearest transaction. AMEX gives every charge
+    #: one line; there a stray line is detail, not text.
     wraps: bool = False
 
 
@@ -376,20 +361,15 @@ class ExtractedRow:
     raw_text: str = ""
     account_hint: str = ""
     settlement_date: date | None = None
-    #: Where the row sat in the section, for measuring which transaction a
-    #: wrapped line is nearest.
+    #: Where the row sat in the section, for measuring wrapped-line distance.
     line_index: int = 0
-    #: What the merchant charged, when the account settled in another currency,
-    #: and the rate the issuer applied. Both are printed; neither is derived.
+    #: What the merchant charged and the rate applied. Both printed, not derived.
     foreign: Money | None = None
     fx_rate: Decimal | None = None
     #: Namespaced facts from the row's detail lines and enclosing block —
     #: "issuer.reference", "card.holder", "fx.currency_name".
     details: dict[str, str] = field(default_factory=dict)
-    #: Detail lines no rule claimed, verbatim and in order. AMEX prints a
-    #: flight's routing, ticket number, passenger and document type beneath the
-    #: charge; keeping the lines whole lets the shared detail parser read them
-    #: without the template having to describe every itinerary layout.
+    #: Detail lines no rule claimed, verbatim and in order, for enrich to read.
     detail_lines: list[str] = field(default_factory=list)
 
 
@@ -564,10 +544,8 @@ def _apply_section(
 
         if amount is None:
             if last_row is not None and found_date is None:
-                # A rule that claims the line claims all of it. The rate AMEX
-                # prints underneath a charge lands in the foreign-amount column
-                # too, and reading it there would replace the amount actually
-                # charged with the rate.
+                # A rule that claims the line claims all of it: AMEX's rate
+                # also lands in the foreign-amount column.
                 facts = _match_detail(raw, detail_rules, cells, "detail")
                 if facts is None:
                     facts = _foreign_text(cells) or None
@@ -867,13 +845,10 @@ def _describe(cells: dict[str, str], spec: SectionSpec) -> str:
 def _foreign_text(cells: dict[str, str]) -> dict[str, str]:
     """The foreign-currency figure as printed, staged until its currency is known.
 
-    Only a cell holding nothing but the figure counts. The column is wide and a
-    long merchant name spills into it — "HOSTEL OK BARCELONA 031 BARCELONA"
-    leaves a bare "031" sitting exactly where a foreign amount would be, and
-    reading that as thirty-one euros would invent money that was never charged.
-
-    The currency itself is named on a line underneath, so the pair can only be
-    assembled once the row's detail lines have been read.
+    Only a cell holding nothing but the figure counts: the column is wide, and
+    a merchant name spilling into it leaves stray numbers ("HOSTEL OK BARCELONA
+    031 BARCELONA") exactly where an amount would sit. The currency is named a
+    line or two below, so the pair assembles after the detail lines are read.
     """
     token = cells.get("fx", "").strip()
     if NUMERIC_TOKEN.match(token):
@@ -892,8 +867,7 @@ def _foreign_text(cells: dict[str, str]) -> dict[str, str]:
 def _resolve_foreign(row: ExtractedRow, warnings: list[str]) -> None:
     """Combine the staged foreign figure, its currency and its rate.
 
-    The amount is parsed in the currency it was billed in, which is what makes
-    "13,04" thirteen euros and four cents rather than thirteen hundred.
+    Parsed in the currency it was billed in, so EUR "13,04" is 13.04.
     """
     text = row.details.pop("fx.amount", "")
     name = row.details.pop("fx.currency_name", "")
@@ -910,9 +884,8 @@ def _resolve_foreign(row: ExtractedRow, warnings: list[str]) -> None:
         return
     foreign = parse_amount(text, code)
     if foreign.amount == 0:
-        return          # nothing was charged in that currency; not a fact
-    # The foreign figure is printed unsigned; it moves the same way the booked
-    # amount does.
+        return
+    # Printed unsigned; it moves the way the booked amount does.
     row.foreign = Money(
         amount=abs(foreign.amount) * (-1 if row.amount.amount < 0 else 1),
         currency=code)
@@ -983,8 +956,7 @@ def _split_wrapped(
 ) -> tuple[list[str], list[str]]:
     """Share wrapped lines between the transaction above and the one below.
 
-    A line belongs to whichever figures row it sits closer to; a tie goes to
-    the row above, since text that trails a row reads as its continuation.
+    A line goes to the nearer figures row; a tie goes to the row above.
     Returns (this row's lines, the previous row's lines).
     """
     if previous is None:
@@ -999,7 +971,7 @@ def _match_rule(raw: str, rules: list[tuple[re.Pattern, DetailRule]],
                 cells: dict[str, str] | None = None, on: str = "any"):
     """First rule that matches, as (facts, rule). Empty captures are dropped."""
     for rx, rule in rules:
-        if rule.on != "any" and on != "any" and rule.on != on:
+        if rule.on not in ("any", on):
             continue
         text = (cells or {}).get(rule.column, "").strip() if rule.column else raw
         m = rx.search(text) if text else None

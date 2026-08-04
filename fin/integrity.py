@@ -36,10 +36,8 @@ def record_balance(conn, *, account_id: str, as_of, balance: Money,
     )
 
 
-#: Rows the statement contributed, followed through dedup. When the same charge
-#: also arrived in a CSV, whichever copy survived stands in for this one, so a
-#: statement still reconciles after its rows have been merged with another
-#: source. Without the second arm every deduplicated statement reads as short.
+#: Rows the statement contributed, followed through dedup: where a copy of one
+#: of its rows survived instead, that copy stands in for it.
 _STATEMENT_ROWS = """
 SELECT COALESCE(SUM(t.amount_booked), 0) AS total FROM txn t
 WHERE t.duplicate_of_id IS NULL AND t.status <> 'void'
@@ -53,31 +51,22 @@ WHERE t.duplicate_of_id IS NULL AND t.status <> 'void'
 def check_account(conn, account_id: str, *, record: bool = True) -> list[dict]:
     """Verify the transactions we hold reproduce the balances the issuer printed.
 
-    Two shapes of evidence, because statements come in two shapes.
+    A statement printing an opening and a closing is checked against its own
+    rows, because the issuer assigns a charge to a statement by posting date —
+    one dated inside the period may be billed on the next. A passbook printing
+    a running balance is checked date to date.
 
-    A statement that prints an opening and a closing brackets a known set of
-    rows: its own. Those are compared against exactly the rows that statement
-    contributed. This is the only correct check for a card, because the issuer
-    decides which statement a charge belongs to by when it posted, so a charge
-    dated inside the period can legitimately be billed on the next one.
-
-    A statement that prints a running balance instead — a passbook — is checked
-    date to date, since consecutive figures do bracket everything in between.
-
-    `record` writes the outcome to the audit trail. Callers that are only
-    answering a question pass False: the check is pure arithmetic over data
-    already stored, so running it on a page load should not append a row, nor
-    take a write lock that a concurrent reader then deadlocks against.
+    `record` writes the outcome to the audit trail. Callers only answering a
+    question pass False, so a page load neither appends a row nor takes a write
+    lock a concurrent reader deadlocks against.
     """
     name_row = conn.execute("SELECT display_name FROM account WHERE id=?",
                             (account_id,)).fetchone()
     account_name = name_row["display_name"] if name_row else account_id
 
     statements = _check_statements(conn, account_id)
-    # Consecutive closings do bracket the gaps between statements, but only
-    # matter when the issuer never printed an opening — Mox Credit states what
-    # you owe and nothing else. Where openings exist the pairs above already
-    # say the same thing and say it per statement, which is stricter.
+    # Consecutive closings bracket the gaps between statements — the only
+    # evidence available when the issuer prints no opening, as Mox Credit does.
     kinds = ("running",) if statements else ("running", "closing")
     out = [*statements, *_check_running(conn, account_id, kinds)]
     if not out:
@@ -103,9 +92,8 @@ def check_account(conn, account_id: str, *, record: bool = True) -> list[dict]:
 
 
 def _outcome(period_start, period_end, expected, actual, currency) -> dict:
-    # Minor units, same as everywhere else. The period is also given as two
-    # dates so a client can deep-link straight to the rows in question — after
-    # "is anything missing?" the next question is always "which row?".
+    # Minor units, and the period as two dates so a client can deep-link to the
+    # rows in question.
     discrepancy = actual - expected
     return {
         "period": f"{period_start} -> {period_end}",

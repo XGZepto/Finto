@@ -366,18 +366,10 @@ class Txn(BaseModel):
     def compute_dedup_key(self) -> str:
         """Deterministic natural key for exact-duplicate detection.
 
-        The tuple that identifies a charge in practice: account, date, signed
-        amount, currency and normalised description. Deliberately excludes
-        posted_date and status, so a pending row and its posted twin collide by
-        design.
-
-        The issuer's own reference is deliberately *not* part of this, even
-        though it is the strongest identifier available. The whole job of the
-        key is to make the same charge collide across sources, and a reference
-        is printed on the statement but absent from the same issuer's CSV
-        export — keying on it makes the two copies differ precisely when they
-        must match. Dedup still uses the reference as a scoring signal, where
-        having it on one side only does no harm.
+        Account, date, signed amount, currency and normalised description.
+        Excludes posted_date and status, so a pending row and its posted twin
+        collide by design, and excludes external_ref, which a statement prints
+        and the same issuer's CSV omits. Dedup scores on the reference instead.
         """
         basis = "|".join([
             self.account_id,
@@ -480,13 +472,8 @@ class InstallmentCandidate(BaseModel):
 
 
 class CategoryRule(BaseModel):
-    """A deterministic label the statements themselves justify.
-
-    Issuers annotate the movements that matter most: HSBC stamps a payroll
-    credit "SALARY-09", a standing rent charge always names the same agent.
-    Encoding those as data keeps a fact the bank stated from being re-derived
-    by guesswork later.
-    """
+    """A label keyed on what the statement itself says — HSBC stamps a payroll
+    credit "SALARY-09", AMEX names the merchant's category."""
 
     id: str
     pattern: str

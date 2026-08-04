@@ -1,35 +1,21 @@
 """Deduplication.
 
-**The statement is the truth.** An issuer's PDF statement is the document the
-issuer stands behind; a CSV export of the same account is a convenience copy of
-the same movements, reworded. Where both describe a period, the statement wins
-and the export's rows are suppressed. Nothing is guessed and nothing is scored:
-a movement is the same movement when the account, the date, the amount and the
-currency are identical, and those are the four fields no export rewords.
+The statement is authoritative. A CSV export of the same account restates the
+same movements in different words, so where both cover a period the statement
+wins and the export's rows are suppressed — matched on account, date, signed
+amount and currency, the four fields an export does not reword.
 
-That rule exists because the alternative was tried and does not work. The two
-sources write the same payment as "HC12552952988759 29MAY ZHOU YIXIANG" and
-"ZHOU Y****** HC12552952988759" — same money, different word order, payee
-masked on one side. Any similarity threshold high enough to avoid merging two
-genuinely different charges is too high to catch that, and one tuned to catch it
-starts merging real transactions.
-
-What remains, then:
-
-1. Same file imported twice        -> caught upstream by file_sha256.
+1. Same file imported twice        -> file_sha256, upstream.
 2. Overlapping statement periods   -> exact dedup_key collision.
-3. An export copy of a movement a  -> statement supersession, below.
-   statement already carries
-4. Pending row later posted        -> fuzzy pass, between exports only. A
-                                      statement never lists a pending charge,
-                                      so it is never a party to this.
-5. Same movement reported under two -> the cross-account pass, scoped to a
-   accounts of one provider (Wise       whitelist of accounts sharing a
-   HKD/USD balances)                    `balance_group`.
+3. Export copy of a statement row  -> supersede_with_statements.
+4. Pending row later posted        -> fuzzy pass, between exports only; a
+                                      statement never lists a pending charge.
+5. One provider reporting a        -> cross-account pass, scoped to accounts
+   movement under two accounts        sharing a `balance_group`.
 
-Supplementary cards are deliberately NOT in this list: their charges post to the
-parent account's statement, so they share an account_id and fall out of case 2
-or 3 above. The card_id field exists for attribution and reporting, not dedup.
+Supplementary card charges post to the parent account's statement, so they
+share an account_id and fall out of cases 2 and 3. card_id is for attribution,
+not dedup.
 """
 
 from __future__ import annotations
@@ -51,7 +37,6 @@ REVIEW_THRESHOLD = 0.70       # below this we don't even raise a candidate
 @dataclass
 class DedupReport:
     exact_merged: int = 0
-    #: Export rows suppressed because a statement already carries the movement.
     superseded: int = 0
     candidates: list[DuplicateCandidate] = None
     kept: int = 0
@@ -64,18 +49,12 @@ class DedupReport:
 def dedup_exact(txns: Sequence[Txn]) -> tuple[list[Txn], int]:
     """Collapse exact dedup_key collisions *across* files.
 
-    Two rows in one file are never merged, however identical they look. The
-    dedup key cannot tell two HK$18 MTR rides on one day apart from one ride
-    listed twice — but the source can: an issuer lists each movement once, so
-    two identical rows in a statement are two movements. Collapsing them
-    silently deletes real spending, which is the failure mode this whole
-    module exists to avoid.
+    Two rows in one file are two movements: an issuer lists each once, and the
+    key cannot tell two identical same-day charges from one charge listed
+    twice. Across files rows pair off by position, so a period restated in two
+    statements collapses two into two.
 
-    Across files the rows are paired off by position, so a period restated in
-    two overlapping statements collapses two into two, not two into one.
-
-    Winner selection matters: prefer the POSTED row over a PENDING one, then
-    the one with an external_ref, then the earliest imported.
+    Winner: POSTED over PENDING, then external_ref, then earliest imported.
     """
     by_key: dict[str, list[Txn]] = defaultdict(list)
     for t in txns:
@@ -117,10 +96,9 @@ def supersede_with_statements(
 ) -> int:
     """Suppress export rows a statement already accounts for.
 
-    Matched on the exact tuple (account, date, signed amount, currency) and
-    counted, not paired by description: two HK$35 taxi rides on one day are two
-    movements, so two statement rows suppress two export rows and a third
-    export row survives to be noticed. Deliberately no similarity anywhere.
+    Matched on (account, date, signed amount, currency) and counted, not paired
+    by description: two statement rows suppress two export rows, and a third
+    export row survives.
     """
     groups: dict[tuple, tuple[list[Txn], list[Txn]]] = defaultdict(lambda: ([], []))
     for t in txns:
@@ -223,10 +201,7 @@ def _score_duplicate(a: Txn, b: Txn, date_delta: int) -> tuple[float, list[str]]
         score += 0.12
         reasons.append("pending/posted pair")
 
-    # The issuer's own reference settles it either way. Two sources agreeing on
-    # it is the strongest evidence available that one charge was exported
-    # twice — which matters most when the wording differs, as it does when a
-    # statement and a CSV order the payee and the reference differently.
+    # The issuer's own reference settles it either way.
     if a.external_ref and b.external_ref:
         same = a.external_ref == b.external_ref
         score += 0.35 if same else -0.45
@@ -283,8 +258,7 @@ def run_dedup(
     survivors, exact = dedup_exact(
         [t for t in txns if t.duplicate_of_id is None])
 
-    # Only export rows are matched fuzzily. A statement is authoritative, so it
-    # is never merged into anything on a similarity score.
+    # A statement is never merged into anything on a similarity score.
     remaining = [t for t in survivors
                  if t.duplicate_of_id is None and t.id not in statement_txn_ids]
     cands = find_fuzzy_duplicates(remaining, cross_account_pairs=cross_account_pairs)

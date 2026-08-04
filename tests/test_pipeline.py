@@ -106,11 +106,7 @@ def test_exact_dedup_collapses_a_charge_restated_by_two_statements():
 
 
 def test_two_identical_charges_in_one_statement_are_two_charges():
-    """Two HK$50 taxi rides on one day are indistinguishable by key.
-
-    The source tells them apart: an issuer lists each movement once, so a
-    statement carrying the row twice is reporting two movements.
-    """
+    """Indistinguishable by key; the source lists each movement once."""
     a, b = _txn(statement_file_id="jan"), _txn(statement_file_id="jan")
     assert a.dedup_key == b.dedup_key
     survivors, merged = dedup_exact([a, b])
@@ -128,11 +124,7 @@ def test_posted_row_wins_over_pending():
 
 
 def test_same_charge_collides_when_only_one_source_carries_the_reference():
-    """The PDF statement prints an issuer reference; the CSV export omits it.
-
-    Both describe one charge, so they have to collapse into one row. Keying on
-    the reference would make them differ exactly where they must match.
-    """
+    """The statement prints an issuer reference; the CSV export omits it."""
     from_pdf = _txn(external_ref="HC12552952988759", statement_file_id="stmt")
     from_csv = _txn(statement_file_id="export")
     assert from_pdf.dedup_key == from_csv.dedup_key

@@ -130,10 +130,8 @@ def resolve_card(parsed: ParsedTxn, account_id: str, cards: list[Card]) -> str |
 def _name_key(name: str) -> tuple[str, ...]:
     """A person's name reduced to something two issuers can agree on.
 
-    The same cardholder is "HO CHING LEUNG" on the account map and "LEUNG HO
-    CHING" on the statement that lists their charges. Comparing the name parts
-    as a set rather than a string is what stops that reordering from splitting
-    one person's spending in two.
+    One cardholder is "HO CHING LEUNG" on the account map and "LEUNG HO CHING"
+    on the statement, so the parts are compared as a set.
     """
     return tuple(sorted(re.findall(r"[a-z]+", name.lower())))
 
@@ -278,8 +276,9 @@ def ingest_file(
     def route(hint: str) -> str | None:
         return alias_index.get(normalize_alias(hint)) if hint else None
 
+    accounts = dbm.load_accounts(conn)
     routed = [route((p.extra or {}).get("account_hint", "")) for p in result.txns]
-    routed = [_settle_in_currency(conn, a or resolved_account, p.booked.currency) or a
+    routed = [_settle_in_currency(accounts, a or resolved_account, p.booked.currency) or a
               for a, p in zip(routed, result.txns)]
     # Idle consolidated months have no rows but still carry per-account
     # balance figures — use those hints so the file can import without
@@ -359,10 +358,8 @@ def ingest_file(
         as_of, bal, hint = entry[0], entry[1], entry[2]
         kind = entry[3] if len(entry) > 3 else "running"
         target = route(hint) or sf_account
-        # A figure has to land on the account that holds it, for the same
-        # reason its transactions do — otherwise the CNY sub-account's closing
-        # balance is checked against the HKD account's spending.
-        target = _settle_in_currency(conn, target, bal.currency) or target
+        # A figure lands on the account that holds it, as its transactions do.
+        target = _settle_in_currency(accounts, target, bal.currency) or target
         record_balance(conn, account_id=target, as_of=as_of,
                        balance=bal, kind=kind, statement_file_id=sf.id)
     conn.commit()
@@ -404,23 +401,15 @@ def reattribute_cards(conn) -> int:
     return len(updates)
 
 
-def _settle_in_currency(conn, account_id: str | None, currency: str) -> str | None:
+def _settle_in_currency(accounts: dict, account_id: str | None, currency: str) -> str | None:
     """The sibling account that actually settles this currency, if any.
 
-    A dual-currency card and a multi-currency bank login are one product with
-    several balances, modelled as one account per currency and tied together by
-    `balance_group`. Their statements are one document, so a CNY charge on the
-    HSBC Pulse arrives under the same file as the HKD charges — and without
-    this it lands on the HKD account, where it is neither spendable nor
-    reportable, and the ledger claims a currency the account cannot hold.
+    A dual-currency card is one product over several balances, modelled as one
+    account per currency and tied together by `balance_group`; its statement is
+    a single document, so a CNY charge arrives in the HKD account's file.
     """
-    if account_id is None:
-        return None
-    accounts = dbm.load_accounts(conn)
-    account = accounts.get(account_id)
-    if account is None or account.primary_currency == currency:
-        return None
-    if currency in account.settlement_currencies:
+    account = accounts.get(account_id) if account_id else None
+    if account is None or currency in account.settlement_currencies:
         return None
     return next((aid for aid, a in accounts.items()
                  if a.balance_group and a.balance_group == account.balance_group
@@ -456,14 +445,9 @@ def cross_account_dupe_pairs(conn) -> set[tuple[str, str]]:
 def label_payment_gateways(txns: Iterable[Txn]) -> int:
     """Record the rail a charge was routed through, and what it disclosed.
 
-    Two outcomes, both facts rather than failures:
-
-    * the gateway named the merchant — "Alipay*DIDI Taxi" — so the merchant is
-      recovered and the row categorises like any other purchase;
-    * it did not, so the row is categorised `proxy_payment` and says which
-      gateway. That is what the statement actually records, and it stops the
-      commonest line in the ledger sitting under "uncategorised" as though
-      something were still to be worked out.
+    A gateway that named its merchant yields one, and the row categorises like
+    any other purchase. One that did not gives `proxy_payment` plus the
+    gateway, which is what the statement records.
     """
     labelled = 0
     for t in txns:
@@ -487,15 +471,11 @@ def label_payment_gateways(txns: Iterable[Txn]) -> int:
 def assign_default_kinds(txns: Iterable[Txn], accounts: dict) -> int:
     """Give every remaining card row the only kind it can have.
 
-    A card account carries purchases, fees, interest, payments, refunds and
-    instalments, and every one of those but the first is named by the issuer
-    and already labelled by the passes above. So what is left on a card is a
-    purchase when money left it and a refund when money came back. Running this
-    last is what makes that true.
+    Everything a card carries but a purchase is named by the issuer and already
+    labelled, so what is left is a purchase out and a refund in. Runs last.
 
-    Bank accounts are deliberately untouched. A debit there might be a purchase
-    or half of a transfer nothing has matched yet, and `unknown` says so
-    honestly where a guess would not.
+    Bank accounts are left alone: a debit there may be spending or half of an
+    unmatched transfer.
     """
     cards = {aid for aid, a in accounts.items()
              if a.account_type in (AccountType.CREDIT_CARD, AccountType.CHARGE_CARD)}
@@ -576,8 +556,8 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
         if a.account_type not in (AccountType.CREDIT_CARD, AccountType.CHARGE_CARD)})
     income_labelled = apply_income_labels(live, income_streams)
 
-    # Before default kinds, so a gateway charge is a purchase like any other,
-    # and after the rules, which may already have categorised a named merchant.
+    # After the rules, which may have categorised a named merchant; before
+    # default kinds, so a gateway charge is a purchase like any other.
     gateways = label_payment_gateways(live)
     summary_kinds = assign_default_kinds(live, accounts)
 

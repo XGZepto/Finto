@@ -221,11 +221,9 @@ def parse_amount(value: str, currency: str, *, credit_positive: bool = True) -> 
 def _normalise_separators(v: str, currency: str) -> str:
     """Resolve '.' and ',' into a decimal point, using the currency to decide.
 
-    Neither symbol has a fixed role across markets, and shape alone cannot
-    settle it: "1,234" is one thousand two hundred and thirty-four while
-    "13,04" is thirteen and four hundredths. What settles it is how many minor
-    digits the currency has — the trailing separator is the decimal point only
-    when exactly that many digits follow it, and every other separator groups.
+    Shape alone cannot: "1,234" is a thousand, "13,04" is thirteen and four
+    hundredths. The trailing separator is the decimal point only when the
+    currency's minor-unit digits follow it; every other separator groups.
     """
     exp = minor_exponent(currency)
     seps = list(_SEPARATOR.finditer(v))
