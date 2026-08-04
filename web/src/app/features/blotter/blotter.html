@@ -48,13 +48,21 @@
                 }
               </td>
               <td class="desc">
-                <span class="primary">{{ t.merchant || t.description }}</span>
-                @if (t.merchant && t.description !== t.merchant) {
+                @if (merchantHidden(t)) {
+                  <span class="primary dim">Merchant not disclosed</span>
                   <span class="muted small block">{{ t.description }}</span>
+                } @else {
+                  <span class="primary">{{ t.merchant || t.description }}</span>
+                  @if (t.merchant && t.description !== t.merchant) {
+                    <span class="muted small block">{{ t.description }}</span>
+                  }
                 }
               </td>
               <td>
-                @if (t.category) {
+                @if (merchantHidden(t)) {
+                  via {{ gateway(t) }}
+                  <span class="muted small block">gateway payment</span>
+                } @else if (t.category) {
                   {{ t.category }}
                   @if (t.subcategory) { <span class="muted small block">{{ t.subcategory }}</span> }
                 } @else {
@@ -68,6 +76,7 @@
                 }
                 @if (t.refund_of_id) { <span class="tag refund">refund</span> }
                 @if (isTravel(t)) { <span class="tag travel">travel</span> }
+                @if (gateway(t); as g) { <span class="tag gateway">{{ g }}</span> }
               </td>
               <td class="num" [class.neg]="t.booked.amount < 0" [class.pos]="t.booked.amount > 0">
                 {{ t.booked | money }}
@@ -102,7 +111,28 @@
       {{ txn.booked | money }}
     </div>
     @if (txn.native) {
-      <p class="muted small">Merchant charged {{ txn.native | money }}</p>
+      <p class="muted small">
+        Merchant charged {{ txn.native | money }}@if (txn.fx_rate) {, converted at {{ txn.fx_rate }}}
+      </p>
+    }
+
+    @if (gateway(txn); as g) {
+      <section class="gateway-note">
+        <h3>Paid through {{ g }}</h3>
+        @if (merchantHidden(txn)) {
+          <p class="muted small">
+            {{ g }} settled this charge and did not pass the merchant's name to
+            the card, so the statement records the gateway and nothing more.
+            This is what the source says, not a gap in the import — the name is
+            only recoverable from {{ g }}'s own history.
+          </p>
+        } @else {
+          <p class="muted small">
+            {{ g }} settled this charge on behalf of
+            <strong>{{ txn.merchant }}</strong>, which the statement did name.
+          </p>
+        }
+      </section>
     }
 
     <div class="drawer-flags">

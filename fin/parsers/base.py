@@ -16,7 +16,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from ..models import FileFormat, Money, ParsedTxn
+from ..models import FileFormat, Money, ParsedTxn, minor_exponent
 
 
 @dataclass
@@ -157,18 +157,22 @@ def parse_date(value: str, dayfirst: bool = True) -> date:
     raise ValueError(f"unrecognised date: {value!r}")
 
 
-_AMOUNT_CLEAN = re.compile(r"[,\s ]")
+_AMOUNT_CLEAN = re.compile(r"[\s ]")
+_SEPARATOR = re.compile(r"[.,](\d+)")
 _TRAILING_SIGN = re.compile(r"^(?P<num>[\d.,]+)\s*(?P<sign>CR|DR|\+|-)$", re.IGNORECASE)
 
 
 def parse_amount(value: str, currency: str, *, credit_positive: bool = True) -> Money:
     """Parse an amount into signed minor units.
 
-    Handles the four notations statements actually use:
+    Handles the notations statements actually use:
       "1,234.56"   plain
       "(1,234.56)" parenthesised negative
       "1,234.56CR" trailing credit marker (HSBC HK)
       "-1,234.56"  leading sign
+      "5.420,95"   European grouping — AMEX bills a foreign charge in the
+                   foreign market's own convention, so a EUR amount arrives
+                   with the roles of '.' and ',' swapped
     """
     v = value.strip()
     if not v:
@@ -204,15 +208,30 @@ def parse_amount(value: str, currency: str, *, credit_positive: bool = True) -> 
     elif v.startswith("+"):
         v = v[1:]
 
-    v = _AMOUNT_CLEAN.sub("", v).replace(",", "")
     try:
-        d = Decimal(v)
+        d = Decimal(_normalise_separators(v, currency))
     except InvalidOperation as e:
         raise ValueError(f"unrecognised amount: {value!r}") from e
 
     if negative:
         d = -d
     return Money.from_decimal(d, currency)
+
+
+def _normalise_separators(v: str, currency: str) -> str:
+    """Resolve '.' and ',' into a decimal point, using the currency to decide.
+
+    Neither symbol has a fixed role across markets, and shape alone cannot
+    settle it: "1,234" is one thousand two hundred and thirty-four while
+    "13,04" is thirteen and four hundredths. What settles it is how many minor
+    digits the currency has — the trailing separator is the decimal point only
+    when exactly that many digits follow it, and every other separator groups.
+    """
+    exp = minor_exponent(currency)
+    seps = list(_SEPARATOR.finditer(v))
+    if exp and seps and seps[-1].end() == len(v) and len(seps[-1].group(1)) == exp:
+        return re.sub(r"[.,]", "", v[:seps[-1].start()]) + "." + seps[-1].group(1)
+    return re.sub(r"[.,]", "", v)
 
 
 def read_csv_rows(path: Path, *, skip_preamble: bool = True) -> tuple[list[str], list[dict]]:

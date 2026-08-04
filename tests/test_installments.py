@@ -233,10 +233,13 @@ def test_amex_flight_details_are_extracted():
     assert d["travel.passenger_name"] == "CHAN/MEI LING"
     assert d["travel.ticket_number"] == "1601234567890"
     assert d["travel.carrier"] == "CX"
-    assert d["travel.origin"] == "JFK"
-    assert d["travel.destination"] == "HKG"
     assert d["travel.departure_date"] == "15/03/2025"
     assert is_travel(d)
+    # The bare routing line carries no label, so it is kept verbatim rather
+    # than parsed into an origin and a destination. Reading AAA/BBB as a route
+    # turns "opt out" into a flight, which is worse than not knowing.
+    assert "JFK/HKG" in d.values()
+    assert "travel.origin" not in d
 
 
 def test_merchant_columns_are_captured():
@@ -277,7 +280,7 @@ def test_details_survive_ingest(conn, tmp_path):
         "SELECT key, value FROM txn_detail").fetchall())
     assert details["travel.passenger_name"] == "CHAN/MEI LING"
     assert details["travel.carrier"] == "CX"
-    assert details["travel.origin"] == "HKG"
+    assert "HKG/LHR" in details.values()
 
 
 def test_details_are_searchable(conn, tmp_path):

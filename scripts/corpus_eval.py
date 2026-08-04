@@ -19,7 +19,7 @@ import yaml
 
 from fin import db as dbm
 from fin.ingest import ingest_file, reconcile
-from fin.models import Account, Card, Institution, Party
+from fin.models import Account, Card, CategoryRule, Institution, Party
 
 ROOT_DEFAULT = Path.home() / "Documents" / "Finto-Data"
 ACCOUNTS_YAML = Path("accounts.example.yaml")
@@ -109,6 +109,8 @@ def main() -> int:
         dbm.upsert_card(conn, Card(**c))
     for p in data.get("parties", []):
         dbm.upsert_party(conn, Party(**p))
+    for r in data.get("rules", []):
+        dbm.upsert_category_rule(conn, CategoryRule(**r))
     conn.commit()
 
     counts = {"imported": 0, "skipped": 0, "error": 0}
@@ -215,6 +217,27 @@ def main() -> int:
               f"[{balance_info}]")
 
     print(f"\nTotal transactions: {total_txns}")
+
+    # Fidelity: how much of what the statements print actually reached the
+    # ledger. Reconciliation proves no row was dropped; this proves no field
+    # was.
+    live = "duplicate_of_id IS NULL AND status <> 'void'"
+    fx = conn.execute(
+        f"SELECT COUNT(*) n, COUNT(fx_rate) r FROM txn "
+        f"WHERE {live} AND currency_native IS NOT NULL").fetchone()
+    kinds = conn.execute(
+        f"SELECT COUNT(*) n FROM txn WHERE {live} AND kind <> 'unknown'").fetchone()["n"]
+    carded = conn.execute(
+        f"SELECT COUNT(*) n FROM txn WHERE {live} AND card_id IS NOT NULL").fetchone()["n"]
+    print(f"Foreign-currency txns: {fx['n']} ({fx['r']} with the issuer's rate)")
+    print(f"Classified kind: {kinds}/{total_txns}   attributed to a card: {carded}")
+    print("Structured detail captured:")
+    for r in conn.execute(
+            "SELECT substr(key, 1, instr(key, '.') - 1) AS ns, COUNT(*) n, "
+            "COUNT(DISTINCT txn_id) t FROM txn_detail WHERE instr(key, '.') > 0 "
+            "GROUP BY ns ORDER BY n DESC"):
+        print(f"  {r['ns']:12} {r['n']:6} facts over {r['t']:5} txns")
+
     if supp:
         print("Supplementary card spend:")
         for s in supp:

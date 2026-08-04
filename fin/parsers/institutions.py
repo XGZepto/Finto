@@ -142,6 +142,18 @@ class AmexCsvParser(StatementParser):
 # HSBC HK
 # ---------------------------------------------------------------------------
 
+#: HSBC writes its own reference for a transfer into the description on both
+#: the statement and the CSV export, but with the payee on the other side of
+#: it. Lifting it out is what lets the two copies of one payment recognise each
+#: other despite the wording differing.
+_HSBC_REF = re.compile(r"\b(HC\d{10,})\b")
+
+
+def _hsbc_payment_ref(description: str) -> str | None:
+    m = _HSBC_REF.search(description)
+    return m.group(1) if m else None
+
+
 @register
 class HsbcHkCsvParser(StatementParser):
     """HSBC HK internet banking CSV export.
@@ -215,7 +227,8 @@ class HsbcHkCsvParser(StatementParser):
                 description_raw=desc or "(no description)",
                 merchant=pick(row, "Merchant name", "Merchant") or None,
                 counterparty=pick(row, "Payee", "Beneficiary") or None,
-                external_ref=pick(row, "Reference", "Transaction Reference") or None,
+                external_ref=(pick(row, "Reference", "Transaction Reference")
+                              or _hsbc_payment_ref(desc)),
                 kind_hint=_hsbc_kind(desc),
                 installment_hint=parse_installment_marker(desc),
                 details=extract_details(columns=row, description=desc),
@@ -503,7 +516,7 @@ def _balance_at(row: dict, d: date, ccy: str) -> list[tuple]:
     if not bal:
         return []
     try:
-        return [(d, parse_amount(bal, ccy), "", "statement_running")]
+        return [(d, parse_amount(bal, ccy), "", "running")]
     except ValueError:
         return []
 

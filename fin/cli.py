@@ -45,7 +45,7 @@ def cmd_init(args):
 def cmd_accounts(args):
     import yaml  # lazy: only needed for this command
 
-    from .models import Party
+    from .models import CategoryRule, Party
     conn = dbm.connect(args.db)
     data = yaml.safe_load(Path(args.file).read_text())
     for i in data.get("institutions", []):
@@ -56,11 +56,14 @@ def cmd_accounts(args):
         dbm.upsert_card(conn, Card(**c))
     for p in data.get("parties", []):
         dbm.upsert_party(conn, Party(**p))
+    for r in data.get("rules", []):
+        dbm.upsert_category_rule(conn, CategoryRule(**r))
     conn.commit()
     print(f"loaded {len(data.get('institutions', []))} institutions, "
           f"{len(data.get('accounts', []))} accounts, "
           f"{len(data.get('cards', []))} cards, "
-          f"{len(data.get('parties', []))} parties")
+          f"{len(data.get('parties', []))} parties, "
+          f"{len(data.get('rules', []))} rules")
 
 
 def cmd_investments(args):

@@ -12,6 +12,7 @@ from pathlib import Path
 from .models import (
     Account,
     Card,
+    CategoryRule,
     DuplicateCandidate,
     FxRate,
     InstallmentCandidate,
@@ -128,6 +129,33 @@ def upsert_party(conn, p) -> None:
     conn.executemany(
         "INSERT OR IGNORE INTO party_alias (party_id, alias) VALUES (?,?)",
         [(p.id, al) for al in aliases if al],
+    )
+
+
+def statement_txn_ids(conn) -> set[str]:
+    """Transactions that came from an issuer's own statement document.
+
+    A statement is what the issuer stands behind; a CSV export is a convenience
+    copy of the same movements. Only PDFs are statements in this corpus — every
+    CSV here is an export — so the file format is the whole distinction.
+    """
+    return {r["id"] for r in conn.execute(
+        "SELECT t.id FROM txn t JOIN statement_file sf ON sf.id = t.statement_file_id "
+        "WHERE sf.file_format = 'pdf'")}
+
+
+def upsert_category_rule(conn, r: CategoryRule) -> None:
+    conn.execute(
+        "INSERT INTO category_rule (id, priority, match_field, match_type, pattern, "
+        "account_id, set_kind, set_category, set_subcategory, enabled) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
+        "priority=excluded.priority, match_field=excluded.match_field, "
+        "match_type=excluded.match_type, pattern=excluded.pattern, "
+        "account_id=excluded.account_id, set_kind=excluded.set_kind, "
+        "set_category=excluded.set_category, "
+        "set_subcategory=excluded.set_subcategory, enabled=excluded.enabled",
+        (r.id, r.priority, r.match_field, r.match_type, r.pattern, r.account_id,
+         r.set_kind, r.set_category, r.set_subcategory, int(r.enabled)),
     )
 
 
@@ -375,15 +403,28 @@ def load_txns(conn, *, include_duplicates: bool = False) -> list[Txn]:
 
 
 def update_txn_links(conn, txns: Sequence[Txn]) -> None:
-    """Persist only the fields the dedup/transfer/installment passes mutate."""
+    """Persist everything the reconcile passes mutate.
+
+    Category, merchant and the detail facts are written as well as the links,
+    because the passes that run after import set them too: gateway labelling
+    recovers a merchant the parser never saw, and income detection tags the
+    stream a credit belongs to. Leaving them out computed those facts on every
+    run and discarded them.
+
+    Every pass already declines to overwrite a value that is present, so
+    writing back what was loaded is a no-op for untouched rows and a manual
+    correction survives.
+    """
     conn.executemany(
         "UPDATE txn SET duplicate_of_id=?, transfer_group_id=?, kind=?, "
         "installment_plan_id=?, installment_seq=?, refund_of_id=?, "
-        "updated_at=? WHERE id=?",
+        "category=?, subcategory=?, merchant=?, updated_at=? WHERE id=?",
         [(t.duplicate_of_id, t.transfer_group_id, t.kind.value,
           t.installment_plan_id, t.installment_seq, t.refund_of_id,
+          t.category, t.subcategory, t.merchant,
           datetime.now().isoformat(), t.id) for t in txns],
     )
+    insert_txn_details(conn, txns)
 
 
 # ---------------------------------------------------------------------------

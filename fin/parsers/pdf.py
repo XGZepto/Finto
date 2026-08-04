@@ -15,6 +15,8 @@ An unmatched PDF is refused too: templates are the only deterministic path.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from ..enrich import extract_details
 from ..installments import parse_installment_marker
 from ..models import FileFormat, ParsedTxn
@@ -131,13 +133,22 @@ def _to_parse_result(
         {"extraction": doc.to_json(), "template_id": template_id},
     ]
     for i, row in enumerate(result.rows):
+        # Facts the template named win over anything inferred from free text.
+        details = extract_details(
+            extended="\n".join(row.detail_lines), description=row.description)
+        details.update(row.details)
         txns.append(ParsedTxn(
             txn_date=row.txn_date,
             posted_date=row.settlement_date,
             booked=row.amount,
+            native=row.foreign,
+            fx_rate=row.fx_rate,
+            external_ref=details.pop("issuer.reference", None),
+            card_last4=details.pop("card.last4", None),
+            cardholder_hint=details.pop("card.holder", None),
             description_raw=row.description,
             installment_hint=parse_installment_marker(row.description),
-            details=extract_details(description=row.description),
+            details=details,
             line_no=i,
             extra={
                 "pdf_section": row.section,
@@ -161,18 +172,16 @@ def _to_parse_result(
 
     balances: list[tuple] = []
     for when, money, kind, _section, hint in result.balances:
-        as_of = when
-        if as_of is None:
-            if kind == "closing":
-                as_of = result.period_end or result.statement_date
-            else:
-                # Never date an opening on the statement day — that collides
-                # with the closing, INSERT OR IGNORE keeps the opening, and
-                # check_account then compares the wrong period's activity.
-                as_of = result.period_start
+        as_of = when or result.period_end or result.statement_date
+        if kind == "opening" and result.period_start is not None:
+            # An opening balance is the position *before* the period's first
+            # day, which is the close of the day before. Card issuers who print
+            # no period at all keep the statement's own date: an opening is
+            # matched to its closing through the statement they were printed
+            # on, so the date labels it rather than locating it.
+            as_of = result.period_start - timedelta(days=1)
         if as_of is not None:
-            source = "statement_closing" if kind == "closing" else "statement_running"
-            balances.append((as_of, money, hint, source))
+            balances.append((as_of, money, hint, kind))
 
     return ParseResult(
         txns=txns,

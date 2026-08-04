@@ -2,7 +2,7 @@
   "template_id": "amex_hk_card",
   "institution_id": "amex_hk",
   "label": "American Express Hong Kong card statement",
-  "version": "1.4.1",
+  "version": "2.0.0",
   "match_all": [
     "American Express",
     "STATEMENT PERIOD",
@@ -45,15 +45,20 @@
       "exclude": [
         "^PAGE \\d+ OF\\d*",
         "^Total of ",
-        "All-inclusive exchange rate",
         "^#?The All-Inclusive",
-        "^Reference ",
         "American Express International",
         "Important Information",
         "Statement of Account",
         "Cardmember Name",
         "Cardmember Hotline",
-        "^DETAILS\\b"
+        "^DETAILS\\b",
+        "^Account Number$",
+        "^Payment Advice$",
+        "^Minimum Payment:",
+        "^Enter amount enclosed",
+        "^Due by",
+        "^Other Account Transactions$",
+        "americanexpress\\.com"
       ],
       "balances": [
         {
@@ -80,7 +85,30 @@
         "AMEX ACCESS IT SUMMARY",
         "Membership\\s+Rewards"
       ],
-      "continuation": "below"
+      "detail": [
+        {
+          "match": "^Reference\\s+(\\S+)(?:\\s+([A-Z][A-Z ]*?))?(?:\\s+CR)?\\s*$",
+          "keys": [
+            "issuer.reference",
+            "fx.currency_name"
+          ]
+        },
+        {
+          "match": "All-inclusive exchange rate\\S*\\s*:\\s*([\\d.]+)",
+          "keys": [
+            "fx.rate"
+          ]
+        }
+      ],
+      "markers": [
+        {
+          "match": "^Total of New Transactions for\\s*(.*?)\\s+[\\d,]+\\.\\d{2}",
+          "keys": [
+            "card.holder"
+          ],
+          "scope": "preceding"
+        }
+      ]
     },
     {
       "name": "card",
@@ -112,21 +140,49 @@
       "exclude": [
         "^PAGE \\d+ OF\\d*",
         "^Total of ",
-        "All-inclusive exchange rate",
         "^#?The All-Inclusive",
-        "^Reference ",
         "American Express International",
         "Important Information",
         "Statement of Account",
         "Cardmember Name",
         "Cardmember Hotline",
-        "^DETAILS\\b"
+        "^DETAILS\\b",
+        "^Account Number$",
+        "^Payment Advice$",
+        "^Minimum Payment:",
+        "^Enter amount enclosed",
+        "^Due by",
+        "^Other Account Transactions$",
+        "americanexpress\\.com"
       ],
       "stop_at": [
         "AMEX ACCESS IT SUMMARY",
         "Membership\\s+Rewards"
       ],
-      "continuation": "below"
+      "detail": [
+        {
+          "match": "^Reference\\s+(\\S+)(?:\\s+([A-Z][A-Z ]*?))?(?:\\s+CR)?\\s*$",
+          "keys": [
+            "issuer.reference",
+            "fx.currency_name"
+          ]
+        },
+        {
+          "match": "All-inclusive exchange rate\\S*\\s*:\\s*([\\d.]+)",
+          "keys": [
+            "fx.rate"
+          ]
+        }
+      ],
+      "markers": [
+        {
+          "match": "^Total of New Transactions for\\s*(.*?)\\s+[\\d,]+\\.\\d{2}",
+          "keys": [
+            "card.holder"
+          ],
+          "scope": "preceding"
+        }
+      ]
     }
   ],
   "source": "builtin"

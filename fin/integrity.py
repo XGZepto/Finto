@@ -21,28 +21,48 @@ from .models import Money
 
 
 def record_balance(conn, *, account_id: str, as_of, balance: Money,
-                   source: str = "statement_running",
+                   kind: str = "running",
                    statement_file_id: str | None = None) -> None:
-    # First write wins for a given (account, date, source, currency). HSBC and
+    # First write wins for a given (account, date, kind, currency). HSBC and
     # Wise export newest-first, so the first running-balance we see for a date
     # is the end-of-day figure; later same-day rows are mid-day snapshots that
     # would make check_account invent a phantom delta.
     conn.execute(
         "INSERT OR IGNORE INTO balance_assertion (id, account_id, as_of_date, "
-        "balance, currency, source, statement_file_id) VALUES (?,?,?,?,?,?,?)",
+        "balance, currency, kind, statement_file_id) VALUES (?,?,?,?,?,?,?)",
         (str(uuid.uuid4()), account_id,
          as_of.isoformat() if hasattr(as_of, "isoformat") else str(as_of),
-         balance.amount, balance.currency, source, statement_file_id),
+         balance.amount, balance.currency, kind, statement_file_id),
     )
 
 
-def check_account(conn, account_id: str, *, record: bool = True) -> list[dict]:
-    """Verify transactions reproduce the balance delta between assertions.
+#: Rows the statement contributed, followed through dedup. When the same charge
+#: also arrived in a CSV, whichever copy survived stands in for this one, so a
+#: statement still reconciles after its rows have been merged with another
+#: source. Without the second arm every deduplicated statement reads as short.
+_STATEMENT_ROWS = """
+SELECT COALESCE(SUM(t.amount_booked), 0) AS total FROM txn t
+WHERE t.duplicate_of_id IS NULL AND t.status <> 'void'
+  AND t.account_id = ? AND t.currency_booked = ?
+  AND (t.statement_file_id = ?
+       OR EXISTS (SELECT 1 FROM txn d WHERE d.duplicate_of_id = t.id
+                    AND d.statement_file_id = ?))
+"""
 
-    Walks consecutive balance assertions and, for each interval, compares the
-    bank's balance movement against the sum of transactions we hold. Any
-    non-zero discrepancy means a dropped row, a duplicate we wrongly kept, or a
-    sign error — all of which are invisible without this check.
+
+def check_account(conn, account_id: str, *, record: bool = True) -> list[dict]:
+    """Verify the transactions we hold reproduce the balances the issuer printed.
+
+    Two shapes of evidence, because statements come in two shapes.
+
+    A statement that prints an opening and a closing brackets a known set of
+    rows: its own. Those are compared against exactly the rows that statement
+    contributed. This is the only correct check for a card, because the issuer
+    decides which statement a charge belongs to by when it posted, so a charge
+    dated inside the period can legitimately be billed on the next one.
+
+    A statement that prints a running balance instead — a passbook — is checked
+    date to date, since consecutive figures do bracket everything in between.
 
     `record` writes the outcome to the audit trail. Callers that are only
     answering a question pass False: the check is pure arithmetic over data
@@ -53,54 +73,93 @@ def check_account(conn, account_id: str, *, record: bool = True) -> list[dict]:
                             (account_id,)).fetchone()
     account_name = name_row["display_name"] if name_row else account_id
 
-    assertions = list(conn.execute(
-        "SELECT as_of_date, balance, currency FROM balance_assertion "
-        "WHERE account_id=? ORDER BY as_of_date", (account_id,)))
-    if len(assertions) < 2:
+    statements = _check_statements(conn, account_id)
+    # Consecutive closings do bracket the gaps between statements, but only
+    # matter when the issuer never printed an opening — Mox Credit states what
+    # you owe and nothing else. Where openings exist the pairs above already
+    # say the same thing and say it per statement, which is stricter.
+    kinds = ("running",) if statements else ("running", "closing")
+    out = [*statements, *_check_running(conn, account_id, kinds)]
+    if not out:
         return [{"account_id": account_id, "account_name": account_name,
                  "status": "insufficient_data",
-                 "note": "need at least two balance assertions"}]
+                 "note": "no opening/closing pair and fewer than two running balances"}]
 
-    out = []
-    for prev, curr in zip(assertions, assertions[1:]):
-        if prev["currency"] != curr["currency"]:
-            continue
-        expected = curr["balance"] - prev["balance"]
-        row = conn.execute(
-            "SELECT COALESCE(SUM(amount_booked), 0) AS total FROM txn "
-            "WHERE account_id=? AND duplicate_of_id IS NULL AND status<>'void' "
-            "AND currency_booked=? AND txn_date > ? AND txn_date <= ?",
-            (account_id, curr["currency"], prev["as_of_date"], curr["as_of_date"])
-        ).fetchone()
-        actual = row["total"]
-        discrepancy = actual - expected
-        status = "ok" if discrepancy == 0 else "discrepancy"
+    for c in out:
+        c["account_id"] = account_id
+        c["account_name"] = account_name
         if record:
             conn.execute(
                 "INSERT INTO reconciliation_check (id, account_id, period_start, "
                 "period_end, expected_delta, actual_delta, discrepancy, currency, "
                 "status, checked_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (str(uuid.uuid4()), account_id, prev["as_of_date"], curr["as_of_date"],
-                 expected, actual, discrepancy, curr["currency"], status,
+                (str(uuid.uuid4()), account_id, c["period_start"], c["period_end"],
+                 c["expected_delta"]["amount"], c["actual_delta"]["amount"],
+                 c["discrepancy"]["amount"], c["currency"], c["status"],
                  datetime.now().isoformat()))
-        # Minor units, same as everywhere else. The period is also given as two
-        # dates so a client can deep-link straight to the rows in question —
-        # after "is anything missing?" the next question is always "which row?".
-        ccy = curr["currency"]
-        out.append({
-            "account_id": account_id,
-            "account_name": account_name,
-            "period": f"{prev['as_of_date']} -> {curr['as_of_date']}",
-            "period_start": prev["as_of_date"],
-            "period_end": curr["as_of_date"],
-            "expected_delta": {"amount": expected, "currency": ccy},
-            "actual_delta": {"amount": actual, "currency": ccy},
-            "discrepancy": {"amount": discrepancy, "currency": ccy},
-            "currency": ccy,
-            "status": status,
-        })
     if record:
         conn.commit()
+    return out
+
+
+def _outcome(period_start, period_end, expected, actual, currency) -> dict:
+    # Minor units, same as everywhere else. The period is also given as two
+    # dates so a client can deep-link straight to the rows in question — after
+    # "is anything missing?" the next question is always "which row?".
+    discrepancy = actual - expected
+    return {
+        "period": f"{period_start} -> {period_end}",
+        "period_start": period_start,
+        "period_end": period_end,
+        "expected_delta": {"amount": expected, "currency": currency},
+        "actual_delta": {"amount": actual, "currency": currency},
+        "discrepancy": {"amount": discrepancy, "currency": currency},
+        "currency": currency,
+        "status": "ok" if discrepancy == 0 else "discrepancy",
+    }
+
+
+def _check_statements(conn, account_id: str) -> list[dict]:
+    """Each statement's own opening and closing, against its own rows."""
+    out = []
+    for r in conn.execute(
+            "SELECT o.statement_file_id AS sf, o.currency AS ccy, "
+            "       o.as_of_date AS opened, c.as_of_date AS closed, "
+            "       o.balance AS opening, c.balance AS closing "
+            "FROM balance_assertion o JOIN balance_assertion c "
+            "  ON c.statement_file_id = o.statement_file_id "
+            " AND c.account_id = o.account_id "
+            " AND c.currency = o.currency AND c.kind = 'closing' "
+            "WHERE o.account_id = ? AND o.kind = 'opening' "
+            "  AND o.statement_file_id IS NOT NULL "
+            "ORDER BY c.as_of_date", (account_id,)):
+        actual = conn.execute(
+            _STATEMENT_ROWS, (account_id, r["ccy"], r["sf"], r["sf"])
+        ).fetchone()["total"]
+        out.append(_outcome(r["opened"], r["closed"],
+                            r["closing"] - r["opening"], actual, r["ccy"]))
+    return out
+
+
+def _check_running(conn, account_id: str, kinds: tuple[str, ...]) -> list[dict]:
+    """Consecutive balances, against everything dated between them."""
+    assertions = list(conn.execute(
+        "SELECT as_of_date, balance, currency FROM balance_assertion "
+        f"WHERE account_id=? AND kind IN ({','.join('?' * len(kinds))}) "
+        "ORDER BY currency, as_of_date", (account_id, *kinds)))
+    out = []
+    for prev, curr in zip(assertions, assertions[1:]):
+        if prev["currency"] != curr["currency"]:
+            continue
+        actual = conn.execute(
+            "SELECT COALESCE(SUM(amount_booked), 0) AS total FROM txn "
+            "WHERE account_id=? AND duplicate_of_id IS NULL AND status<>'void' "
+            "AND currency_booked=? AND txn_date > ? AND txn_date <= ?",
+            (account_id, curr["currency"], prev["as_of_date"], curr["as_of_date"])
+        ).fetchone()["total"]
+        out.append(_outcome(prev["as_of_date"], curr["as_of_date"],
+                            curr["balance"] - prev["balance"], actual,
+                            curr["currency"]))
     return out
 
 

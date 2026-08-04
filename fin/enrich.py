@@ -12,8 +12,12 @@ module turns those blobs into namespaced key/value facts in `txn_detail`.
 
 Design rules:
 
-* **Never invent.** A field is emitted only when the source actually labelled
-  it or the format is unambiguous (IATA routing, ticket number check digits).
+* **Never invent.** A field is emitted only where the source labelled it. The
+  tempting shortcuts do not survive contact with real statements: matching
+  SURNAME/FORENAME anywhere on a travel row turns "and/or Private Label" into a
+  passenger 35 times over, and reading AAA/BBB as a route turns "opt out" into a
+  flight from OPT to OUT. Guesses like those are worse than a missing field,
+  because a missing field is visibly missing.
 * **Never discard.** Detail lines we don't recognise are kept under `raw.line_N`.
   A parser that improves later can re-derive from raw_record, but only if we
   noticed the field was there.
@@ -26,14 +30,6 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
-# Common IATA codes are 3 uppercase letters; routing is written many ways.
-_ROUTE = re.compile(r"\b([A-Z]{3})\s*(?:/|-|>|\bTO\b)\s*([A-Z]{3})\b")
-# Airline tickets are 13-14 digits, often with the 3-digit carrier prefix split.
-_TICKET = re.compile(r"\b(\d{3}[- ]?\d{10,11})\b")
-# AMEX writes passenger names surname-first: SMITH/JOHN MR
-_PAX = re.compile(r"\b([A-Z][A-Z'\-]{1,20})\s*/\s*([A-Z][A-Z'\- ]{1,30})\b")
-_IATA_CARRIER = re.compile(r"\b(?:CARRIER|AIRLINE)\b[:\s]+([A-Z0-9]{2})\b")
-
 # Label -> namespaced key. Matching is case-insensitive and tolerant of the
 # separator (colon, multiple spaces, or nothing).
 _LABELS: dict[str, str] = {
@@ -42,6 +38,8 @@ _LABELS: dict[str, str] = {
     "ticket number": "travel.ticket_number",
     "ticket no": "travel.ticket_number",
     "departure date": "travel.departure_date",
+    "date of departure": "travel.departure_date",
+    "document type": "travel.document_type",
     "depart": "travel.departure_date",
     "arrival date": "travel.arrival_date",
     "return date": "travel.return_date",
@@ -87,9 +85,23 @@ _LABELS: dict[str, str] = {
     "appears on your statement as": "issuer.statement_text",
 }
 
-_LABEL_RE = re.compile(
-    r"^\s*(" + "|".join(re.escape(k) for k in sorted(_LABELS, key=len, reverse=True))
-    + r")\s*[:\-]?\s{0,}(.+?)\s*$", re.I)
+def _label_pattern(labels, separator: str) -> re.Pattern:
+    names = "|".join(re.escape(k) for k in sorted(labels, key=len, reverse=True))
+    return re.compile(rf"^\s*({names})\b(?:{separator})(.+?)\s*$", re.I)
+
+
+# How much punctuation a label needs before its value is believed.
+#
+# A distinctive label — "passenger name", "ticket number" — cannot occur in
+# ordinary merchant text, so a single space is enough, which matters because
+# CSV quoting collapses AMEX's Extended Details onto one line. Short labels
+# ("to", "class", "city") occur in prose constantly, so those need a colon, a
+# dash, or the column gap a statement leaves between a heading and its value.
+#
+# The word boundary applies to both, and is what stops "depart" matching inside
+# "DEPARTMENT STORE" and filing the rest of the line as a travel date.
+_SEP = r"\s*[:\-]\s*|\s{2,}"
+_LABEL_RES = None    # built after _SPLIT_LABELS, which names the distinctive set
 
 # Labels distinctive enough to split on when several are crammed onto one line.
 # CSV quoting collapses the newlines in AMEX's Extended Details, so "PASSENGER
@@ -99,7 +111,8 @@ _LABEL_RE = re.compile(
 # Short, common words ("to", "from", "city", "class") are deliberately excluded:
 # splitting on those would shred ordinary merchant text.
 _SPLIT_LABELS = [
-    "passenger name", "ticket number", "ticket no", "departure date",
+    "passenger name", "ticket number", "date of departure", "document type",
+    "ticket no", "departure date",
     "arrival date", "return date", "record locator", "booking reference",
     "fare basis", "class of service", "flight number", "carrier", "airline",
     "check-in", "check in", "check-out", "check out", "room rate",
@@ -111,6 +124,11 @@ _SPLIT_RE = re.compile(
     r"(?=\b(?:" + "|".join(re.escape(k) for k in
                            sorted(_SPLIT_LABELS, key=len, reverse=True)) + r")\b)",
     re.I)
+
+_LABEL_RES = (
+    _label_pattern(_SPLIT_LABELS, _SEP + r"|\s+"),
+    _label_pattern(_LABELS, _SEP),
+)
 
 # Ticket and reference numbers are written with spaces or dashes for
 # readability; the identity is the digits.
@@ -160,12 +178,6 @@ def extract_details(
         if key:
             details[key] = str(value).strip()
 
-    # Descriptions sometimes carry routing when the detail field does not.
-    if "travel.origin" not in details and description:
-        route = _ROUTE.search(description.upper())
-        if route:
-            details["travel.origin"], details["travel.destination"] = route.groups()
-
     return {k: v for k, v in details.items() if v}
 
 
@@ -183,7 +195,7 @@ def _from_blob(blob: str) -> dict[str, str]:
         if not line or _MASK_ONLY.match(line):
             continue
 
-        m = _LABEL_RE.match(line)
+        m = next(filter(None, (rx.match(line) for rx in _LABEL_RES)), None)
         if m:
             key = _LABELS[_norm_label(m.group(1))]
             value = m.group(2).strip()
@@ -204,34 +216,7 @@ def _from_blob(blob: str) -> dict[str, str]:
             details.setdefault(key, _clean_value(key, value))
             continue
 
-        upper = line.upper()
-        matched = False
-
-        route = _ROUTE.search(upper)
-        if route and "travel.origin" not in details:
-            details["travel.origin"], details["travel.destination"] = route.groups()
-            matched = True
-
-        ticket = _TICKET.search(upper)
-        if ticket and "travel.ticket_number" not in details:
-            details["travel.ticket_number"] = ticket.group(1).replace(" ", "").replace("-", "")
-            matched = True
-
-        carrier = _IATA_CARRIER.search(upper)
-        if carrier and "travel.carrier" not in details:
-            details["travel.carrier"] = carrier.group(1)
-            matched = True
-
-        # Surname/forename only counts as a passenger when the row looks like
-        # travel — otherwise "AMZN/MKTP" would become a person.
-        if "travel.passenger_name" not in details and _looks_like_travel(details, upper):
-            pax = _PAX.search(upper)
-            if pax:
-                details["travel.passenger_name"] = f"{pax.group(1)}/{pax.group(2)}".strip()
-                matched = True
-
-        if not matched:
-            unrecognised.append(line)
+        unrecognised.append(line)
 
     # Keep what we could not classify rather than dropping it.
     for i, line in enumerate(unrecognised[:8]):
@@ -239,12 +224,6 @@ def _from_blob(blob: str) -> dict[str, str]:
 
     return details
 
-
-def _looks_like_travel(details: dict[str, str], line: str) -> bool:
-    if any(k.startswith("travel.") for k in details):
-        return True
-    return bool(re.search(
-        r"\b(FLIGHT|AIRLINE|AIRWAYS|TICKET|PASSENGER|BOARDING|ITINERARY|AIR)\b", line))
 
 
 def _clean_value(key: str, value: str) -> str:
@@ -270,3 +249,68 @@ def _split_lines(blob: str) -> Iterable[str]:
 def is_travel(details: dict[str, str]) -> bool:
     """True when the row describes a trip — used to tag transactions."""
     return any(k.startswith(("travel.", "lodging.", "rental.")) for k in details)
+
+
+# ---------------------------------------------------------------------------
+# Payment gateways
+# ---------------------------------------------------------------------------
+# A charge routed through Alipay, WeChat Pay or UnionPay reaches the card as the
+# gateway's own name. Sometimes the merchant survives — "Alipay*DIDI Taxi" —
+# and sometimes it does not: "Alipay* Shanghai" is the single most common line
+# in this ledger and says only that money went through Alipay in Shanghai.
+#
+# Neither case is "uncategorised". The first is an ordinary purchase that
+# happens to name its rail; the second is a *known* state of affairs — the
+# acquirer did not pass the merchant on — and recording it as such is the
+# difference between "we could not read this" and "the statement does not say".
+# Leaving them blank invites someone to keep trying to categorise rows that
+# contain no answer.
+
+#: Gateway patterns, longest legal name first so "AlipayHK" is not read as
+#: "Alipay", and the canonical name to record.
+_GATEWAYS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"^(?:SALES:\s*)?ALIPAYHK\b", re.I), "AlipayHK"),
+    (re.compile(r"^(?:SALES:\s*)?ALIPAY(?:\s+NETWORK\s+TECH)?\b", re.I), "Alipay"),
+    (re.compile(r"^(?:SALES:\s*)?TENPAY(?:\s+TECHNOLOGY(?:\s+COMPANY)?)?\b", re.I),
+     "Tenpay"),
+    (re.compile(r"^(?:SALES:\s*)?TENCENT\b", re.I), "Tenpay"),
+    (re.compile(r"^(?:SALES:\s*)?WECHAT\s*PAY"
+                r"(?:\s+(?:HONG\s*KONG|HK))?(?:\s+(?:LIMITED|LIMI))?\b", re.I),
+     "WeChat Pay"),
+    (re.compile(r"^(?:SALES:\s*)?UNIONPAY(?:\s+MERCHANT)?\b", re.I), "UnionPay"),
+    (re.compile(r"^(?:SALES:\s*)?TAOBAO(?:\s+MERCHANT)?\b", re.I), "Taobao"),
+    (re.compile(r"^(?:SALES:\s*)?E-?WALLET\b", re.I), "E-wallet"),
+    (re.compile(r"^(?:SALES:\s*)?APLPAY\b", re.I), "Apple Pay"),
+    (re.compile(r"^(?:SALES:\s*)?GGLPAY\b", re.I), "Google Pay"),
+    (re.compile(r"^(?:SALES:\s*)?KPAY\b", re.I), "KPay"),
+]
+
+#: Tokens that are place, legal form, or the gateway naming itself again — none
+#: of which identify a merchant. NUCC is China's clearing house, not a shop.
+_NOT_A_MERCHANT = re.compile(
+    r"^(?:\*+|CHN|CN|HK|HKG|HONGKONG|HONG|KONG|SHANGHAI|SHENZHEN|BEIJING|CHINA|"
+    r"MACAU|MO|TW|SG|LIMITED|LIMI|LTD|CO|INC|NUCC|ALIPAY|WECHAT|PAY|MERCHANT)$",
+    re.I)
+
+
+def payment_gateway(description_raw: str) -> tuple[str, str] | None:
+    """The gateway a charge was routed through, and the merchant it disclosed.
+
+    Returns (gateway, merchant) with merchant "" when the acquirer passed no
+    merchant through. Reads the raw description on purpose: normalisation drops
+    the "*" that separates a gateway from the merchant behind it, which is the
+    one character that distinguishes the two cases.
+    """
+    for rx, name in _GATEWAYS:
+        m = rx.match(description_raw.strip())
+        if m is None:
+            continue
+        tokens = description_raw.strip()[m.end():].replace("*", " ").split()
+        # Trim place and legal-form tokens from the end only. Dropping them
+        # wherever they appear would turn "Ichiran Hong K" into "Ichiran K".
+        while tokens and _NOT_A_MERCHANT.match(tokens[-1]):
+            tokens.pop()
+        while tokens and _NOT_A_MERCHANT.match(tokens[0]):
+            tokens.pop(0)
+        return name, " ".join(tokens)
+    return None

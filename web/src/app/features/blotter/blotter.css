@@ -92,3 +92,15 @@ tr.on td { background: var(--panel-3); }
 .leg-desc { overflow-wrap: anywhere; color: var(--fg); }
 .leg-amt { grid-column: 3; grid-row: 1 / span 2; font-variant-numeric: tabular-nums; }
 .leg .mono.small { grid-column: 2; }
+
+/* A charge routed through a payment gateway. Muted rather than alarming: it is
+   an ordinary purchase whose merchant the acquirer withheld, not a problem. */
+.tag.gateway {
+  background: color-mix(in srgb, var(--accent, #6b7280) 12%, transparent);
+  color: var(--muted, #6b7280);
+}
+
+.gateway-note {
+  border-left: 2px solid color-mix(in srgb, var(--muted, #6b7280) 35%, transparent);
+  padding-left: 0.75rem;
+}

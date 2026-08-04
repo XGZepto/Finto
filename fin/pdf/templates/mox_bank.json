@@ -41,8 +41,8 @@
       },
       "exclude": [
         "^Page \\d+ of \\d+$",
-        "交易⽇期",
-        "對應貨幣⾦額",
+        "\u4ea4\u6613\u2f47\u671f",
+        "\u5c0d\u61c9\u8ca8\u5e63\u2fa6\u984d",
         "^Activities"
       ],
       "balances": [
@@ -58,7 +58,8 @@
         }
       ],
       "description_column": "description",
-      "settlement_column": "settlement"
+      "settlement_column": "settlement",
+      "wraps": true
     },
     {
       "name": "jpy",
@@ -84,8 +85,8 @@
       },
       "exclude": [
         "^Page \\d+ of \\d+$",
-        "交易⽇期",
-        "對應貨幣⾦額"
+        "\u4ea4\u6613\u2f47\u671f",
+        "\u5c0d\u61c9\u8ca8\u5e63\u2fa6\u984d"
       ],
       "balances": [
         {
@@ -100,7 +101,8 @@
         }
       ],
       "description_column": "description",
-      "settlement_column": "settlement"
+      "settlement_column": "settlement",
+      "wraps": true
     }
   ],
   "source": "builtin"

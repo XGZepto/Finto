@@ -366,22 +366,26 @@ class Txn(BaseModel):
     def compute_dedup_key(self) -> str:
         """Deterministic natural key for exact-duplicate detection.
 
-        Uses the issuer's own reference when one exists — that is authoritative
-        and survives re-statements. Otherwise falls back to the tuple that
-        identifies a charge in practice: account, date, signed amount, currency
-        and normalised description. Deliberately excludes posted_date and
-        status, so a pending row and its posted twin collide by design.
+        The tuple that identifies a charge in practice: account, date, signed
+        amount, currency and normalised description. Deliberately excludes
+        posted_date and status, so a pending row and its posted twin collide by
+        design.
+
+        The issuer's own reference is deliberately *not* part of this, even
+        though it is the strongest identifier available. The whole job of the
+        key is to make the same charge collide across sources, and a reference
+        is printed on the statement but absent from the same issuer's CSV
+        export — keying on it makes the two copies differ precisely when they
+        must match. Dedup still uses the reference as a scoring signal, where
+        having it on one side only does no harm.
         """
-        if self.external_ref:
-            basis = f"{self.account_id}|ref|{self.external_ref}"
-        else:
-            basis = "|".join([
-                self.account_id,
-                self.txn_date.isoformat(),
-                str(self.booked.amount),
-                self.booked.currency,
-                self.description_norm,
-            ])
+        basis = "|".join([
+            self.account_id,
+            self.txn_date.isoformat(),
+            str(self.booked.amount),
+            self.booked.currency,
+            self.description_norm,
+        ])
         return hashlib.sha256(basis.encode()).hexdigest()[:32]
 
     @property
@@ -473,6 +477,30 @@ class InstallmentCandidate(BaseModel):
     reasons: list[str] = Field(default_factory=list)
     resolution: Literal["open", "accepted", "rejected"] = "open"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class CategoryRule(BaseModel):
+    """A deterministic label the statements themselves justify.
+
+    Issuers annotate the movements that matter most: HSBC stamps a payroll
+    credit "SALARY-09", a standing rent charge always names the same agent.
+    Encoding those as data keeps a fact the bank stated from being re-derived
+    by guesswork later.
+    """
+
+    id: str
+    pattern: str
+    match_field: Literal[
+        "description_norm", "merchant", "counterparty", "external_ref",
+        "merchant_category",
+    ] = "description_norm"
+    match_type: Literal["contains", "regex", "exact"] = "contains"
+    priority: int = 100
+    account_id: str | None = None
+    set_kind: TxnKind | None = None
+    set_category: str | None = None
+    set_subcategory: str | None = None
+    enabled: bool = True
 
 
 class FxRate(BaseModel):

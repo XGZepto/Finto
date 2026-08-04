@@ -25,6 +25,7 @@ def filter_from_query(
     minAmount: int | None = Query(None),
     maxAmount: int | None = Query(None),
     q: str | None = Query(None),
+    detail: list[str] | None = Query(None),
     includeTransfers: bool = Query(False),
     includeDuplicates: bool = Query(False),
     uncategorisedOnly: bool = Query(False),
@@ -34,6 +35,7 @@ def filter_from_query(
         **{"from": date_from, "to": date_to}, accounts=accounts, cards=cards,
         institutions=institutions, categories=categories, kinds=kinds,
         currency=currency, minAmount=minAmount, maxAmount=maxAmount, q=q,
+        detail=detail,
         includeTransfers=includeTransfers, includeDuplicates=includeDuplicates,
         uncategorisedOnly=uncategorisedOnly, installmentsOnly=installmentsOnly,
     )
@@ -102,6 +104,18 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
                 (txn_id, key, str(value), now))
     conn.commit()
     return reporting.transaction_detail(conn, txn_id)
+
+
+@router.get("/details")
+def list_detail_keys(conn=Depends(get_conn)) -> dict:
+    """The structured facts extracted from statements, with counts."""
+    return reporting.detail_keys(conn)
+
+
+@router.get("/details/{key}")
+def list_detail_values(key: str, limit: int = Query(200, le=1000),
+                       conn=Depends(get_conn)) -> dict:
+    return reporting.detail_values(conn, key, limit)
 
 
 @router.get("/facets")

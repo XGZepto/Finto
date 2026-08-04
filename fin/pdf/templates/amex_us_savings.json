@@ -77,7 +77,8 @@
       ],
       "stop_at": [
         "Accounts\\s+offered\\s+by\\s+American\\s+Express\\s+National\\s+Bank"
-      ]
+      ],
+      "wraps": true
     }
   ],
   "source": "builtin"

@@ -2,7 +2,7 @@
   "template_id": "hsbc_hk_savings",
   "institution_id": "hsbc_hk",
   "label": "HSBC HK savings / HSBC One statement",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "match_all": [
     "Account Transaction History",
     "Portfolio Summary"
@@ -54,6 +54,27 @@
           "pattern": "C/F BALANCE",
           "kind": "closing",
           "column": "balance"
+        },
+        {
+          "pattern": "^HKD\\s?Savings\\s+\\d{3}-\\d{6}-\\d{3}\\s+HKD\\b",
+          "kind": "closing",
+          "scope": "document",
+          "token_index": 0
+        }
+      ],
+      "wraps": true,
+      "detail": [
+        {
+          "match": "\\b(SALARY(?:-\\d+)?)\\b",
+          "keys": [
+            "issuer.transaction_code"
+          ]
+        },
+        {
+          "match": "\\b(HC\\d{10,})\\b",
+          "keys": [
+            "issuer.reference"
+          ]
         }
       ]
     },
@@ -98,7 +119,22 @@
           "column": "balance"
         }
       ],
-      "currency_column": "ccy"
+      "currency_column": "ccy",
+      "wraps": true,
+      "detail": [
+        {
+          "match": "\\b(SALARY(?:-\\d+)?)\\b",
+          "keys": [
+            "issuer.transaction_code"
+          ]
+        },
+        {
+          "match": "\\b(HC\\d{10,})\\b",
+          "keys": [
+            "issuer.reference"
+          ]
+        }
+      ]
     }
   ],
   "source": "builtin"

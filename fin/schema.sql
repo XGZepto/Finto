@@ -379,8 +379,13 @@ CREATE TABLE IF NOT EXISTS fx_rate (
 CREATE TABLE IF NOT EXISTS category_rule (
     id          TEXT PRIMARY KEY,
     priority    INTEGER NOT NULL DEFAULT 100,   -- lower runs first
+    -- 'merchant_category' matches what the issuer itself called the merchant
+    -- (AMEX prints "TAXICAB & LIMOUSINE" under the charge). That is a fact
+    -- from the statement, so mapping it to a ledger category is a rename, not
+    -- a guess — unlike inferring one from a merchant's name.
     match_field TEXT NOT NULL CHECK (match_field IN
-                  ('description_norm','merchant','counterparty','external_ref')),
+                  ('description_norm','merchant','counterparty','external_ref',
+                   'merchant_category')),
     match_type  TEXT NOT NULL CHECK (match_type IN ('contains','regex','exact')),
     pattern     TEXT NOT NULL,
     account_id  TEXT REFERENCES account(id),     -- optional scoping
@@ -401,16 +406,24 @@ CREATE TABLE IF NOT EXISTS category_rule (
 -- Without this, a silently-dropped transaction is invisible forever.
 -- ---------------------------------------------------------------------------
 
+-- `kind` is what the issuer said the figure was, not where we got it. A
+-- statement's opening and closing bracket exactly the rows that statement
+-- listed, which is the only sound way to check a card: the issuer bills by
+-- posting date, so a charge made on the last day of a period routinely appears
+-- on the next statement. Comparing "everything dated inside the period" against
+-- those two figures therefore disagrees with the bank even when nothing is
+-- missing. A `running` balance is the per-row figure a passbook-style statement
+-- prints, checkable in sequence instead.
 CREATE TABLE IF NOT EXISTS balance_assertion (
     id                TEXT PRIMARY KEY,
     account_id        TEXT NOT NULL REFERENCES account(id),
     as_of_date        TEXT NOT NULL,
     balance           INTEGER NOT NULL,     -- minor units, signed
     currency          TEXT NOT NULL,
-    source            TEXT NOT NULL CHECK (source IN
-                        ('statement_closing','statement_running','manual')),
+    kind              TEXT NOT NULL CHECK (kind IN
+                        ('opening','closing','running','manual')),
     statement_file_id TEXT REFERENCES statement_file(id),
-    UNIQUE (account_id, as_of_date, source, currency)
+    UNIQUE (account_id, as_of_date, kind, currency)
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_balance_account ON balance_assertion(account_id, as_of_date);

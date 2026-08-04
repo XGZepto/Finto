@@ -3,9 +3,16 @@
   "institution_id": "mox",
   "label": "Mox Credit card statement",
   "version": "1.0.0",
-  "match_all": ["Mox Credit statement", "Transaction details"],
+  "match_all": [
+    "Mox Credit statement",
+    "Transaction details"
+  ],
   "default_currency": "HKD",
-  "date": {"format": "auto", "dayfirst": true, "year_from_statement": true},
+  "date": {
+    "format": "auto",
+    "dayfirst": true,
+    "year_from_statement": true
+  },
   "period": "(\\d{1,2}\\s+\\w{3,9}\\s+\\d{4})\\s*-\\s*(\\d{1,2}\\s+\\w{3,9}\\s+\\d{4})",
   "body_start": "Transaction details",
   "sections": [
@@ -26,10 +33,19 @@
           "amount": "(?-i:^Amount)"
         }
       },
-      "amount": {"mode": "signed", "column": "amount", "invert": false},
+      "amount": {
+        "mode": "signed",
+        "column": "amount",
+        "invert": false
+      },
       "description_column": "description",
       "settlement_column": "settlement",
-      "exclude": ["^Page \\d+ of \\d+$", "交易⽇期", "外幣⾦額", "⾦額 \\(港幣\\)"],
+      "exclude": [
+        "^Page \\d+ of \\d+$",
+        "\u4ea4\u6613\u2f47\u671f",
+        "\u5916\u5e63\u2fa6\u984d",
+        "\u2fa6\u984d \\(\u6e2f\u5e63\\)"
+      ],
       "balances": [
         {
           "pattern": "Statement balance",
@@ -37,7 +53,8 @@
           "scope": "document",
           "line_offset": -1
         }
-      ]
+      ],
+      "wraps": true
     }
   ],
   "source": "builtin"

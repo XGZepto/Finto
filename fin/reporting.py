@@ -100,6 +100,18 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
         clauses.append("t.installment_plan_id IS NOT NULL")
     if not f.get("includeTransfers"):
         clauses.append("t.transfer_group_id IS NULL")
+    # Exact detail lookup: "travel.passenger_name=YIXIANG ZHOU". This is what
+    # txn_detail exists for — a JSON blob cannot answer "every flight booked
+    # for this passenger", and `q` only does substrings across every key.
+    for pair in f.get("detail") or []:
+        key, _, value = str(pair).partition("=")
+        clauses.append(
+            "EXISTS (SELECT 1 FROM txn_detail d WHERE d.txn_id = t.id "
+            "        AND d.key = ?" + (" AND d.value = ?" if value else "") + ")")
+        params.append(key)
+        if value:
+            params.append(value)
+
     if f.get("q"):
         clauses.append(
             "(t.description_raw LIKE ? OR t.description_norm LIKE ? "
@@ -110,6 +122,26 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
         params.extend([like] * 5)
 
     return " AND ".join(clauses), params
+
+
+def detail_keys(conn) -> dict:
+    """Which structured facts the ledger holds, and how common each is.
+
+    Lets a client build a facet list without knowing in advance what the
+    parsers found — the set grows as templates learn to read more.
+    """
+    return {"keys": [dict(r) for r in conn.execute(
+        "SELECT key, COUNT(*) AS facts, COUNT(DISTINCT txn_id) AS transactions "
+        "FROM txn_detail GROUP BY key ORDER BY transactions DESC, key")]}
+
+
+def detail_values(conn, key: str, limit: int = 200) -> dict:
+    return {"key": key, "values": [dict(r) for r in conn.execute(
+        "SELECT d.value, COUNT(*) AS transactions FROM txn_detail d "
+        "JOIN txn t ON t.id = d.txn_id "
+        "WHERE d.key = ? AND t.duplicate_of_id IS NULL AND t.status <> 'void' "
+        "GROUP BY d.value ORDER BY transactions DESC, d.value LIMIT ?",
+        (key, int(limit)))]}
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +178,11 @@ def positions(conn, *, as_of: str | None = None) -> list[dict]:
             "SELECT balance, as_of_date FROM balance_assertion "
             "WHERE account_id=? AND currency=? " +
             ("AND as_of_date <= ? " if as_of else "") +
-            "ORDER BY as_of_date DESC LIMIT 1",
+            # A statement with no printed period dates its opening on the
+            # statement day too, so the closing has to win that tie.
+            "ORDER BY as_of_date DESC, "
+            "CASE kind WHEN 'closing' THEN 0 WHEN 'running' THEN 1 ELSE 2 END "
+            "LIMIT 1",
             (r["account_id"], r["currency"]) + ((as_of,) if as_of else ()),
         ).fetchone()
 
@@ -312,8 +348,14 @@ def _txn_dict(r, details: dict[str, str]) -> dict:
         "merchant": r["merchant"],
         "counterparty": r["counterparty"],
         "booked": money(r["amount_booked"], r["currency_booked"]),
+        # What the merchant charged, and the rate the issuer applied to get to
+        # the booked amount. Both are printed on the statement; neither is
+        # derived here, so a client can show the original charge exactly.
         "native": (money(r["amount_native"], r["currency_native"])
                    if r["amount_native"] is not None else None),
+        "fx_rate": r["fx_rate"],
+        "fx_fee": (money(r["fx_fee_booked"], r["currency_booked"])
+                   if r["fx_fee_booked"] is not None else None),
         "kind": r["kind"],
         "category": r["category"],
         "subcategory": r["subcategory"],

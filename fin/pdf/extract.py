@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 from dataclasses import asdict, dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 # pdfminer logs a warning per malformed font descriptor. Statement PDFs are full
@@ -177,7 +178,19 @@ class PdfDocument:
 
 
 def extract_document(path: str | Path) -> PdfDocument:
-    """Read a PDF into positioned words. Raises if there is no text layer."""
+    """Read a PDF into positioned words. Raises if there is no text layer.
+
+    Cached on the file's identity, because every import reads each PDF twice —
+    once for the parser to recognise it, once to extract it — and the parse is
+    by far the most expensive step in an import.
+    """
+    path = Path(path)
+    st = path.stat()
+    return _extract_cached(str(path), st.st_mtime_ns, st.st_size)
+
+
+@lru_cache(maxsize=8)
+def _extract_cached(path_str: str, _mtime_ns: int, _size: int) -> PdfDocument:
     try:
         import pdfplumber
     except ImportError as e:  # pragma: no cover - depends on optional extra
@@ -185,7 +198,7 @@ def extract_document(path: str | Path) -> PdfDocument:
             "PDF support needs pdfplumber — install with: pip install 'finto[pdf]'"
         ) from e
 
-    path = Path(path)
+    path = Path(path_str)
     content_hash = hashlib.sha256(path.read_bytes()).hexdigest()
 
     pages: list[PdfPage] = []

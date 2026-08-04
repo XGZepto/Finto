@@ -33,6 +33,8 @@ class LedgerFilter(BaseModel):
     minAmount: int | None = None
     maxAmount: int | None = None
     q: str | None = None
+    #: Exact structured-fact filters, each "key" or "key=value".
+    detail: list[str] | None = None
     # Transfers are money moved between your own accounts. Counting them as
     # spending is the specific error transfer linking exists to prevent, so the
     # caller has to opt in.

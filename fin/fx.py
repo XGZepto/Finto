@@ -18,6 +18,7 @@ actually applied to your money. `harvest_rates` mines those.
 from __future__ import annotations
 
 import csv
+import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -25,6 +26,41 @@ from pathlib import Path
 
 from . import db as dbm
 from .models import FxRate, Money, minor_exponent
+
+# ---------------------------------------------------------------------------
+# Naming a currency the way a statement does
+# ---------------------------------------------------------------------------
+# Card statements label a foreign charge in words, not ISO codes, and the
+# wording varies by market and over time: AMEX HK writes "CHINA YUAN RENMINBI",
+# AMEX US writes "China Yuan" with "Renminbs" wrapped onto the next line.
+# Matching on the distinctive word rather than the full phrase absorbs that,
+# and the qualified entries are listed first so "Hong Kong Dollars" is not read
+# as a US dollar. Without this the foreign amount is an unlabelled number and
+# the ledger cannot say what was actually charged.
+
+_CURRENCY_WORDS: list[tuple[str, str]] = [
+    ("HONG KONG", "HKD"), ("UNITED STATES", "USD"), ("NEW TAIWAN", "TWD"),
+    ("SINGAPORE", "SGD"), ("NEW ZEALAND", "NZD"), ("AUSTRALIAN", "AUD"),
+    ("CANADIAN", "CAD"), ("PHILIPPINE", "PHP"), ("MEXICAN", "MXN"),
+    ("STERLING", "GBP"), ("POUND", "GBP"), ("EURO", "EUR"),
+    ("RENMINBI", "CNY"), ("YUAN", "CNY"), ("YEN", "JPY"), ("WON", "KRW"),
+    ("BAHT", "THB"), ("RINGGIT", "MYR"), ("RUPIAH", "IDR"), ("RUPEE", "INR"),
+    ("DONG", "VND"), ("PATACA", "MOP"), ("KORUNA", "CZK"), ("ZLOTY", "PLN"),
+    ("FORINT", "HUF"), ("KRONA", "SEK"), ("KRONE", "DKK"), ("FRANC", "CHF"),
+    ("SHILLING", "KES"), ("LARI", "GEL"), ("RIYAL", "QAR"), ("RIAL", "QAR"),
+    ("DIRHAM", "AED"), ("LIRA", "TRY"), ("REAL", "BRL"), ("RAND", "ZAR"),
+    ("DOLLAR", "USD"),
+]
+
+
+def currency_from_name(name: str) -> str | None:
+    """The ISO code a statement's spelled-out currency name refers to."""
+    text = re.sub(r"[^A-Z ]", " ", name.upper())
+    for word, code in _CURRENCY_WORDS:
+        if re.search(rf"\b{word}", text):
+            return code
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Harvesting rates the statements already told us

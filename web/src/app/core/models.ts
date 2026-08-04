@@ -62,6 +62,8 @@ export interface Txn {
   counterparty: string | null;
   booked: Money;
   native: Money | null;
+  fx_rate: string | null;
+  fx_fee: Money | null;
   kind: string;
   category: string | null;
   subcategory: string | null;

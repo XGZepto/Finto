@@ -97,27 +97,57 @@ def _txn(**kw) -> Txn:
     return Txn(**base)
 
 
-def test_exact_dedup_collapses_repeated_statement_rows():
-    a, b = _txn(), _txn()
+def test_exact_dedup_collapses_a_charge_restated_by_two_statements():
+    a, b = _txn(statement_file_id="jan"), _txn(statement_file_id="feb")
     assert a.dedup_key == b.dedup_key
     survivors, merged = dedup_exact([a, b])
     assert merged == 1
     assert len(survivors) == 1
 
 
+def test_two_identical_charges_in_one_statement_are_two_charges():
+    """Two HK$50 taxi rides on one day are indistinguishable by key.
+
+    The source tells them apart: an issuer lists each movement once, so a
+    statement carrying the row twice is reporting two movements.
+    """
+    a, b = _txn(statement_file_id="jan"), _txn(statement_file_id="jan")
+    assert a.dedup_key == b.dedup_key
+    survivors, merged = dedup_exact([a, b])
+    assert merged == 0
+    assert len(survivors) == 2
+
+
 def test_posted_row_wins_over_pending():
-    pending = _txn(status=TxnStatus.PENDING)
-    posted = _txn(status=TxnStatus.POSTED)
+    pending = _txn(status=TxnStatus.PENDING, statement_file_id="export1")
+    posted = _txn(status=TxnStatus.POSTED, statement_file_id="export2")
     _, merged = dedup_exact([pending, posted])
     assert merged == 1
     assert pending.duplicate_of_id == posted.id
     assert posted.duplicate_of_id is None
 
 
-def test_external_ref_makes_key_authoritative():
-    a = _txn(external_ref="TW-1", description_raw="CAFE ABC")
-    b = _txn(external_ref="TW-2", description_raw="CAFE ABC")
-    assert a.dedup_key != b.dedup_key      # different refs = different txns
+def test_same_charge_collides_when_only_one_source_carries_the_reference():
+    """The PDF statement prints an issuer reference; the CSV export omits it.
+
+    Both describe one charge, so they have to collapse into one row. Keying on
+    the reference would make them differ exactly where they must match.
+    """
+    from_pdf = _txn(external_ref="HC12552952988759", statement_file_id="stmt")
+    from_csv = _txn(statement_file_id="export")
+    assert from_pdf.dedup_key == from_csv.dedup_key
+    survivors, merged = dedup_exact([from_csv, from_pdf])
+    assert merged == 1
+    # The copy carrying the issuer's reference is the one worth keeping.
+    assert survivors[0].external_ref == "HC12552952988759"
+
+
+def test_different_references_still_separate_when_anything_else_differs():
+    a = _txn(external_ref="TW-1", booked=Money(amount=-100, currency="HKD"),
+             statement_file_id="a")
+    b = _txn(external_ref="TW-2", booked=Money(amount=-200, currency="HKD"),
+             statement_file_id="b")
+    assert a.dedup_key != b.dedup_key
     _, merged = dedup_exact([a, b])
     assert merged == 0
 

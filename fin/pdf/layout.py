@@ -41,6 +41,11 @@ MONEY_TOKEN = re.compile(
 # sub-ledger, where the currency has no minor unit).
 BARE_INT_TOKEN = re.compile(r"^[-+]?\d{1,3}$")
 
+# A figure written in some other market's convention, for the foreign-currency
+# column. MONEY_TOKEN is deliberately too strict for this: it assumes a comma
+# groups thousands, so it rejects the EUR "13,04" that AMEX prints verbatim.
+NUMERIC_TOKEN = re.compile(r"^\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?$|^\d+(?:[.,]\d{1,2})?$")
+
 
 def is_money(token: str) -> bool:
     t = token.strip()

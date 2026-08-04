@@ -169,6 +169,22 @@ export class BlotterPage {
     }));
   }
 
+  /**
+   * The rail a charge was routed through, when it went through one.
+   *
+   * Alipay, WeChat Pay and UnionPay reach the card under their own name. When
+   * the acquirer passes no merchant through, that is a fact the statement
+   * records — not a row we failed to read — so it is shown as such rather than
+   * left looking unclassified.
+   */
+  gateway(txn: Txn): string | null {
+    return txn.details?.['payment.gateway'] ?? null;
+  }
+
+  merchantHidden(txn: Txn): boolean {
+    return txn.details?.['merchant.disclosed'] === 'no';
+  }
+
   isTravel(txn: Txn): boolean {
     return Object.keys(txn.details ?? {}).some(
       (k) => k.startsWith('travel.') || k.startsWith('lodging.') || k.startsWith('rental.'),

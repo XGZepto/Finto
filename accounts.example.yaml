@@ -331,3 +331,151 @@ cards:
     cardholder_name: Chenxi Huang
     last4: "51034"
     is_supplementary: true
+
+# Labels the statements themselves justify. Lower priority runs first and the
+# first match wins, so the specific cases sit above the general ones — a cash
+# advance fee is a fee, not the interest its wording also mentions.
+rules:
+  - id: cash_advance_fee
+    priority: 10
+    pattern: 'CASH ADVANCE FEE'
+    set_kind: fee
+    set_category: fees
+    set_subcategory: cash_advance
+  - id: card_fee
+    priority: 15
+    match_type: regex
+    pattern: '\b(ANNUAL|MEMBERSHIP|HANDLING|LATE|OVERLIMIT|RENEWAL MEMBERSHIP) FEE\b'
+    set_kind: fee
+    set_category: fees
+  - id: interest
+    priority: 20
+    match_type: regex
+    pattern: '\b(INTEREST|FINANCE CHARGE)\b|PAGO DE INTERESES'
+    set_kind: interest
+    set_category: interest
+  - id: salary
+    priority: 30
+    match_type: regex
+    pattern: '\bSALARY\b'
+    set_kind: income
+    set_category: income
+    set_subcategory: salary
+  - id: rent
+    priority: 35
+    pattern: 'RENTSMART'
+    set_category: housing
+    set_subcategory: rent
+  - id: rewards
+    priority: 40
+    match_type: regex
+    pattern: '\b(CASHBACK|REWARDCASH)\b'
+    set_kind: reward
+    set_category: rewards
+  - id: card_payment
+    priority: 50
+    match_type: regex
+    pattern: '(THANK YOU|IFS PAYMENT|PAYMENT RECEIVED|PAGADO A|AMERICAN EXPRESS CARDS)'
+    set_kind: cc_payment
+    set_category: transfers
+  - id: installment
+    priority: 60
+    match_type: regex
+    pattern: '\bINSTAL?LMENTS?\b'
+    set_kind: installment
+    set_category: credit
+
+  # AMEX states the merchant's category on the statement. Renaming its
+  # vocabulary to the ledger's is a mapping, not an inference — so these are
+  # rules, not a job for the model. Priority 80 leaves the wording-based rules
+  # above free to override, since a cash advance fee at a restaurant is a fee.
+  - id: cat_transport
+    priority: 80
+    match_field: merchant_category
+    match_type: regex
+    pattern: 'TAXICAB|LIMOUSINE|LOCAL TRANSPORTATION|RAILROAD|BUS LINE|PARKING|TOLL'
+    set_category: transport
+  - id: cat_travel
+    priority: 80
+    match_field: merchant_category
+    match_type: regex
+    pattern: 'LODGING|TRAVEL AGENCY|AIRWAYS|AIRLINE|CAR RENTAL|CRUISE'
+    set_category: travel
+  - id: cat_dining
+    priority: 80
+    match_field: merchant_category
+    match_type: regex
+    pattern: 'RESTAURANT|BAR/NIGHTCLUB|CATERER|FAST FOOD'
+    set_category: dining
+  - id: cat_groceries
+    priority: 80
+    match_field: merchant_category
+    match_type: regex
+    pattern: 'GROCERY|SUPERMARKET|CONVENIENCE STORE'
+    set_category: groceries
+  - id: cat_utilities
+    priority: 80
+    match_field: merchant_category
+    match_type: regex
+    pattern: 'TELECOM|UTILIT|CABLE|INTERNET SERVICE'
+    set_category: utilities
+  - id: cat_shopping
+    priority: 80
+    match_field: merchant_category
+    match_type: regex
+    pattern: "GENERAL MERCHANDISE|CLOTH|COSMETIC|RECORD STORE|DEPARTMENT STORE|JEWEL"
+    set_category: shopping
+  - id: cat_services
+    priority: 85
+    match_field: merchant_category
+    match_type: regex
+    pattern: 'COMPUTER|PROFESSIONAL SERVICE|ADVERTISING|BUSINESS SERVICE'
+    set_category: services
+
+  # Named merchants. A rule here is a fact about who was paid, not a guess at
+  # what for, which is why these are safe to state deterministically. Note what
+  # is deliberately absent: Alipay, WeChat Pay, UnionPay, Taobao and the other
+  # payment rails. Those name the processor, never the merchant — the statement
+  # simply does not say what was bought, and inventing a category for ~900 rows
+  # of "ALIPAY CHN CN" would be fabricating the most common line in the ledger.
+  - id: m_ridehail
+    priority: 90
+    match_type: regex
+    pattern: 'UBER TRIP|GAO DE TAXI|DIDICHUXING|DIDI TAXI|\bGRAB\*|GRAB RIDES|LYFT'
+    set_category: transport
+    set_subcategory: ride_hailing
+  - id: m_transit
+    priority: 90
+    match_type: regex
+    pattern: 'MTR - RIDES|SHENZHEN METRO|OCTOPUS|JR EAST|LONG WIN BUS|CITYBUS'
+    set_category: transport
+    set_subcategory: transit
+  - id: m_food_delivery
+    priority: 90
+    match_type: regex
+    pattern: 'FOOD ?PANDA|DELIVEROO|MEITUANDIANPING|DAZHONGDIANPING|KEETA'
+    set_category: dining
+    set_subcategory: delivery
+  - id: m_software
+    priority: 90
+    match_type: regex
+    pattern: 'VERCEL|OPENAI|CLAUDE\.AI|ANTHROPIC|MONGODB|GITHUB|CURSOR|AWS|CLOUDFLARE'
+    set_category: services
+    set_subcategory: software
+  - id: m_streaming
+    priority: 90
+    match_type: regex
+    pattern: 'SPOTIFY|NETFLIX|DISNEYPLUS|YOUTUBEPREMIUM|APPLE\.COM/BILL'
+    set_category: services
+    set_subcategory: subscriptions
+  - id: m_travel_booking
+    priority: 90
+    match_type: regex
+    pattern: 'TRIP\.COM|QATARAIRWAYS|QATAR AIRWAYS|CATHAY|EXPEDIA|AGODA|BOOKING\.COM|AIRBNB'
+    set_category: travel
+  - id: m_loyalty
+    priority: 90
+    match_type: regex
+    pattern: 'ASIA MILES|MEMBERSHIP REWARDS'
+    set_kind: reward
+    set_category: rewards

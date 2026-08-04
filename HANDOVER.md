@@ -11,92 +11,93 @@ Goal: ingest the owner's real financial data (AMEX HK/US, HSBC HK cards+savings+
 A personal finance ledger. Key design rules (do not violate):
 
 - **Integer money everywhere** (`Money.amount` is minor-unit int). Never floats.
-- **Schema is rebuilt, not migrated.** `fin/db.py::init_db` just runs `fin/schema.sql`. No migration machinery — that was deliberately removed. If the schema changes, re-import from statements.
-- **Failed PDF verification refuses import.** Templates are the only deterministic extraction path; a statement that doesn't reconcile against its own printed balances is rejected, never silently imported.
+- **Schema is rebuilt, not migrated.** `fin/db.py::init_db` just runs `fin/schema.sql`. No migration machinery. If the schema changes, re-import from statements.
+- **Failed PDF verification refuses import.** A statement that doesn't reconcile against its own printed balances is rejected, never silently imported.
 - **Strict code quality**: `ruff check fin tests scripts --select E,F,I,UP` must pass. All tests must pass.
 
-## 2. Current state (verified)
+## 2. Current state (verified 2026-08-04)
 
-- **Tests: 260 passing** (`pytest tests/ --ignore=tests/test_pdf_corpus.py`).
-- **Lint: clean.**
-- **Corpus eval (last clean run, `scripts/corpus_eval.py`):**
-  - **192 files imported, 0 errors, 5,988 transactions**, 26 empty.
-  - All Chase, Mox (credit+jpy), Wise USD/GBP, HSBC Pulse HKD/CNY reconcile fully.
-  - Remaining reconciliation gaps on: Amex cards (18 each), HSBC savings CNY (12), Mox HKD (22), HSBC EveryMile (10), Amex savings (2), HSBC savings HKD (1), Amex HK Essential (1). See §5.
-- Committed and pushed through `5e79b8a` + the uncommitted-then-committed period/income work (see §4).
+- **Tests: 275 passing.** Lint clean.
+- **Extraction is exact.** Every statement that prints an opening and a closing reproduces them from the rows we pulled out of it — 226/226 across AMEX HK (32), AMEX US (38), AMEX US savings (19), Chase (38), HSBC cards (49), HSBC One (19), Mox Bank (31). Mox Credit prints no opening; its 19 statements chain closing-to-closing.
+- **Corpus: 192 files imported, 0 errors, 5,494 transactions.**
+- **Classification: 5,102/5,494 have a kind; 3,301 have a category.**
+- **Reconciliation: 425 checks, 0 discrepancies. 0 structural violations.** `GET /api/integrity` reports `healthy: true`.
+- Two accounts are reported *unverified* rather than healthy — Wise HKD and NZD have a single balance assertion each, and one figure cannot verify anything. That is the correct answer, not a gap.
 
-## 3. Architecture map
+## 3. The two checks, and why they differ
 
-| Path | Role |
-|---|---|
-| `fin/models.py` | Pydantic models (`Txn`, `Money`, `Account`, `Card`, …) + `normalize_description`/`normalize_alias` |
-| `fin/schema.sql` | Single source of truth for the DB |
-| `fin/db.py` | SQLite CRUD; `busy_timeout` set; loaders incl. `load_account_alias_index` |
-| `fin/ingest.py` | `ingest_file` (parse→route→insert→balance) + `reconcile` (dedup→transfers→installments→refunds→income) |
-| `fin/parsers/institutions.py` | CSV parsers: Amex, HSBC, Wise, Mox |
-| `fin/parsers/pdf.py` | PDF parser wrapper → template engine + LLM fallback |
-| `fin/pdf/template.py` | Declarative template engine (columns, balance rules, CR markers, continuation) |
-| `fin/pdf/layout.py` | Column geometry (anchors / fractions) |
-| `fin/pdf/extract.py` | pdfplumber extraction (word coordinates) |
-| `fin/pdf/templates/*.json` | Issuer templates: mox_bank, mox_credit, chase_us, hsbc_hk_card/savings, amex_hk_card, amex_us_card, amex_us_savings |
-| `fin/dedup.py` `fin/transfers.py` `fin/refunds.py` `fin/installments.py` | Cross-source dedup, transfer/payment linking, refunds, installment plans |
-| `fin/income.py` | **NEW** — regular income cadence detection |
-| `fin/investment.py` | HSBC MPF XLSX → investment_* tables |
-| `fin/integrity.py` | Balance reconciliation `check_account`, structural violations |
-| `fin/cli.py` | `finto` CLI |
-| `fin/api/` | FastAPI backend (Angular frontend proxies to it) |
-| `scripts/corpus_eval.py` | **The acceptance harness** — see §6 |
-| `web/` | Angular frontend |
-| `accounts.example.yaml` | The owner's real account map (accounts, cards, parties, aliases) |
+`scripts/corpus_eval.py` is the end-to-end harness. But when it reports a discrepancy, the question is always *which layer*:
 
-## 4. What I did in this session (the last batch, commits `01fa2a1` and `5e79b8a` plus the last one)
+- **Extraction** — did we read the statement correctly? Check with the per-statement sweep (no DB, no dedup). This is currently perfect, so any failure is downstream.
+- **Ledger** — after CSV and PDF copies of the same charge are merged, do the numbers still hold? This is where the remaining 100 discrepancies live.
 
-1. **Amex HK templates now verify 32/32 statements.**
-   - `fin/pdf/template.py`: added `continuation="below"` (FX detail lines attach to the row above); generalized `cr_on_following_line` so a CR ending a continuation line (`UNITED STATES DOLLAR CR`) flips the emitted row; added `BalanceRule.cr_following_line` so a lone CR word under a balance column flips the figure's sign only when it shares the column x-range. Wired `continuation` through `_section_from_dict`/`_section_to_dict`.
-2. **Mox `RecursionError`** — root cause: pydantic `validate_assignment=True` + `Txn._derive` assigning `description_norm` re-triggered the validator; a CJK-only description (阿貓的貓) normalized to `""` and recursed forever. Fix: `object.__setattr__` in `_derive`, and `normalize_description` now keeps CJK (`㐀-䶿一-鿿`) so it never collapses to `""`.
-3. **CSV↔PDF dedup** — Amex PDFs were picking up footer/FX noise into descriptions (`TURKISH AIRLINES … 5.420,95 the Important Information…`), so the same charge never matched the clean CSV row. Fixes: exclude boilerplate lines in `amex_hk_card.json`; keep `fx` out of the description but fold non-money FX-zone words back in (`_describe`); strip HSBC's CSV-only `SALES:` prefix in `normalize_description`; `dedup._score_duplicate` now boosts same-day same-account restatements with a shared description prefix.
-4. **Consolidated statements route rows to per-currency accounts.** `ingest_file` resolves each row's `account_hint` via `load_account_alias_index`; balances carry the hint end-to-end (tuple is now `(as_of, Money, hint, source)`). Chase/HSBC One/Mox bank PDFs import with no `--account`. Idle Chase months route via balance-hint aliases.
-5. **Balance assertions:** `INSERT OR REPLACE` → `INSERT OR IGNORE` (first write wins). HSBC/Wise export newest-first, so the first running-balance of a date is the end-of-day figure; same-day mid-day snapshots were inventing phantom deltas. CSV parsers and the PDF path now tag closings `statement_closing` vs `statement_running`.
-6. **Card period-start parsing** — `fin/pdf/template.py::_find_period` now parses `"From February 9 to March 8, 2025"` (start has no year) so openings land on period_start, not on statement_date. Before this, opening+closing collided on statement_date and the integrity check compared the wrong period.
-7. **CSV parsers:** Amex dates are MM/DD in every market (HK was being day-shifted — **this silently corrupted dates in earlier imports; re-import is required**); HSBC card/savings exports read `Billing amount/currency` + `Credit/Debit`; empty-but-parseable exports import via `ParseResult.allow_empty` instead of erroring.
-8. **Income detection** — new `fin/income.py`: credits with ≥3 occurrences, 25–35-day gaps, amounts within 2% are labelled `TxnKind.INCOME` and tagged `income_stream` in `details`. Wired into `reconcile`; tests in `tests/test_income.py`.
+Keep them separate when debugging. Conflating them is what made the previous handover attribute extraction quality to reconciliation failures that were really dedup.
+
+## 4. What changed in this session
+
+1. **Reconciliation model rewritten** (`fin/integrity.py`). Card issuers assign a charge to a statement by *posting* date, so a charge dated inside a period is routinely billed on the next one. Walking balance assertions by date therefore disagreed with the bank even when nothing was missing. Statements that print an opening and a closing are now checked against *their own rows* (followed through dedup); passbook-style running balances keep the date walk. `balance_assertion.source` became `kind` (`opening`/`closing`/`running`/`manual`).
+2. **Structured detail capture** (`fin/pdf/template.py`). New `DetailRule` — a regex plus the names its capture groups are stored under. Sections declare `detail` (facts about a transaction, on its own line or the lines beneath) and `markers` (facts about a block of rows, `scope: following|preceding`). This replaced a shape heuristic that guessed which continuation lines were FX detail and glued "Payment Advice" onto merchant names, breaking CSV↔PDF dedup.
+3. **Foreign currency is now real data.** The printed foreign amount, its currency and the issuer's rate land in `amount_native`/`currency_native`/`fx_rate`. 1,317 transactions carry a foreign amount, 823 the issuer's own rate.
+4. **`parse_amount` is currency-aware.** AMEX bills a foreign charge in the foreign market's convention, so EUR arrives as "13,04". Which of `.`/`,` is the decimal point is decided by the currency's minor-unit count, not by guessing.
+5. **Cardholder attribution.** AMEX HK closes each cardholder's block with its total, AMEX US opens one with `Card Ending 6-63019`, HSBC heads one with the card number and name. All three are markers now. Name matching compares sorted name parts, because the same person is "HO CHING LEUNG" in the account map and "LEUNG HO CHING" on the statement.
+6. **Cross-source dedup was removed; the statement is the truth.** An export
+   row is suppressed only when a statement carries the same account, date,
+   signed amount and currency — matched by count, so two identical rides
+   suppress two rows and a third survives to be noticed. Nothing is scored.
+   This alone took the ledger from 100 discrepancies to 0. Statements never
+   take part in fuzzy matching, and two identical rows inside one file are two
+   movements, never one.
+7. **Rows land on the account that settles their currency.** A dual-currency
+   card is one statement over two balances; `balance_group` already modelled
+   that, and `_settle_in_currency` now uses it for both transactions and
+   balance figures. This moved 1,325 CNY charges off the HKD Pulse account.
+8. **`compute_dedup_key` no longer keys on `external_ref`.** The key exists to make the same charge collide across sources, and a reference printed on a statement is absent from the same issuer's CSV — keying on it made the copies differ exactly where they had to match. Dedup still *scores* on the reference.
+9. **`wraps`** per section: whether a description can run over several lines. Mox centres a long merchant name on its figures row so parts sit above *and* below; each stray line goes to whichever transaction it is nearest. AMEX gives every charge one line, and there a stray line is detail.
+10. **Category rules are loadable** (`rules:` in `accounts.example.yaml`, `dbm.upsert_category_rule`). Salary, rent, fees, interest, rewards, card payments and instalments are labelled from what the statements themselves stamp.
+11. **Classification closed as far as the statements allow.** AMEX prints the
+    merchant's own category under each charge; a `column`-scoped detail rule
+    captures it (566 rows) and `category_rule.match_field='merchant_category'`
+    maps its vocabulary onto the ledger's — a rename, not an inference. Named
+    merchants (Uber, MTR, Didi, foodpanda, Vercel) are ordinary rules. A card
+    row left unlabelled after every other pass is a purchase when money left
+    and a refund when it came back, because a card carries nothing else.
+    Income detection no longer runs on cards, where a monthly AMEX rebate was
+    being counted as earnings.
+12. **Payment gateways are a category, not a blank.** A charge routed through
+    Alipay, WeChat Pay, UnionPay, Apple/Google Pay or KPay reaches the card
+    under the gateway's name. `enrich.payment_gateway` reads the *raw*
+    description — normalisation drops the "\*" that separates a gateway from
+    the merchant behind it, which is the one character telling the two cases
+    apart. Where the gateway named the merchant, 309 merchants were recovered
+    that the ledger had as NULL (DIDI Taxi, Ichiran, NYCT PAYGO). Where it did
+    not, 1,114 rows are categorised `proxy_payment` with the gateway as
+    subcategory and `merchant.disclosed=no`, so the commonest line in the
+    ledger reads as a known state of affairs rather than an unread row. The
+    blotter shows "Merchant not disclosed / via Alipay" and the drawer explains
+    that the name is only recoverable from the gateway's own history.
+13. **`update_txn_links` persists what reconcile computes.** It wrote links
+    only, so gateway labels, recovered merchants and `income_stream` tags were
+    recomputed on every run and thrown away. It now writes category,
+    subcategory, merchant and the detail rows as well; every pass already
+    declines to overwrite a value that is present, so manual corrections
+    survive.
+14. **PDF extraction is cached** (`fin/pdf/extract.py`). Every import read each PDF twice — once to recognise it, once to parse it. Halves import time.
 
 ## 5. Known gaps / next steps
 
-**Final corpus eval (2026-08-04, ~3.5 min):** 192 imported, 0 errors, 5,988 txns, 267 unlinked transfer candidates, EXIT=0. A full run takes 2.5–4 minutes; do not mistake it for a hang (running several evals concurrently will slow it further).
+1. **2,193 long-tail merchants** are uncategorised. These *are* the LLM's job — a name a model recognises and a rule-writer would not bother with. Run `python -m fin.cli categorize --db … --apply` with `ANTHROPIC_API_KEY` in the environment. Decisions are cached in `llm_decision` and recorded in `txn_annotation`, so `DELETE FROM txn_annotation WHERE source='llm'` is a complete undo. `promote_to_rules` turns confident, repeated answers into ordinary `category_rule` rows, so the model is paid for once.
+2. **392 bank rows have no kind, on purpose.** A debit on a current account is either spending or half of a transfer nothing has matched yet. `unknown` says so; a guess would hide the transfer.
+3. **Transfer candidates** — ~290 unlinked, mostly same-name FPS moves between the owner's own accounts. Clearing these would also resolve most of item 3.
+4. **Frontend** — Angular app in `web/`. `/api/investments` now exists; the positions page does not.
 
-Remaining reconciliation gaps from that run (ok/discrepancy intervals):
-
-| Account | ok | disc | Note |
-|---|---|---|---|
-| amex_hk_explorer | 9 | 28 | Card statements — see below |
-| amex_hk_platinum | 1 | 20 | " |
-| amex_us_marriott | 0 | 18 | " |
-| amex_us_platinum | 0 | 18 | " |
-| hsbc_hk_everymile | 0 | 10 | " |
-| hsbc_hk_savings_cny | 15 | 12 | CNY sub-account coverage |
-| mox_hkd | 15 | 22 | partial-month CSV/PDF overlap |
-| hsbc_hk_savings_hkd | 89 | 1 | nearly clean |
-| amex_us_savings | 35 | 2 | nearly clean |
-| everything else | — | 0 | clean |
-
-Then:
-
-1. **Re-import everything from scratch** (schema rebuilt anyway) — Amex date-shift bug means any DB built before commit `01fa2a1` has corrupted Amex CSV dates.
-2. **Close the card-account reconciliation gaps.** Card statements provide only opening+closing balances dated at period bounds; `check_account` needs a card mode that anchors on consecutive statement closings and tolerates the payment-cutoff window. The remaining mismatches are likely a mix of that anchoring and residual CSV↔PDF dedup misses.
-3. **Unlinked transfer candidates** (267) — review `transfer_candidate` scoring in `fin/transfers.py`; many are same-name FPS moves.
-4. **Frontend polish** — Angular app in `web/`; MPF/investment positions page is the main missing view; cardholder breakdown exists via `group_by=cardholder`.
-
-## 6. How to validate (the acceptance harness)
-
-`scripts/corpus_eval.py` imports every file under `~/Documents/Finto-Data` into a scratch DB, runs `reconcile`, and prints per-account transaction counts + balance reconciliation coverage. "0 errors and all balances reconcile" is the bar. `account_for` maps corpus paths → account ids; consolidated Chase/HSBC One/Mox files return `ROUTED` (empty string) and route per-row.
-
-Quick issuer check without a full ingest: `python scripts/pdf_probe.py <file-or-dir>`.
-
-## 7. Things not to do
+## 6. Things not to do
 
 - Do not reintroduce DB migrations.
 - Do not let an unverified PDF import.
 - Do not use floats for money.
-- Do not weaken `check_account` or the verification gate to make numbers go away — fix the extraction or the balance anchoring instead.
-- The `fin/llm/` path exists (categorize/adjudicate/query) but is optional and off by default; keep it that way unless the owner asks.
+- Do not weaken `check_account` to make numbers go away — fix the extraction or the anchoring.
+- Do not put an issuer reference back into `compute_dedup_key` (see §4.6).
+- Do not merge two identical rows that came from the same file. The key cannot
+  tell two HK$18 MTR rides apart from one ride listed twice; the source can.
+- Do not reintroduce similarity matching between a statement and an export.
+- Do not let a template `exclude` swallow a line that carries data; that is what `detail` is for.

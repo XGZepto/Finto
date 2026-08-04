@@ -2,7 +2,7 @@
   "template_id": "chase_us_consolidated",
   "institution_id": "chase_us",
   "label": "Chase US consolidated checking and savings statement",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "match_all": [
     "JPMorgan Chase Bank",
     "TRANSACTION DETAIL"
@@ -54,6 +54,34 @@
       ],
       "stop_at": [
         "\\*end\\*transaction detail"
+      ],
+      "wraps": true,
+      "detail": [
+        {
+          "match": "^(?:(\\d{2}/\\d{2}) )?Online Transfer (To|From) (\\w+) \\.\\.\\.(\\d+).*?Transaction#:\\s*(\\d+)",
+          "keys": [
+            "issuer.effective_date",
+            "transfer.direction",
+            "transfer.account_kind",
+            "transfer.account_last4",
+            "issuer.reference"
+          ]
+        },
+        {
+          "match": "Zelle [Pp]ayment (?:[Tt]o|[Ff]rom) (.+?)\\s+([A-Za-z0-9]{12})\\b",
+          "keys": [
+            "transfer.counterparty",
+            "issuer.reference"
+          ]
+        },
+        {
+          "match": "^(?:(\\d{2}/\\d{2}) )?(.+?) ACH Pmt (\\w+) Web",
+          "keys": [
+            "issuer.effective_date",
+            "transfer.counterparty",
+            "issuer.reference"
+          ]
+        }
       ]
     },
     {
@@ -95,6 +123,34 @@
       ],
       "stop_at": [
         "\\*end\\*transaction detail"
+      ],
+      "wraps": true,
+      "detail": [
+        {
+          "match": "^(?:(\\d{2}/\\d{2}) )?Online Transfer (To|From) (\\w+) \\.\\.\\.(\\d+).*?Transaction#:\\s*(\\d+)",
+          "keys": [
+            "issuer.effective_date",
+            "transfer.direction",
+            "transfer.account_kind",
+            "transfer.account_last4",
+            "issuer.reference"
+          ]
+        },
+        {
+          "match": "Zelle [Pp]ayment (?:[Tt]o|[Ff]rom) (.+?)\\s+([A-Za-z0-9]{12})\\b",
+          "keys": [
+            "transfer.counterparty",
+            "issuer.reference"
+          ]
+        },
+        {
+          "match": "^(?:(\\d{2}/\\d{2}) )?(.+?) ACH Pmt (\\w+) Web",
+          "keys": [
+            "issuer.effective_date",
+            "transfer.counterparty",
+            "issuer.reference"
+          ]
+        }
       ]
     }
   ],

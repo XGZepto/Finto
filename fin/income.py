@@ -36,14 +36,23 @@ class IncomeStream:
     currency: str
 
 
-def detect_regular_income(txns: Sequence[Txn]) -> list[IncomeStream]:
-    """Group recurring same-account credits into income streams."""
+def detect_regular_income(
+    txns: Sequence[Txn], *, income_accounts: set[str] | None = None
+) -> list[IncomeStream]:
+    """Group recurring same-account credits into income streams.
+
+    `income_accounts` limits the search to accounts income can actually arrive
+    in. Nobody is paid into a credit card: a recurring credit there is a
+    statement benefit — AMEX refunds a Walmart+ subscription every month — and
+    counting those as earnings inflates income by whatever the card rebates.
+    """
     credits = [
         t for t in txns
         if t.duplicate_of_id is None
         and t.booked.amount > 0
         and t.transfer_group_id is None
         and t.refund_of_id is None
+        and (income_accounts is None or t.account_id in income_accounts)
     ]
     buckets: dict[tuple[str, str, str], list[Txn]] = defaultdict(list)
     for t in credits:

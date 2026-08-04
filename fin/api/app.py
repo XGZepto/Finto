@@ -30,6 +30,7 @@ from .routers import (
     imports,
     installments,
     integrity,
+    investments,
     jobs,
     query,
     review,
@@ -54,7 +55,7 @@ app.add_middleware(
 )
 
 for router in (transactions, summary, accounts, imports, review, integrity,
-               installments, jobs, query):
+               installments, investments, jobs, query):
     app.include_router(router.router, prefix="/api")
 
 
