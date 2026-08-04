@@ -15,8 +15,20 @@
 
 <!-- Headline figures, one card per currency. -->
 <section class="totals">
+  @if (headline(); as h) {
+    <div class="card kpi headline">
+      <div class="kpi-head"><h3>Net · {{ convertTo() }}</h3></div>
+      <div class="kpi-net" [class.neg]="h.net.amount < 0" [class.pos]="h.net.amount > 0">
+        {{ h.net | money: 'bare' }}
+      </div>
+      <div class="kpi-split">
+        <span><label>Out</label><span class="mono neg">{{ h.spend | money: 'bare' }}</span></span>
+        <span><label>In</label><span class="mono pos">{{ h.income | money: 'bare' }}</span></span>
+      </div>
+    </div>
+  }
   @for (t of totals(); track t.currency) {
-    <div class="card kpi">
+    <div class="card kpi" [class.dim]="!!headline()">
       <div class="kpi-head">
         <h3>{{ t.currency }}</h3>
         <span class="mono small muted">{{ t.txn_count }} rows</span>

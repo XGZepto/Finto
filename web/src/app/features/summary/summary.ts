@@ -47,6 +47,7 @@ export class SummaryPage {
   positions = signal<Position[]>([]);
   conversion = signal<{ to: string; unconvertible_currencies: string[] } | null>(null);
   netWorth = signal<Money | null>(null);
+  headline = signal<{ net: Money; spend: Money; income: Money } | null>(null);
   outstanding = signal<Array<{ currency: string; amount: number }>>([]);
 
   /** Currencies present, so the conversion picker offers real options. */
@@ -213,6 +214,7 @@ export class SummaryPage {
       next: (res) => {
         this.rows.set(res.rows);
         this.totals.set(res.totals);
+        this.headline.set(res.normalised?.total ?? null);
         this.conversion.set(res.conversion ?? null);
         this.loading.set(false);
       },

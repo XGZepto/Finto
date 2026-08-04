@@ -170,3 +170,10 @@ tr:hover .bar-col .bar-fill { background: var(--fg-3); }
   .flow-row .fname { width: 72px; }
   .flow-row .fnum { width: 60px; }
 }
+
+/* When a normalise currency is chosen the single figure leads; the native
+   per-currency cards recede to a supporting row. */
+.kpi.headline { border-color: var(--fg-3); }
+.kpi.headline .kpi-net { font-size: 30px; }
+.totals .kpi.dim { opacity: 0.72; }
+.totals .kpi.dim .kpi-net { font-size: 18px; }

@@ -78,7 +78,10 @@ addTag(id: string, tag: string): Observable<Txn> {
     groupBy: string,
     f: LedgerFilter,
     convertTo?: string,
-  ): Observable<{ group_by: string; rows: SummaryRow[]; totals: TotalRow[]; conversion?: any }> {
+  ): Observable<{
+    group_by: string; rows: SummaryRow[]; totals: TotalRow[]; conversion?: any;
+    normalised?: { total: { net: Money; spend: Money; income: Money } };
+  }> {
     let p = filterToParams(f).set('group_by', groupBy);
     if (convertTo) p = p.set('convert_to', convertTo);
     return this.http.get<any>(`${this.base}/summary`, { params: p });
