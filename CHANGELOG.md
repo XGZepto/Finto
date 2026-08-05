@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+## 0.2.7 — 2026-08-05
+
 - Generate Import format support from the parser and PDF-template registries.
 - Use active PostgreSQL PDF templates during preview and import.
 - Add format contribution documentation and request links.
+- Include investment valuations in aggregate positions and net worth.
+- Correct short-page mobile layout, navigation grouping, and shared control sizing.
+- Fix Ask on Claude 5 and return specific analysis-service errors.
 
 ## 0.2.6 — 2026-08-05
 
