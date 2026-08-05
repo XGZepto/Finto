@@ -22,23 +22,46 @@
   }
 }
 
-<section class="totals">
-  <button class="card kpi" (click)="go('/accounts')">
-    <label>Net worth</label>
-    @if (netWorth(); as nw) {
-      <strong [class.neg]="nw.amount < 0" [class.pos]="nw.amount > 0">{{ nw | money: 'bare' }}</strong>
-    } @else { <strong>—</strong> }
-    <span>Accounts →</span>
-  </button>
-  @if (headline(); as h) {
-    <div class="card kpi">
-      <label>Net flow</label>
-      <strong [class.neg]="h.net.amount < 0" [class.pos]="h.net.amount > 0">{{ h.net | money: 'bare' }}</strong>
+<section class="hero">
+  <div class="card hero-figure">
+    <div class="hero-top">
+      <finto-stat label="Net worth" [value]="netWorth()" [change]="netWorthChange()"
+                  [percent]="netWorthPercent()" [period]="range()" />
+      <finto-pills [options]="rangeOptions" [value]="range()" ariaLabel="Chart range"
+                   (pick)="setRange($event)" />
     </div>
-    <div class="card kpi"><label>In</label><strong class="pos">{{ h.income | money: 'bare' }}</strong></div>
-    <div class="card kpi"><label>Out</label><strong class="neg">{{ h.spend | money: 'bare' }}</strong></div>
+    @if (series().length > 1) {
+      <finto-timeseries [points]="series()" label="Net worth over time" />
+    }
+    <button class="bare hero-link" (click)="go('/accounts')">Accounts →</button>
+  </div>
+
+  @if (assetSlices().length || liabilitySlices().length) {
+    <div class="card hero-mix">
+      <span class="label">Assets</span>
+      <finto-share-bar [slices]="assetSlices()" label="Assets by account type" />
+      @if (liabilitySlices().length) {
+        <span class="label" style="margin-top: var(--s4)">Liabilities</span>
+        <finto-share-bar [slices]="liabilitySlices()" label="Liabilities by account type" />
+      }
+    </div>
   }
 </section>
+
+@if (headline(); as h) {
+  <section class="kpi-strip">
+    <div class="kpi"><span class="label">In</span><span class="figure pos">{{ h.income | money: 'bare' }}</span></div>
+    <div class="kpi"><span class="label">Out</span><span class="figure neg">{{ h.spend | money: 'bare' }}</span></div>
+    <div class="kpi">
+      <span class="label">Net</span>
+      <span class="figure" [class.neg]="h.net.amount < 0" [class.pos]="h.net.amount > 0">{{ h.net | money: 'bare' }}</span>
+    </div>
+    <div class="kpi">
+      <span class="label">Saved</span>
+      <span class="figure">{{ savingsRate() === null ? '—' : savingsRate()!.toFixed(1) + '%' }}</span>
+    </div>
+  </section>
+}
 
 @if (positionChart().length) {
   <section class="card positions-card">
@@ -87,6 +110,11 @@
           }
         </div>
       </div>
+    }
+
+    @if (spendSlices().length > 1 && !isTimeDimension()) {
+      <finto-donut class="breakdown-donut" [slices]="spendSlices()"
+                   [label]="'Spending by ' + groupBy()" />
     }
 
     @if (rankedTop().length) {

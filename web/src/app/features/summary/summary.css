@@ -1,14 +1,51 @@
-.totals {
+/* The figure a person came for, then what it is made of. */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+.hero-figure { display: flex; flex-direction: column; gap: var(--s4); }
+.hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3); flex-wrap: wrap; }
+.hero-link { align-self: flex-start; color: var(--fg-4); font-family: var(--mono); font-size: var(--t-micro); letter-spacing: .1em; text-transform: uppercase; }
+.hero-link:hover { color: var(--fg-2); }
+.hero-mix { display: flex; flex-direction: column; }
+
+.kpi-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  margin-bottom: var(--s3);
 }
+.kpi-strip .kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s4);
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+}
+.kpi-strip .kpi:last-child { border-right: 0; }
+.kpi-strip .figure {
+  font-family: var(--mono);
+  font-size: var(--t-figure);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+
+.breakdown-donut { display: block; margin-bottom: var(--s4); }
+
+@media (max-width: 860px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-strip .kpi:nth-child(2) { border-right: 0; }
+  .kpi-strip .kpi:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .kpi-strip .figure { font-size: 18px; }
+}
+
 .kpi { min-height: 112px; text-align: left; color: inherit; }
 button.kpi { cursor: pointer; }
-.kpi label { display: block; margin-bottom: auto; }
-.kpi strong { display: block; margin-top: 22px; font: 500 23px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
-.kpi > span { display: block; margin-top: 8px; color: var(--fg-4); font: 9.5px/1 var(--mono); text-transform: uppercase; letter-spacing: .1em; }
 
 .kpi-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
 .kpi-head h3 { margin: 0; }

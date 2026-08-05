@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ... import fx as fxm
@@ -149,6 +151,35 @@ def get_positions(convert_to: str | None = Query(None),
             "unconvertible_currencies": net_worth["unconvertible_currencies"],
         }
     return payload
+
+
+@router.get("/networth-series")
+def get_networth_series(convert_to: str = Query(...),
+                        months: int = Query(12, ge=2, le=60),
+                        conn=Depends(get_conn)) -> dict:
+    """Net worth at each month end.
+
+    Evaluated through the same positions rollup as the headline figure, so the
+    last point of the series and the number beside it cannot disagree.
+    """
+    from datetime import date
+
+    today = date.today()
+    points = []
+    for back in range(months - 1, -1, -1):
+        year, month = today.year, today.month - back
+        while month < 1:
+            month += 12
+            year -= 1
+        anchor = (date(year + (month // 12), (month % 12) + 1, 1)
+                  - timedelta(days=1))
+        as_of = min(anchor, today).isoformat()
+        rows = reporting.positions(conn, as_of=as_of)
+        rolled = reporting.rollup(
+            conn, rows, fields=("balance",), to_currency=convert_to, on=as_of)
+        points.append({"bucket": as_of[:7], "as_of": as_of,
+                       "balance": rolled["balance"]})
+    return {"to": convert_to.upper(), "points": points}
 
 
 @router.get("/stats")

@@ -177,6 +177,14 @@ addTag(id: string, tag: string): Observable<Txn> {
       `${this.base}/positions${p.keys().length ? `?${p.toString()}` : ''}`, this.computedTtl);
   }
 
+  netWorthSeries(convertTo: string, months = 12): Observable<{
+    to: string;
+    points: Array<{ bucket: string; as_of: string; balance: Money }>;
+  }> {
+    const p = new HttpParams().set('convert_to', convertTo).set('months', months);
+    return this.cached<any>(`${this.base}/networth-series?${p.toString()}`, this.computedTtl);
+  }
+
   stats(): Observable<any> {
     return this.cached(`${this.base}/stats`, this.activityTtl);
   }

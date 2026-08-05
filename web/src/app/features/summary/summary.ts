@@ -5,6 +5,10 @@ import { Api } from '../../core/api.service';
 import { MoneyPipe } from '../../core/money.pipe';
 import { Money, StatementFreshness, SummaryRow, TotalRow } from '../../core/models';
 import { FintoSelect } from '../../shared/finto-select';
+import { FintoPills } from '../../shared/finto-pills';
+import { FintoStat } from '../../shared/finto-stat';
+import { FintoTimeseries, SeriesPoint } from '../../shared/finto-timeseries';
+import { FintoDonut, FintoShareBar, Slice } from '../../shared/finto-viz';
 import { Preferences } from '../../core/preferences.service';
 
 /**
@@ -21,7 +25,8 @@ import { Preferences } from '../../core/preferences.service';
  */
 @Component({
   selector: 'app-summary',
-  imports: [FormsModule, MoneyPipe, FintoSelect],
+  imports: [FormsModule, MoneyPipe, FintoSelect, FintoStat, FintoShareBar, FintoDonut,
+            FintoTimeseries, FintoPills],
   templateUrl: './summary.html',
   styleUrl: './summary.css',
 })
@@ -32,7 +37,7 @@ export class SummaryPage {
   readonly money = new MoneyPipe();
 
   readonly dimensions = [
-    'month', 'quarter', 'year', 'category', 'subcategory', 'merchant',
+    'month', 'quarter', 'year', 'category', 'subcategory', 'tag', 'merchant',
     'account', 'institution', 'card', 'cardholder', 'kind', 'currency',
   ];
 
@@ -105,6 +110,66 @@ export class SummaryPage {
     amount: -this.ranked().reduce((s, b) => s + Math.abs(b.spend.amount), 0),
     currency: this.convertTo(),
   }));
+
+  /** How far back the net worth chart reaches, in months per pill. */
+  readonly rangeOptions = ['3M', '6M', '1Y', '2Y'];
+  readonly rangeMonths: Record<string, number> = { '3M': 3, '6M': 6, '1Y': 12, '2Y': 24 };
+  range = signal('1Y');
+  seriesMonths = computed(() => this.rangeMonths[this.range()] ?? 12);
+  netWorthPoints = signal<Array<{ bucket: string; as_of: string; balance: Money }>>([]);
+
+  series = computed<SeriesPoint[]>(() =>
+    this.netWorthPoints().map((p) => ({ label: p.bucket, value: p.balance.amount })));
+
+  /** Movement across the charted window, which is what the pills select. */
+  netWorthChange = computed<Money | null>(() => {
+    const pts = this.netWorthPoints();
+    if (pts.length < 2) return null;
+    const first = pts[0].balance;
+    const last = pts[pts.length - 1].balance;
+    return { amount: last.amount - first.amount, currency: last.currency };
+  });
+
+  netWorthPercent = computed<number | null>(() => {
+    const pts = this.netWorthPoints();
+    if (pts.length < 2 || !pts[0].balance.amount) return null;
+    const first = pts[0].balance.amount;
+    return ((pts[pts.length - 1].balance.amount - first) / Math.abs(first)) * 100;
+  });
+
+  setRange(value: string): void {
+    this.range.set(value);
+    const convert = this.convertTo();
+    if (!convert) return;
+    this.api.netWorthSeries(convert, this.seriesMonths()).subscribe({
+      next: (res) => this.netWorthPoints.set(res.points),
+      error: () => this.netWorthPoints.set([]),
+    });
+  }
+
+  /** What the net worth is made of, largest holding first. */
+  assetSlices = computed<Slice[]>(() =>
+    this.positionTypes()
+      .filter((row) => row.balance.amount > 0)
+      .map((row) => ({ label: this.humanize(row.account_type), value: row.balance.amount }))
+      .sort((a, b) => b.value - a.value));
+
+  liabilitySlices = computed<Slice[]>(() =>
+    this.positionTypes()
+      .filter((row) => row.balance.amount < 0)
+      .map((row) => ({ label: this.humanize(row.account_type), value: -row.balance.amount }))
+      .sort((a, b) => b.value - a.value));
+
+  /** Where the money went, on whichever dimension is selected. */
+  spendSlices = computed<Slice[]>(() =>
+    this.ranked().map((row) => ({ label: row.bucket, value: Math.abs(row.spend.amount) })));
+
+  /** Kept out of the ledger as a stored figure: it is a ratio of two others. */
+  savingsRate = computed(() => {
+    const h = this.headline();
+    if (!h || h.income.amount <= 0) return null;
+    return ((h.income.amount - Math.abs(h.spend.amount)) / h.income.amount) * 100;
+  });
 
 
   readonly timeDimensions = ['day', 'month', 'quarter', 'year'];
@@ -237,6 +302,13 @@ export class SummaryPage {
         this.positionTypes.set(res.normalised?.by_type ?? []);
       },
     });
+
+    if (convert) {
+      this.api.netWorthSeries(convert, this.seriesMonths()).subscribe({
+        next: (res) => this.netWorthPoints.set(res.points),
+        error: () => this.netWorthPoints.set([]),
+      });
+    }
   }
 
   drillAccount(id: string): void {
