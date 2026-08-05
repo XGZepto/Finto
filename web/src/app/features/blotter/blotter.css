@@ -139,9 +139,24 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 /* Narrow screens: the table becomes a list. A six-column grid pushes the
    amount off-screen, and the amount is the number you came for. */
 @media (max-width: 760px) {
-  .ledger-card { padding: 0; }
-  .toolbar { padding: 10px 12px; margin: 0; border-bottom: 1px solid var(--line); }
-  .table-wrap { overflow-x: visible; }
+  /* Separators run to the screen edge; content keeps the page gutter, so a row
+     label sits on the same line as every other page's first character. */
+  .ledger-card {
+    padding: 0;
+    margin-inline: calc(-1 * var(--s3));
+    border-left: 0;
+    border-right: 0;
+  }
+  .toolbar {
+    padding: var(--s2) var(--s3);
+    margin: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  /* The card already bleeds to the edge; the global table bleed would double it. */
+  .table-wrap { overflow-x: visible; margin-inline: 0; }
+  /* The drawer is the scroller on a phone; a capped inner pane would make the
+     raw statement row scroll inside something that is already scrolling. */
+  .details.raw { max-height: none; overflow-y: visible; padding-right: 0; }
   .table-wrap table,
   .table-wrap tbody,
   .table-wrap tr,
@@ -164,28 +179,35 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .skeleton-row { grid-template-columns: 1fr 88px; min-height: 58px; gap: var(--s2) var(--s4); }
   .skeleton-row i:nth-child(3) { display: none; }
 
-  td.desc { grid-column: 2; grid-row: 1; min-width: 0; display: flex; align-items: center; gap: var(--s3); }
-  td.desc .glyph { display: grid; }
-  td.num { grid-column: 3; grid-row: 1; text-align: right; white-space: nowrap; }
-  td.account { grid-column: 2; grid-row: 2; min-width: 0; }
-  td.category { grid-column: 2; grid-row: 2; min-width: 0; justify-self: end; }
-  td.date { display: none; }
-  td.account, td.category { font-size: 11px; color: var(--fg-3); }
-  td.flags { grid-column: 3; grid-row: 2; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; }
-  td.flags:empty { display: none; }
+  .table-wrap td.desc { grid-column: 2; grid-row: 1; min-width: 0; display: flex; align-items: center; gap: var(--s3); }
+  .table-wrap td.desc .glyph { display: grid; }
+  .table-wrap td.num { grid-column: 3; grid-row: 1; text-align: right; white-space: nowrap; }
+  .table-wrap td.account { grid-column: 2; grid-row: 2; min-width: 0; }
+  .table-wrap td.category { grid-column: 2; grid-row: 2; min-width: 0; justify-self: end; }
+  .table-wrap td.date { display: none; }
+  .table-wrap td.account, td.category { font-size: 11px; color: var(--fg-3); }
+  .table-wrap td.flags { grid-column: 3; grid-row: 2; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; }
+  .table-wrap td.flags:empty { display: none; }
 
-  .daygroup td { display: none; }
-  .daygroup td:first-child { display: flex; }
-  .daygroup {
-    display: flex; justify-content: space-between; align-items: baseline;
+  /* The band stays put while its own rows scroll under it, which is what lets
+     the rows drop the date entirely. */
+  .table-wrap tr.daygroup {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    justify-content: space-between;
+    align-items: baseline;
     padding: var(--s2) var(--s3);
+    background: color-mix(in srgb, var(--panel-2) 96%, transparent);
+    backdrop-filter: blur(10px);
   }
-  .daygroup td.num { display: block; }
-  td.desc .primary { font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
-  td.desc .block { line-height: 1.35; margin-top: 2px; }
-  td.account .holder { display: inline; margin-left: 5px; }
-  td.category .block { display: inline; }
-  td.category .block::before { content: ' · '; }
+  .table-wrap tr.daygroup td { display: block; }
+  .table-wrap td.desc .primary { font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+  .table-wrap td.desc .block { line-height: 1.35; margin-top: 2px; }
+  .table-wrap td.account .holder { display: inline; margin-left: 5px; }
+  .table-wrap td.category .block { display: inline; }
+  .table-wrap td.category .block::before { content: ' · '; }
   .flags .tag + .tag { margin-left: 0; }
 
   .drawer {

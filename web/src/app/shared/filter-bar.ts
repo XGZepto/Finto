@@ -163,7 +163,19 @@ import { FintoDate } from './finto-date';
       .advanced, .filter-toggle .chev { transition: none; }
     }
     @media (max-width: 700px) {
-      .filter-bar { padding: 10px; }
+      /* Search stays reachable while the ledger scrolls under it, and takes the
+         same edge treatment as the rows so the two line up. */
+      .filter-bar {
+        position: sticky;
+        top: 0;
+        z-index: 25;
+        margin-inline: calc(-1 * var(--s3));
+        padding: var(--s3);
+        border-left: 0;
+        border-right: 0;
+        background: color-mix(in srgb, var(--panel) 94%, transparent);
+        backdrop-filter: blur(14px);
+      }
       /* Inline expansion would push the ledger off screen, so on a phone the
          panel arrives as a sheet over it and leaves the rows where they were. */
       .advanced {

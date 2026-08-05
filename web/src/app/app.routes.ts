@@ -13,6 +13,16 @@ export const routes: Routes = [
     title: 'Summary · Finto',
   },
   {
+    path: 'reports',
+    loadComponent: () => import('./features/reports/reports').then((m) => m.ReportsPage),
+    title: 'Reports · Finto',
+  },
+  {
+    path: 'tools',
+    loadComponent: () => import('./features/tools/tools').then((m) => m.ToolsPage),
+    title: 'Tools · Finto',
+  },
+  {
     path: 'blotter',
     loadComponent: () => import('./features/blotter/blotter').then((m) => m.BlotterPage),
     title: 'Blotter · Finto',

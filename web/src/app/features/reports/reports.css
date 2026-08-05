@@ -1,0 +1,54 @@
+.dimension-select { min-width: 150px; margin-left: auto; }
+
+.totals-card { display: flex; flex-direction: column; gap: var(--s4); margin-bottom: var(--s3); }
+.totals-row { display: flex; align-items: baseline; gap: var(--s5); flex-wrap: wrap; }
+.totals-row > span { display: flex; align-items: baseline; gap: var(--s2); }
+.totals-row label {
+  color: var(--fg-4); font-family: var(--mono); font-size: var(--t-micro);
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.totals-row b {
+  font-family: var(--mono); font-size: var(--t-figure); font-weight: 500;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+
+.flow-wrap { overflow-x: auto; }
+.flow-wrap svg { display: block; min-width: 460px; width: 100%; height: auto; }
+.flow-label {
+  font-family: var(--mono); font-size: 9px; fill: var(--fg-4);
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.flow-node { font-family: var(--mono); font-size: 9.5px; fill: var(--fg-2); }
+
+.rank-list { display: flex; flex-direction: column; }
+.rank-list button {
+  display: grid;
+  grid-template-columns: 8px minmax(90px, 1.1fr) minmax(0, 2fr) auto 52px;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 0;
+  padding: var(--s2) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  text-align: left;
+}
+.rank-list button:last-child { border-bottom: 0; }
+.rank-list button:hover { background: var(--panel-2); }
+.rank-list .dot { width: 8px; height: 8px; }
+.rank-list .name {
+  color: var(--fg); font-family: var(--sans); font-size: 13px; letter-spacing: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bar-track { height: 6px; background: var(--panel-3); }
+.bar-fill { display: block; height: 100%; }
+.rank-list .amount { font-variant-numeric: tabular-nums; }
+.rank-list .share { color: var(--fg-4); text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 700px) {
+  .totals-row { gap: var(--s4) var(--s5); }
+  .totals-row b { font-size: 17px; }
+  .rank-list button { grid-template-columns: 8px minmax(0, 1fr) auto; row-gap: var(--s1); }
+  .rank-list .bar-track { grid-column: 2 / -1; grid-row: 2; }
+  .rank-list .share { display: none; }
+}
