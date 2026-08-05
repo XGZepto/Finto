@@ -33,11 +33,13 @@ import { FintoDate } from './finto-date';
 
         <button type="button" class="filter-toggle ghost" [class.on]="expanded()"
                 (click)="expanded.set(!expanded())" [attr.aria-expanded]="expanded()">
-          Filters @if (filters.chips().length) { <span>{{ filters.chips().length }}</span> }
+          <span class="chev" aria-hidden="true">›</span>
+          Filters @if (filters.chips().length) { <span class="count">{{ filters.chips().length }}</span> }
         </button>
       </div>
 
       <div class="advanced" [class.open]="expanded()">
+        <div class="advanced-inner">
         <div class="controls">
 
         <div class="field narrow">
@@ -93,6 +95,7 @@ import { FintoDate } from './finto-date';
           <span>Instalments only</span>
         </label>
         </div>
+        </div>
       </div>
 
       @if (filters.isActive()) {
@@ -113,12 +116,31 @@ import { FintoDate } from './finto-date';
     .filter-primary { display: flex; align-items: end; gap: 10px; }
     .filter-primary .search { flex: 1; }
     .filter-primary input { width: 100%; }
-    .filter-toggle { display: none; min-width: 92px; height: 31px; }
-    .filter-toggle span {
+    .filter-toggle { display: block; min-width: 92px; height: 31px; }
+    .filter-toggle .chev {
+      display: inline-block;
+      margin-right: 6px;
+      color: var(--fg-4);
+      transition: transform 220ms cubic-bezier(.4, 0, .2, 1);
+    }
+    .filter-toggle.on .chev { transform: rotate(90deg); color: var(--fg-2); }
+    .filter-toggle .count {
       display: inline-grid; place-items: center; min-width: 16px; height: 16px;
       margin-left: 4px; background: var(--fg); color: var(--bg); font-size: 9px;
     }
-    .advanced { margin-top: 10px; }
+    /* Filters stay folded until asked for; the chips below keep active
+       state visible, so nothing is hidden that is currently in effect. */
+    /* Height animates from zero without knowing the content height; the inner
+       wrapper is what clips while the row track grows. */
+    .advanced {
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transition: grid-template-rows 220ms cubic-bezier(.4, 0, .2, 1),
+                  opacity 140ms linear, margin-top 220ms cubic-bezier(.4, 0, .2, 1);
+    }
+    .advanced.open { grid-template-rows: 1fr; opacity: 1; margin-top: var(--s3); }
+    .advanced-inner { overflow: hidden; min-height: 0; }
     .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; }
     .field.narrow { max-width: 150px; }
     .field input, .field finto-select, .field finto-date { width: 100%; }
@@ -137,11 +159,29 @@ import { FintoDate } from './finto-date';
       display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
       margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
     }
+    @media (prefers-reduced-motion: reduce) {
+      .advanced, .filter-toggle .chev { transition: none; }
+    }
     @media (max-width: 700px) {
       .filter-bar { padding: 10px; }
-      .filter-toggle { display: block; }
-      .advanced { display: none; }
-      .advanced.open { display: block; }
+      /* Inline expansion would push the ledger off screen, so on a phone the
+         panel arrives as a sheet over it and leaves the rows where they were. */
+      .advanced {
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        z-index: 40;
+        display: block;
+        max-height: 78vh;
+        overflow-y: auto;
+        margin-top: 0;
+        padding: var(--s4) var(--s3) calc(var(--s5) + env(safe-area-inset-bottom));
+        background: var(--panel);
+        border-top: 1px solid var(--line-2);
+        transform: translateY(100%);
+        transition: transform 260ms cubic-bezier(.4, 0, .2, 1), opacity 160ms linear;
+      }
+      .advanced.open { transform: translateY(0); margin-top: 0; }
+      .advanced-inner { overflow: visible; }
       .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .field.narrow { max-width: none; }
       .toggles { display: grid; grid-template-columns: 1fr; gap: 9px; }

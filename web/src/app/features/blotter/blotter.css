@@ -148,31 +148,39 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .table-wrap td { display: block; }
   .table-wrap thead { display: none; }
 
-  .table-wrap tr {
+  /* A statement row on a phone is a list item: who, what, how much. The day
+     band already carries the date, so the row does not repeat it. */
+  .table-wrap tr.clickable {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 5px 12px;
-    min-height: 84px;
-    padding: 12px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px var(--s3);
+    min-height: 58px;
+    padding: var(--s2) var(--s3);
     border-bottom: 1px solid var(--line);
   }
   .table-wrap td { border: none; padding: 0; }
   .blotter-skeleton { min-height: 640px; }
-  .skeleton-row { grid-template-columns: 1fr 88px; min-height: 80px; gap: 8px 16px; }
-  .skeleton-row i:nth-child(3) { grid-column: 1 / -1; width: 55%; }
+  .skeleton-row { grid-template-columns: 1fr 88px; min-height: 58px; gap: var(--s2) var(--s4); }
+  .skeleton-row i:nth-child(3) { display: none; }
 
-  td.desc { grid-column: 1; grid-row: 1; min-width: 0; }
-  td.num { grid-column: 2; grid-row: 1; text-align: right; white-space: nowrap; }
-  td.account { grid-column: 1; grid-row: 2; min-width: 0; }
-  td.date { grid-column: 2; grid-row: 2; text-align: right; }
-  td.category { grid-column: 1; grid-row: 3; min-width: 0; }
-  td.date, td.account, td.category {
-    font-size: 11px;
-    color: var(--fg-3);
-  }
-  td.flags { grid-column: 2; grid-row: 3; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; }
+  td.desc { grid-column: 2; grid-row: 1; min-width: 0; display: flex; align-items: center; gap: var(--s3); }
+  td.desc .glyph { display: grid; }
+  td.num { grid-column: 3; grid-row: 1; text-align: right; white-space: nowrap; }
+  td.account { grid-column: 2; grid-row: 2; min-width: 0; }
+  td.category { grid-column: 2; grid-row: 2; min-width: 0; justify-self: end; }
+  td.date { display: none; }
+  td.account, td.category { font-size: 11px; color: var(--fg-3); }
+  td.flags { grid-column: 3; grid-row: 2; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; }
   td.flags:empty { display: none; }
+
+  .daygroup td { display: none; }
+  .daygroup td:first-child { display: flex; }
+  .daygroup {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: var(--s2) var(--s3);
+  }
+  .daygroup td.num { display: block; }
   td.desc .primary { font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
   td.desc .block { line-height: 1.35; margin-top: 2px; }
   td.account .holder { display: inline; margin-left: 5px; }
@@ -256,4 +264,29 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 @keyframes inspector-slide-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .drawer, .drawer-backdrop, .edit-panel { animation: none; }
+}
+
+/* A day band carries its own total, so a date is also an answer. */
+.daygroup td {
+  padding-block: var(--s2);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line-2);
+  color: var(--fg-3);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.daygroup td.num { text-align: right; }
+
+/* Merchant monogram. Desktop keeps the text column dense, so it is mobile-only. */
+.glyph {
+  display: none;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-2);
+  color: var(--fg-3);
+  font-family: var(--mono);
+  font-size: 11px;
 }

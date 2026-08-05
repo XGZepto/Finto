@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Add a spacing and type scale, and draw component padding and rhythm from it.
+- Lead Summary with net worth and its movement over a selectable window.
+- Add a net-worth-over-time series evaluated through the positions rollup.
+- Show asset and liability composition with amounts, replacing the Positions card.
+- Band blotter rows by day, each carrying its own total.
+- Separate the time bucket from the entity dimension in the Summary controls.
+- Ask the model for transaction tags and apply them to already-categorised rows.
+- Bound the LLM backfill per request and step chunks past merchants already ruled on.
+- Stop caching non-2xx API responses.
+- Keep app chrome fixed while only content scrolls.
+- Preserve blotter scroll position when the inspector closes.
+- Remove storage-engine and session-status copy from the interface.
+
 ## 0.2.7 — 2026-08-05
 
 - Generate Import format support from the parser and PDF-template registries.

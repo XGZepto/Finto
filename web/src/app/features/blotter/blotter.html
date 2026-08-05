@@ -79,7 +79,18 @@
           </tr>
         </thead>
         <tbody>
-          @for (t of rows(); track t.id) {
+          @for (band of dayGroups(); track band.date ?? '_') {
+            @if (band.date) {
+              <tr class="daygroup">
+                <td colspan="4" class="mono">{{ band.date | shortDate }}</td>
+                <td colspan="2" class="num mono"
+                    [class.neg]="(band.total?.amount ?? 0) < 0"
+                    [class.pos]="(band.total?.amount ?? 0) > 0">
+                  {{ band.total ? (band.total | money: 'bare') : '' }}
+                </td>
+              </tr>
+            }
+            @for (t of band.rows; track t.id) {
             <tr (click)="openFromRow($event, t)" (keydown.enter)="openFromKeyboard($event, t)"
                 (keydown.space)="openFromKeyboard($event, t)"
                 class="clickable" [class.on]="selected()?.id === t.id" tabindex="0"
@@ -98,6 +109,7 @@
                 }
               </td>
               <td class="desc">
+                <span class="glyph" aria-hidden="true">{{ initials(t) }}</span>
                 @if (merchantHidden(t)) {
                   <span class="primary dim">Merchant not disclosed</span>
                   <span class="muted small block">{{ t.description }}</span>
@@ -140,6 +152,7 @@
                 }
               </td>
             </tr>
+            }
           } @empty {
             <tr><td colspan="6" class="empty">Nothing matches this filter</td></tr>
           }

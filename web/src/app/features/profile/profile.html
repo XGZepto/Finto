@@ -36,7 +36,7 @@
       </div>
     } @empty { <div class="empty compact">No API keys</div> }
   </section>
-  <section class="card"><h2>{{ t('Security', '安全') }}</h2><div class="setting-row"><strong>{{ t('Protected session', '已保護工作階段') }}</strong><span class="tag good">{{ t('active', '使用中') }}</span></div><button class="danger" (click)="logout()">{{ t('Sign out', '登出') }}</button></section>
+  <section class="card"><h2>{{ t('Session', '工作階段') }}</h2><button class="danger" (click)="logout()">{{ t('Sign out', '登出') }}</button></section>
   <section class="card"><h2>{{ t('Storage', '儲存') }}</h2><div class="setting-row"><strong>PostgreSQL</strong><span class="dot ok"></span></div></section>
   <section class="card"><h2>{{ t('Data maintenance', '資料維護') }}</h2><a routerLink="/import" class="btn">{{ t('Import statements', '匯入月結單') }} →</a></section>
 </div>

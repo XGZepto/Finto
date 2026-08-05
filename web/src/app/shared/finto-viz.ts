@@ -3,7 +3,8 @@ import { Component, computed, input } from '@angular/core';
 export interface Slice {
   label: string;
   value: number;
-  href?: unknown;
+  /** Formatted amount, shown beside the share when the absolute matters. */
+  display?: string;
 }
 
 const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
@@ -24,6 +25,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
           <div class="legend-row">
             <span class="dot" [style.background]="s.colour"></span>
             <span class="name">{{ s.label }}</span>
+            @if (s.display) { <span class="amount mono">{{ s.display }}</span> }
             <span class="pct mono">{{ s.pct.toFixed(1) }}%</span>
           </div>
         }
@@ -37,7 +39,8 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
     .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: 12.5px; }
     .dot { width: 8px; height: 8px; flex: none; }
     .name { flex: 1; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pct { font-variant-numeric: tabular-nums; color: var(--fg-3); }
+    .amount { font-variant-numeric: tabular-nums; color: var(--fg); }
+    .pct { font-variant-numeric: tabular-nums; color: var(--fg-4); width: 48px; text-align: right; }
   `],
 })
 export class FintoShareBar {
@@ -50,6 +53,7 @@ export class FintoShareBar {
     const total = rows.reduce((sum, s) => sum + s.value, 0) || 1;
     return rows.map((s, i) => ({
       label: s.label,
+      display: s.display,
       colour: SERIES[i % SERIES.length],
       pct: (s.value / total) * 100,
       title: `${s.label} — ${((s.value / total) * 100).toFixed(1)}%`,

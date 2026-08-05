@@ -36,8 +36,14 @@ export class SummaryPage {
   private preferences = inject(Preferences);
   readonly money = new MoneyPipe();
 
+  /**
+   * Entity dimensions only.
+   *
+   * Time is the period control's decision, so offering "month" here alongside
+   * "merchant" would present two unrelated choices as one.
+   */
   readonly dimensions = [
-    'month', 'quarter', 'year', 'category', 'subcategory', 'tag', 'merchant',
+    'category', 'subcategory', 'tag', 'merchant',
     'account', 'institution', 'card', 'cardholder', 'kind', 'currency',
   ];
 
@@ -45,6 +51,7 @@ export class SummaryPage {
   convertTo = this.preferences.baseCurrency;
   loading = signal(true);
   rows = signal<SummaryRow[]>([]);
+  monthRows = signal<SummaryRow[]>([]);
   totals = signal<TotalRow[]>([]);
   netWorth = signal<Money | null>(null);
   positionTypes = signal<Array<{ account_type: string; balance: Money }>>([]);
@@ -151,13 +158,21 @@ export class SummaryPage {
   assetSlices = computed<Slice[]>(() =>
     this.positionTypes()
       .filter((row) => row.balance.amount > 0)
-      .map((row) => ({ label: this.humanize(row.account_type), value: row.balance.amount }))
+      .map((row) => ({
+        label: this.humanize(row.account_type),
+        value: row.balance.amount,
+        display: this.money.transform(row.balance, 'bare'),
+      }))
       .sort((a, b) => b.value - a.value));
 
   liabilitySlices = computed<Slice[]>(() =>
     this.positionTypes()
       .filter((row) => row.balance.amount < 0)
-      .map((row) => ({ label: this.humanize(row.account_type), value: -row.balance.amount }))
+      .map((row) => ({
+        label: this.humanize(row.account_type),
+        value: -row.balance.amount,
+        display: this.money.transform(row.balance, 'bare'),
+      }))
       .sort((a, b) => b.value - a.value));
 
   /** Where the money went, on whichever dimension is selected. */
@@ -172,12 +187,9 @@ export class SummaryPage {
   });
 
 
-  readonly timeDimensions = ['day', 'month', 'quarter', 'year'];
-  isTimeDimension = computed(() => this.timeDimensions.includes(this.groupBy()));
-
   /** Currency the trend is drawn in — a chart mixing HKD and USD bars is a lie. */
   chartCurrency = signal('');
-  chartCurrencies = computed(() => [...new Set(this.rows().map((r) => r.currency))]);
+  chartCurrencies = computed(() => [...new Set(this.monthRows().map((r) => r.currency))]);
 
   /** Falls back when a filter change removes the currency that was selected. */
   shownCurrency = computed(() => {
@@ -197,10 +209,9 @@ export class SummaryPage {
    * month that earned more than it spent is visible as such.
    */
   trend = computed(() => {
-    if (!this.isTimeDimension()) return [];
     if (this.convertTo()) {
       const grouped = new Map<string, SummaryRow>();
-      for (const row of this.rows()) {
+      for (const row of this.monthRows()) {
         if (!row.spend_converted?.ok || !row.income_converted?.ok || !row.net_converted?.ok) continue;
         const current = grouped.get(row.bucket) ?? {
           bucket: row.bucket, currency: this.convertTo(), txn_count: 0,
@@ -222,7 +233,7 @@ export class SummaryPage {
         in: `${Math.max(1, row.income.amount / peak * 100)}%` }));
     }
     const ccy = this.shownCurrency();
-    const rows = this.rows()
+    const rows = this.monthRows()
       .filter((r) => r.currency === ccy)
       .sort((a, b) => a.bucket.localeCompare(b.bucket));
     const peak = Math.max(
@@ -290,10 +301,18 @@ export class SummaryPage {
       next: (res) => {
         this.rows.set(res.rows);
         this.totals.set(res.totals);
-        this.headline.set(res.normalised?.total ?? null);
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
+    });
+
+    // The trend is always per month: the dimension control picks what the
+    // breakdown splits by, never how time is bucketed.
+    this.api.summary('month', {}, convert).subscribe({
+      next: (res) => {
+        this.monthRows.set(res.rows);
+        this.headline.set(res.normalised?.total ?? null);
+      },
     });
 
     this.api.positions(convert).subscribe({
@@ -327,7 +346,7 @@ export class SummaryPage {
 
   private savedGroupBy(): string {
     const saved = sessionStorage.getItem('finto.summary.groupBy');
-    return saved && this.dimensions.includes(saved) ? saved : 'month';
+    return saved && this.dimensions.includes(saved) ? saved : 'category';
   }
 
   go(path: string): void { this.router.navigate([path]); }

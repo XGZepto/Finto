@@ -25,7 +25,7 @@ import { NavIcon } from './shared/nav-icon';
           <div class="brand-row"><img class="brand-logo" src="/favicon.svg?v=3" alt=""><div class="name">Finto@if (navigating()) { <span class="caret">▌</span> }</div></div>
         </div>
 
-        <div class="nav" aria-label="Workspace navigation">
+        <div class="nav" aria-label="Primary navigation">
           @for (group of desktopGroups; track group.label) {
             <section class="nav-group">
               <h2>{{ preferences.text(group.label, group.labelZh) }}</h2>
@@ -48,17 +48,19 @@ import { NavIcon } from './shared/nav-icon';
             <span class="idx"><finto-nav-icon name="settings" /></span><span class="label">{{ preferences.text('Settings', '設定') }}</span>
           </a>
         </div>
-        <div class="status">
-          <span class="dot" [class.ok]="online()" [class.bad]="!online()"></span>
-          <span>{{ online() ? preferences.text('postgres · secured', 'postgres · 已保護') : preferences.text('api unreachable', '無法連接 API') }}</span>
-        </div>
+        @if (!online()) {
+          <div class="status">
+            <span class="dot bad"></span>
+            <span>{{ preferences.text('api unreachable', '無法連接 API') }}</span>
+          </div>
+        }
       </nav>
 
       <header class="mobile-head">
         <div class="mobile-brand"><img class="brand-logo" src="/favicon.svg?v=3" alt="">Finto@if (navigating()) { <span class="caret">▌</span> }</div>
         <div class="mobile-state">
           @if (reviewCount() > 0) { <span class="badge">{{ reviewCount() }} review</span> }
-          <span class="dot" [class.ok]="online()" [class.bad]="!online()"></span>
+          @if (!online()) { <span class="dot bad"></span> }
         </div>
       </header>
 
@@ -70,7 +72,7 @@ import { NavIcon } from './shared/nav-icon';
         <button class="menu-scrim" aria-label="Close menu" (click)="mobileMenu.set(false)"></button>
         <nav class="mobile-sheet" aria-label="More destinations">
           <div class="sheet-head">
-            <span>{{ preferences.text('Workspace', '工作區') }}</span>
+            <span>{{ preferences.text('More', '更多') }}</span>
             <button class="bare close" (click)="mobileMenu.set(false)" aria-label="Close menu">×</button>
           </div>
           @for (group of mobileGroups; track group.label) {
@@ -96,7 +98,7 @@ import { NavIcon } from './shared/nav-icon';
         @for (item of primaryNav; track item.path) {
           <a [routerLink]="item.path" routerLinkActive="active">
             <span class="mobile-icon"><finto-nav-icon [name]="item.icon" /></span>
-            <span>{{ preferences.text(item.mobile, item.mobileZh) }}</span>
+            <span>{{ preferences.text(item.label, item.labelZh) }}</span>
           </a>
         }
         <button type="button" [class.active]="mobileMenu()" (click)="mobileMenu.set(!mobileMenu())">
@@ -114,17 +116,17 @@ export class App {
   preferences = inject(Preferences);
 
   readonly nav = [
-    { path: '/summary', label: 'Summary', labelZh: '總覽', mobile: 'Overview', mobileZh: '總覽', icon: 'summary' },
-    { path: '/blotter', label: 'Blotter', labelZh: '帳目', mobile: 'Activity', mobileZh: '帳目', icon: 'blotter' },
-    { path: '/timeline', label: 'Timeline', labelZh: '時間軸', mobile: 'Timeline', mobileZh: '時間軸', icon: 'timeline' },
-    { path: '/accounts', label: 'Accounts', labelZh: '帳戶', mobile: 'Accounts', mobileZh: '帳戶', icon: 'accounts' },
-    { path: '/import', label: 'Import', labelZh: '匯入', mobile: 'Import', mobileZh: '匯入', icon: 'import' },
-    { path: '/installments', label: 'Instalments', labelZh: '分期', mobile: 'Plans', mobileZh: '分期', icon: 'installments' },
-    { path: '/investments', label: 'Investments', labelZh: '投資', mobile: 'Invest', mobileZh: '投資', icon: 'investments' },
-    { path: '/review', label: 'Review', labelZh: '審核', mobile: 'Review', mobileZh: '審核', icon: 'review' },
-    { path: '/integrity', label: 'Integrity', labelZh: '完整性', mobile: 'Integrity', mobileZh: '完整性', icon: 'integrity' },
-    { path: '/ask', label: 'Ask', labelZh: '查詢', mobile: 'Ask', mobileZh: '查詢', icon: 'ask' },
-    { path: '/profile', label: 'Profile & settings', labelZh: '個人及設定', mobile: 'Settings', mobileZh: '設定', icon: 'settings' },
+    { path: '/summary', label: 'Summary', labelZh: '總覽', icon: 'summary' },
+    { path: '/blotter', label: 'Blotter', labelZh: '帳目', icon: 'blotter' },
+    { path: '/timeline', label: 'Timeline', labelZh: '時間軸', icon: 'timeline' },
+    { path: '/accounts', label: 'Accounts', labelZh: '帳戶', icon: 'accounts' },
+    { path: '/import', label: 'Import', labelZh: '匯入', icon: 'import' },
+    { path: '/installments', label: 'Instalments', labelZh: '分期', icon: 'installments' },
+    { path: '/investments', label: 'Investments', labelZh: '投資', icon: 'investments' },
+    { path: '/review', label: 'Review', labelZh: '審核', icon: 'review' },
+    { path: '/integrity', label: 'Integrity', labelZh: '完整性', icon: 'integrity' },
+    { path: '/ask', label: 'Ask', labelZh: '查詢', icon: 'ask' },
+    { path: '/profile', label: 'Settings', labelZh: '設定', icon: 'settings' },
   ];
 
   readonly primaryNav = this.nav.slice(0, 4);

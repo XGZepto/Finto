@@ -33,7 +33,20 @@
     @if (series().length > 1) {
       <finto-timeseries [points]="series()" label="Net worth over time" />
     }
-    <button class="bare hero-link" (click)="go('/accounts')">Accounts →</button>
+    @if (headline(); as h) {
+      <div class="hero-stats">
+        <span><label>In</label><b class="pos">{{ h.income | money: 'bare' }}</b></span>
+        <span><label>Out</label><b class="neg">{{ h.spend | money: 'bare' }}</b></span>
+        <span>
+          <label>Net</label>
+          <b [class.neg]="h.net.amount < 0" [class.pos]="h.net.amount > 0">{{ h.net | money: 'bare' }}</b>
+        </span>
+        <span>
+          <label>Saved</label>
+          <b>{{ savingsRate() === null ? '—' : savingsRate()!.toFixed(1) + '%' }}</b>
+        </span>
+      </div>
+    }
   </div>
 
   @if (assetSlices().length || liabilitySlices().length) {
@@ -48,44 +61,11 @@
   }
 </section>
 
-@if (headline(); as h) {
-  <section class="kpi-strip">
-    <div class="kpi"><span class="label">In</span><span class="figure pos">{{ h.income | money: 'bare' }}</span></div>
-    <div class="kpi"><span class="label">Out</span><span class="figure neg">{{ h.spend | money: 'bare' }}</span></div>
-    <div class="kpi">
-      <span class="label">Net</span>
-      <span class="figure" [class.neg]="h.net.amount < 0" [class.pos]="h.net.amount > 0">{{ h.net | money: 'bare' }}</span>
-    </div>
-    <div class="kpi">
-      <span class="label">Saved</span>
-      <span class="figure">{{ savingsRate() === null ? '—' : savingsRate()!.toFixed(1) + '%' }}</span>
-    </div>
-  </section>
-}
-
-@if (positionChart().length) {
-  <section class="card positions-card">
-    <div class="section-head"><h2>Positions</h2><button class="bare" (click)="go('/accounts')">Accounts →</button></div>
-    <div class="position-scale" aria-hidden="true"><span>Liabilities</span><i></i><span>Assets</span></div>
-    <div class="position-chart" role="img" [attr.aria-label]="convertTo() + '-normalised positions by account type'">
-      @for (row of positionChart(); track row.account_type) {
-        <button class="position-row" (click)="go('/accounts')" [title]="row.label + ' · ' + money.transform(row.balance)">
-          <span class="position-label">{{ row.label }}</span>
-          <span class="position-bars">
-            @if (row.balance.amount < 0) { <i class="position-bar liability" [style.width]="row.width"></i> }
-            @if (row.balance.amount > 0) { <i class="position-bar asset" [style.width]="row.width"></i> }
-          </span>
-          <strong class="mono" [class.neg]="row.balance.amount < 0" [class.pos]="row.balance.amount > 0">{{ row.balance | money: 'bare' }}</strong>
-        </button>
-      }
-    </div>
-  </section>
-}
 
 <section class="card breakdown">
   <div class="section-head">
     <h2>Flow</h2>
-    <finto-select class="dimension-select" ariaLabel="Group flow" [options]="dimensions"
+    <finto-select class="dimension-select" ariaLabel="Split by" [options]="dimensions"
                   [ngModel]="groupBy()" (ngModelChange)="setGroupBy($event)" />
   </div>
 
@@ -112,7 +92,7 @@
       </div>
     }
 
-    @if (spendSlices().length > 1 && !isTimeDimension()) {
+    @if (spendSlices().length > 1) {
       <finto-donut class="breakdown-donut" [slices]="spendSlices()"
                    [label]="'Spending by ' + groupBy()" />
     }

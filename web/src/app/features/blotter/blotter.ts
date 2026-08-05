@@ -63,6 +63,33 @@ export class BlotterPage implements OnDestroy {
   private afterClose: (() => void) | null = null;
   private scrollLockOffset = 0;
 
+  /**
+   * Rows banded by day, each band carrying its own total.
+   *
+   * Only meaningful while the ledger is in date order — under any other sort
+   * the bands would not be contiguous, so the rows stay ungrouped instead.
+   * A day that mixes currencies gets no subtotal rather than a summed lie.
+   */
+  dayGroups = computed<Array<{ date: string | null; total: Money | null; rows: Txn[] }>>(() => {
+    const rows = this.rows();
+    if (this.sort() !== 'date') return [{ date: null, total: null, rows }];
+    const bands: Array<{ date: string | null; total: Money | null; rows: Txn[] }> = [];
+    for (const txn of rows) {
+      const last = bands[bands.length - 1];
+      if (last && last.date === txn.date) last.rows.push(txn);
+      else bands.push({ date: txn.date, total: null, rows: [txn] });
+    }
+    for (const band of bands) {
+      const currencies = new Set(band.rows.map((r) => r.booked.currency));
+      if (currencies.size !== 1) continue;
+      band.total = {
+        amount: band.rows.reduce((sum, r) => sum + r.booked.amount, 0),
+        currency: band.rows[0].booked.currency,
+      };
+    }
+    return bands;
+  });
+
   pageStart = computed(() => (this.total() ? this.offset() + 1 : 0));
   pageEnd = computed(() => Math.min(this.offset() + this.limit(), this.total()));
   hasPrev = computed(() => this.offset() > 0);
@@ -253,6 +280,15 @@ export class BlotterPage implements OnDestroy {
     const pane = scrollPane();
     if (pane) pane.style.overflowY = '';
     this.afterClose = null;
+  }
+
+  /** Monogram standing in for a merchant logo, which a statement never carries. */
+  initials(txn: Txn): string {
+    const source = (txn.merchant || txn.description || '').trim();
+    const words = source.split(/[\s·|/-]+/).filter(Boolean);
+    if (!words.length) return '—';
+    const letters = words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2);
+    return letters.toUpperCase();
   }
 
   /** The counterpart legs — everything in the group except this row. */
