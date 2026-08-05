@@ -17,6 +17,7 @@ No financial data or production credentials are stored in this repository.
 - PostgreSQL row-level security with viewer, editor, and owner account roles
 - Password sessions and revocable per-user API keys
 - Installable PWA with desktop and mobile layouts
+- Read-only LLM analysis with allowlisted ledger tools and prompt caching
 - Vercel deployment in the Tokyo region
 
 Bundled parsers cover American Express HK/US, HSBC HK, Mox, Wise, and Chase
@@ -162,6 +163,27 @@ curl -fsS -X POST \
 
 Each audit and apply operation is recorded in PostgreSQL. API keys are scoped
 to their owner and can be revoked without changing the login password.
+
+## LLM analysis
+
+The optional Ask page uses a bounded set of read-only reporting tools. The
+model cannot issue SQL or modify the ledger. Tool results supply all financial
+figures; the generated answer and executed filters are returned together.
+
+Anthropic prompt-prefix caching covers the tool definitions, system
+instructions, and current ledger vocabulary. PostgreSQL decision caching remains
+separate and is used for deterministic categorisation and query audit records.
+
+Classification defaults to Claude Haiku 4.5. Ask uses Claude Sonnet 5 and can be
+configured independently:
+
+```bash
+finto config set llm_enabled 1
+finto config set llm_agent_model claude-sonnet-5
+```
+
+Deployments can use `FINTO_LLM_ENABLED`, `FINTO_LLM_MODEL`, and
+`FINTO_LLM_AGENT_MODEL` instead of database settings.
 
 ## Tests
 

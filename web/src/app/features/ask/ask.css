@@ -28,12 +28,31 @@
 
 section.card { margin-bottom: 12px; }
 
+.generated-answer { padding: 18px 20px; }
+.generated-answer label { margin-bottom: 8px; }
+.generated-answer p {
+  margin: 0;
+  max-width: 76ch;
+  white-space: pre-wrap;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
 .plan .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .plan .explanation { margin: 12px 0 0; font-size: 12.5px; color: var(--fg-2); max-width: 76ch; }
 .plan .banner { margin-top: 10px; }
 .tag.high { border-color: var(--pos); color: var(--pos); }
 .tag.mid { border-color: var(--warn); color: var(--warn); }
 .tag.low { border-color: var(--bad); color: var(--bad); }
+.tool-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-2);
+  font-size: 11px;
+}
+.tool-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--pos); }
 
 .answer { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .total h3 { margin-bottom: 8px; }

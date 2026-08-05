@@ -12,6 +12,9 @@
 | `FINTO_AUTH_EMAIL` | Initial owner email when no user exists |
 | `FINTO_AUTH_PASSWORD` | Initial owner password or CLI password input |
 | `ANTHROPIC_API_KEY` | Optional categorisation and adjudication provider |
+| `FINTO_LLM_ENABLED` | Deployment override for the optional LLM layer |
+| `FINTO_LLM_MODEL` | Optional classification model override |
+| `FINTO_LLM_AGENT_MODEL` | Optional Ask analysis model override |
 
 Keep production values in the deployment environment. Do not commit `.env`
 files.

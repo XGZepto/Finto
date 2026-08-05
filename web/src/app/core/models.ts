@@ -304,6 +304,14 @@ export interface QueryResult {
   unsupported?: string | null;
   dropped_fields?: string[];
   cached?: boolean;
+  answer?: string;
+  model?: string;
+  tools?: Array<{ name: string; input: Record<string, unknown> }>;
+  prompt_cache?: {
+    hit: boolean;
+    read_input_tokens: number;
+    created_input_tokens: number;
+  };
   totals?: TotalRow[];
   rows?: SummaryRow[];
   transactions?: Page<Txn>;

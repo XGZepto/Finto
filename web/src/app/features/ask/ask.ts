@@ -6,21 +6,7 @@ import { describeFilter, filterToParams } from '../../core/filter-state';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { QueryResult } from '../../core/models';
 
-/**
- * Ask.
- *
- * The model translates the question into the same LedgerFilter the blotter uses;
- * the database answers it. Two things follow from that split, and they are the
- * reason it is built this way rather than as text-to-SQL.
- *
- * The filter comes back with the result and is rendered as chips, so a misreading
- * is visible and correctable instead of arriving as a wrong number with a
- * confident sentence attached. And because the filter is deterministic, the same
- * question gives the same answer forever — a figure that moves because a model
- * was updated underneath it is not a figure you can use.
- *
- * The model never produces the number. It produces the query.
- */
+/** Read-only ledger analysis with visible tool filters. */
 @Component({
   selector: 'app-ask',
   imports: [FormsModule, MoneyPipe, ShortDatePipe],
@@ -82,8 +68,7 @@ export class AskPage {
     this.router.navigate(['/blotter'], { queryParams: filterToParams(f) });
   }
 
-  confidenceBand(): 'high' | 'mid' | 'low' {
-    const c = this.result()?.confidence ?? 0;
-    return c >= 0.8 ? 'high' : c >= 0.55 ? 'mid' : 'low';
+  toolLabel(name: string): string {
+    return name.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 }

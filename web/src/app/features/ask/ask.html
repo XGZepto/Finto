@@ -35,23 +35,29 @@
 }
 
 @if (asking()) {
-  <div class="card"><div class="spinner">translating </div></div>
+  <div class="card"><div class="spinner">analysing </div></div>
 }
 
 @if (result(); as r) {
   @if (!r.ok) {
     <div class="banner error">{{ r.error }}</div>
   } @else {
-    <!-- What was actually asked of the database. This is the check. -->
-    <section class="card plan">
+    @if (r.answer) {
+      <section class="card generated-answer" aria-live="polite">
+        <label>Answer</label>
+        <p>{{ r.answer }}</p>
+      </section>
+    }
+
+    @if (r.filter || r.group_by || r.tools?.length) {
+      <section class="card plan">
       <div class="section-head">
-        <h2>Interpreted as</h2>
+        <h2>Ledger queries</h2>
         <div class="row">
-          @if (r.cached) { <span class="tag">cached</span> }
-          <span class="tag" [class]="confidenceBand()">
-            {{ ((r.confidence ?? 0) * 100).toFixed(0) }}% confident
-          </span>
-          <button class="ghost" (click)="openInBlotter()">Edit in blotter →</button>
+          @if (r.prompt_cache?.hit) { <span class="tag high">prompt cache hit</span> }
+          @if (r.filter) {
+            <button class="ghost" (click)="openInBlotter()">Open in blotter →</button>
+          }
         </div>
       </div>
 
@@ -64,25 +70,16 @@
         @if (r.group_by) { <span class="chip">grouped by {{ r.group_by }}</span> }
       </div>
 
-      @if (r.explanation) {
-        <p class="explanation">{{ r.explanation }}</p>
-      }
-
-      @if (r.unsupported) {
-        <div class="banner warn small">
-          {{ r.unsupported }} — the figures below answer the nearest question the
-          filter can express, not that one.
+      @if (r.tools?.length) {
+        <div class="tool-list">
+          @for (tool of r.tools!; track $index) {
+            <span class="tool"><span class="tool-dot"></span>{{ toolLabel(tool.name) }}</span>
+          }
         </div>
       }
-      @if (r.dropped_fields?.length) {
-        <div class="banner warn small">
-          Ignored, because they don't exist in this ledger:
-          <span class="mono">{{ r.dropped_fields!.join(', ') }}</span>
-        </div>
-      }
-    </section>
+      </section>
+    }
 
-    <!-- Every figure below is computed by SQL over the filter above. -->
     <section class="answer">
       @for (t of r.totals ?? []; track t.currency) {
         <div class="card total">

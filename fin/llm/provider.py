@@ -12,7 +12,8 @@ import json
 import os
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -21,6 +22,7 @@ class LLMResponse:
     data: Any            # parsed JSON
     model: str
     raw: str
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class LLMUnavailable(RuntimeError):
@@ -33,6 +35,19 @@ class LLMProvider(ABC):
     @abstractmethod
     def complete_json(self, system: str, user: str, *, max_tokens: int = 2000) -> LLMResponse:
         """Return parsed JSON. Must raise on unparseable output, never guess."""
+
+    def complete_with_tools(
+        self,
+        system: str,
+        user: str,
+        tools: Sequence[dict[str, Any]],
+        execute_tool: Callable[[str, dict[str, Any]], Any],
+        *,
+        max_turns: int = 4,
+        max_tokens: int = 1600,
+    ) -> LLMResponse:
+        """Run a bounded client-tool loop."""
+        raise LLMUnavailable(f"{self.name} does not support tool use")
 
 
 def _extract_json(text: str) -> Any:
@@ -82,12 +97,116 @@ class AnthropicProvider(LLMProvider):
         msg = self._client.messages.create(
             model=self.model,
             max_tokens=max_tokens,
-            system=system,
+            system=[{
+                "type": "text",
+                "text": system,
+                "cache_control": {"type": "ephemeral"},
+            }],
             temperature=0,          # classification, not creativity
             messages=[{"role": "user", "content": user}],
         )
         text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
-        return LLMResponse(data=_extract_json(text), model=self.model, raw=text)
+        return LLMResponse(
+            data=_extract_json(text), model=self.model, raw=text,
+            metadata={"usage": _usage(msg)},
+        )
+
+    def complete_with_tools(
+        self,
+        system: str,
+        user: str,
+        tools: Sequence[dict[str, Any]],
+        execute_tool: Callable[[str, dict[str, Any]], Any],
+        *,
+        max_turns: int = 4,
+        max_tokens: int = 1600,
+    ) -> LLMResponse:
+        if not tools:
+            raise ValueError("at least one tool is required")
+
+        cached_tools = [dict(tool) for tool in tools]
+        cached_tools[-1]["cache_control"] = {"type": "ephemeral"}
+        cached_system = [{
+            "type": "text",
+            "text": system,
+            "cache_control": {"type": "ephemeral"},
+        }]
+        messages: list[dict[str, Any]] = [{"role": "user", "content": user}]
+        usage: dict[str, int] = {}
+
+        for turn in range(max_turns + 1):
+            final_turn = turn == max_turns
+            msg = self._client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                system=cached_system,
+                temperature=0,
+                messages=messages,
+                tools=cached_tools,
+                **({"tool_choice": {"type": "none"}} if final_turn else {}),
+            )
+            _merge_usage(usage, _usage(msg))
+            tool_blocks = [
+                block for block in msg.content
+                if getattr(block, "type", "") == "tool_use"
+            ]
+            if not tool_blocks or final_turn:
+                text = "".join(
+                    block.text for block in msg.content
+                    if getattr(block, "type", "") == "text"
+                ).strip()
+                if not text:
+                    raise ValueError("model returned no final answer")
+                return LLMResponse(
+                    data={"answer": text}, model=self.model, raw=text,
+                    metadata={"usage": usage, "turns": turn + 1},
+                )
+
+            messages.append({"role": "assistant", "content": msg.content})
+            results = []
+            for block in tool_blocks:
+                try:
+                    value = execute_tool(block.name, dict(block.input or {}))
+                    content = json.dumps(value, default=str, separators=(",", ":"))
+                    is_error = False
+                except (KeyError, TypeError, ValueError) as exc:
+                    content = json.dumps({"error": str(exc)})
+                    is_error = True
+                results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": content,
+                    "is_error": is_error,
+                })
+            messages.append({"role": "user", "content": results})
+
+        raise ValueError("tool loop exceeded its turn limit")
+
+
+def _usage(message) -> dict[str, int]:
+    usage = getattr(message, "usage", None)
+    if usage is None:
+        return {}
+    raw = usage.model_dump() if hasattr(usage, "model_dump") else vars(usage)
+    out: dict[str, int] = {}
+    for key in (
+        "input_tokens", "output_tokens", "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+    ):
+        value = raw.get(key)
+        if isinstance(value, int):
+            out[key] = value
+    creation = raw.get("cache_creation")
+    if isinstance(creation, dict):
+        out["cache_creation_input_tokens"] = sum(
+            value for value in creation.values() if isinstance(value, int)
+        )
+    return out
+
+
+def _merge_usage(total: dict[str, int], item: dict[str, int]) -> None:
+    for key, value in item.items():
+        total[key] = total.get(key, 0) + value
 
 
 class NullProvider(LLMProvider):
@@ -116,17 +235,29 @@ class EchoProvider(LLMProvider):
         return LLMResponse(data=[], model="echo", raw="[]")
 
 
-def build_provider(conn=None, *, model: str | None = None) -> LLMProvider:
+def build_provider(
+    conn=None, *, model: str | None = None, purpose: str = "classification",
+) -> LLMProvider:
     """Construct a provider from settings, degrading to Null when unavailable."""
     enabled, configured_model = True, model
     if conn is not None:
         rows = {r["key"]: r["value"] for r in conn.execute(
-            "SELECT key, value FROM setting WHERE key IN ('llm_enabled','llm_model')")}
+            "SELECT key, value FROM setting WHERE key IN "
+            "('llm_enabled','llm_model','llm_agent_model')")}
         enabled = rows.get("llm_enabled", "0") == "1"
-        configured_model = model or rows.get("llm_model")
+        setting = "llm_agent_model" if purpose == "analysis" else "llm_model"
+        configured_model = model or rows.get(setting)
+    env_enabled = os.environ.get("FINTO_LLM_ENABLED")
+    if env_enabled is not None:
+        enabled = env_enabled.strip().lower() in {"1", "true", "yes", "on"}
+    env_model = os.environ.get(
+        "FINTO_LLM_AGENT_MODEL" if purpose == "analysis" else "FINTO_LLM_MODEL"
+    )
+    configured_model = model or env_model or configured_model
     if not enabled:
         return NullProvider()
     try:
-        return AnthropicProvider(model=configured_model or "claude-haiku-4-5-20251001")
+        default = "claude-sonnet-5" if purpose == "analysis" else "claude-haiku-4-5-20251001"
+        return AnthropicProvider(model=configured_model or default)
     except LLMUnavailable:
         return NullProvider()

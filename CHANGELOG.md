@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1 — 2026-08-05
+
+### LLM analysis
+
+- Added Anthropic prompt-prefix caching with cache usage reporting.
+- Added a bounded read-only ledger tool loop for totals, summaries,
+  transactions, positions, and money flows.
+- Added concise generated answers backed by visible tool filters and audited
+  query records.
+- Split the fast classification model from the higher-capability analysis
+  model and added deployment configuration overrides.
+
 ## 0.2.0 — 2026-08-05
 
 ### Data and storage

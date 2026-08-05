@@ -7,10 +7,18 @@ anything it invents is discarded rather than executed.
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
-from fin.llm.provider import EchoProvider
+from fin.llm.agent import _execute_tool, answer_question
+from fin.llm.provider import (
+    AnthropicProvider,
+    EchoProvider,
+    LLMProvider,
+    LLMResponse,
+    build_provider,
+)
 from fin.llm.query import build_context, sanitise, translate
 from fin.models import Money, Txn
 
@@ -197,3 +205,136 @@ def test_context_only_exposes_real_vocabulary(seeded):
     assert {a["id"] for a in ctx["accounts"]} >= {"amex_us_main"}
     assert "dining" in ctx["categories"]
     assert ctx["date_range"]["earliest"] == "2025-04-03"
+
+
+# ---------------------------------------------------------------------------
+# Read-only analysis agent
+# ---------------------------------------------------------------------------
+
+class _ToolProvider(LLMProvider):
+    name = "tool-test"
+    model = "tool-test-v1"
+
+    def complete_json(self, system, user, *, max_tokens=2000):
+        raise AssertionError("the analysis agent must use the tool interface")
+
+    def complete_with_tools(
+        self, system, user, tools, execute_tool, *, max_turns=4, max_tokens=1600,
+    ):
+        result = execute_tool("ledger_totals", {
+            "filter": {"categories": ["dining"]},
+            "reporting_currency": "USD",
+        })
+        amount = result["normalised"]["spend"]["amount"]
+        return LLMResponse(
+            data={"answer": f"Dining spend was USD {amount / 100:.2f}."},
+            model=self.model,
+            raw="",
+            metadata={"usage": {"cache_read_input_tokens": 800}},
+        )
+
+
+def test_agent_answer_uses_allowlisted_sql_tool(seeded):
+    result = answer_question(
+        seeded, _ToolProvider(), "How much did I spend on dining?",
+        reporting_currency="USD",
+    )
+    assert result["ok"] is True
+    assert result["answer"] == "Dining spend was USD 134.00."
+    assert result["tools"] == [{
+        "name": "ledger_totals",
+        "input": {
+            "filter": {"categories": ["dining"]},
+            "reporting_currency": "USD",
+        },
+    }]
+    assert result["filter"] == {"categories": ["dining"]}
+    assert result["prompt_cache"]["hit"] is True
+    audit = seeded.execute(
+        "SELECT output,prompt_version FROM llm_decision WHERE task='query'"
+    ).fetchone()
+    assert "Dining spend was USD 134.00" in audit["output"]
+    assert audit["prompt_version"] == "agent-v1"
+
+
+def test_agent_tool_rejects_unknown_name(seeded):
+    with pytest.raises(ValueError, match="unknown tool"):
+        _execute_tool(
+            seeded, build_context(seeded), "run_sql", {"sql": "select 1"},
+            default_currency="USD",
+        )
+
+
+class _FakeMessages:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.requests = []
+
+    def create(self, **kwargs):
+        self.requests.append(kwargs)
+        return self.responses.pop(0)
+
+
+def _message(content, *, stop_reason="end_turn", read=0, created=0):
+    return SimpleNamespace(
+        content=content,
+        stop_reason=stop_reason,
+        usage=SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            cache_creation_input_tokens=created,
+            cache_read_input_tokens=read,
+        ),
+    )
+
+
+def _anthropic_with(responses):
+    provider = AnthropicProvider.__new__(AnthropicProvider)
+    provider.model = "claude-test"
+    provider._client = SimpleNamespace(messages=_FakeMessages(responses))
+    return provider
+
+
+def test_json_calls_cache_the_system_prefix():
+    provider = _anthropic_with([
+        _message([SimpleNamespace(type="text", text='{"ok":true}')], created=600),
+    ])
+    response = provider.complete_json("stable system", "changing question")
+    request = provider._client.messages.requests[0]
+    assert request["system"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert response.metadata["usage"]["cache_creation_input_tokens"] == 600
+
+
+def test_tool_loop_caches_tools_and_system_and_reports_hits():
+    tool_use = SimpleNamespace(
+        type="tool_use", id="tool-1", name="ledger_totals", input={"filter": {}},
+    )
+    provider = _anthropic_with([
+        _message([tool_use], stop_reason="tool_use", created=700),
+        _message([SimpleNamespace(type="text", text="Net flow was USD 12.00.")], read=700),
+    ])
+    executed = []
+    tools = [{
+        "name": "ledger_totals",
+        "description": "Totals",
+        "input_schema": {"type": "object"},
+    }]
+    response = provider.complete_with_tools(
+        "stable system", "question", tools,
+        lambda name, value: executed.append((name, value)) or {"net": 1200},
+    )
+    first = provider._client.messages.requests[0]
+    assert first["tools"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert first["system"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert executed == [("ledger_totals", {"filter": {}})]
+    assert response.data["answer"] == "Net flow was USD 12.00."
+    assert response.metadata["usage"]["cache_read_input_tokens"] == 700
+
+
+def test_deployment_can_enable_analysis_without_changing_database(seeded, monkeypatch):
+    monkeypatch.setenv("FINTO_LLM_ENABLED", "1")
+    monkeypatch.setenv("FINTO_LLM_AGENT_MODEL", "claude-sonnet-5")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    provider = build_provider(seeded, purpose="analysis")
+    assert provider.name == "anthropic"
+    assert provider.model == "claude-sonnet-5"
