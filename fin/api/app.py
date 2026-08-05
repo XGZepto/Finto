@@ -167,7 +167,8 @@ def agent_taxonomy_apply(request: Request) -> dict:
 
 @app.post("/api/agent/ledger/categorize")
 def agent_ledger_categorize(request: Request, apply: bool = False,
-                            promote: bool = True) -> dict:
+                            promote: bool = True,
+                            max_merchants: int = 60) -> dict:
     """LLM-categorise transactions no rule matched. Deterministic rules always
     win; the model only sees what is left, its answers are cached and recorded
     source='llm', and low-confidence rows stay uncategorised."""
@@ -188,8 +189,10 @@ def agent_ledger_categorize(request: Request, apply: bool = False,
 
     conn = dbm.connect()
     try:
-        result = apply_to_ledger(conn, provider, dry_run=not apply)
-        result["tags"] = apply_tags(conn, provider, dry_run=not apply)
+        result = apply_to_ledger(conn, provider, dry_run=not apply,
+                                 max_merchants=max_merchants)
+        result["tags"] = apply_tags(conn, provider, dry_run=not apply,
+                                    max_merchants=max_merchants)
         if apply and promote:
             result["promoted_rules"] = promote_to_rules(conn)
         conn.execute(

@@ -136,11 +136,15 @@ def categorize_merchants(
     return results
 
 
-def apply_to_ledger(conn, provider: LLMProvider, *, dry_run: bool = False) -> dict:
+def apply_to_ledger(
+    conn, provider: LLMProvider, *, dry_run: bool = False,
+    max_merchants: int | None = None,
+) -> dict:
     """Categorise every uncategorised transaction the rules didn't claim.
 
     Groups by normalised description first — that collapse is where nearly all
-    of the cost saving comes from.
+    of the cost saving comes from. max_merchants bounds one call so the work
+    fits a serverless request; callers repeat until remaining reaches zero.
     """
     rows = list(conn.execute(
         "SELECT t.id, t.description_norm, t.description_raw, a.user_id FROM txn t "
@@ -158,6 +162,12 @@ def apply_to_ledger(conn, provider: LLMProvider, *, dry_run: bool = False) -> di
     if dry_run:
         return {"transactions": len(rows), "distinct_merchants": len(distinct),
                 "applied": 0, "note": "dry run — no calls made"}
+
+    remaining = 0
+    if max_merchants is not None and len(distinct) > max_merchants:
+        remaining = len(distinct) - max_merchants
+        distinct = distinct[:max_merchants]
+        by_desc = {d: by_desc[d] for d in distinct}
 
     results = categorize_merchants(conn, provider, distinct)
 
@@ -192,10 +202,14 @@ def apply_to_ledger(conn, provider: LLMProvider, *, dry_run: bool = False) -> di
             )
     conn.commit()
     return {"transactions": len(rows), "distinct_merchants": len(distinct),
-            "applied": applied, "skipped_low_confidence": skipped}
+            "applied": applied, "skipped_low_confidence": skipped,
+            "remaining_merchants": remaining}
 
 
-def apply_tags(conn, provider: LLMProvider, *, dry_run: bool = False) -> dict:
+def apply_tags(
+    conn, provider: LLMProvider, *, dry_run: bool = False,
+    max_merchants: int | None = None,
+) -> dict:
     """Tag transactions that carry no tags yet, categorised or not.
 
     Categories were backfilled before the model was asked for tags, so most
@@ -219,6 +233,12 @@ def apply_tags(conn, provider: LLMProvider, *, dry_run: bool = False) -> dict:
         return {"transactions": len(rows), "distinct_merchants": len(distinct),
                 "tagged": 0, "note": "dry run — no calls made"}
 
+    remaining = 0
+    if max_merchants is not None and len(distinct) > max_merchants:
+        remaining = len(distinct) - max_merchants
+        distinct = distinct[:max_merchants]
+        by_desc = {d: by_desc[d] for d in distinct}
+
     results = categorize_merchants(conn, provider, distinct)
 
     tagged = tags_written = 0
@@ -236,7 +256,8 @@ def apply_tags(conn, provider: LLMProvider, *, dry_run: bool = False) -> dict:
             tagged += 1
     conn.commit()
     return {"transactions": len(rows), "distinct_merchants": len(distinct),
-            "tagged": tagged, "tags_written": tags_written}
+            "tagged": tagged, "tags_written": tags_written,
+            "remaining_merchants": remaining}
 
 
 def promote_to_rules(conn, *, min_confidence: float = 0.9, min_occurrences: int = 3) -> int:
