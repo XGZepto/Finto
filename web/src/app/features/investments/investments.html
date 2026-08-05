@@ -13,11 +13,8 @@
     <div class="toolbar">
       <span class="small muted mono">{{ snap.scheme }}</span>
       @if (snapshots().length > 1) {
-        <select [value]="snap.id" (change)="select($any($event.target).value)">
-          @for (s of snapshots(); track s.id) {
-            <option [value]="s.id">{{ s.as_of_date | shortDate }}</option>
-          }
-        </select>
+        <finto-select ariaLabel="Snapshot" [options]="snapshots()" valueKey="id"
+                      labelKey="as_of_date" [ngModel]="snap.id" (ngModelChange)="select($event)" />
       }
     </div>
 

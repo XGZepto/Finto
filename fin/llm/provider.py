@@ -38,7 +38,7 @@ class LLMProvider(ABC):
 def _extract_json(text: str) -> Any:
     """Pull JSON out of a response that may be wrapped in prose or fences."""
     text = text.strip()
-    fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
+    fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if fence:
         text = fence.group(1).strip()
     try:
@@ -120,7 +120,7 @@ def build_provider(conn=None, *, model: str | None = None) -> LLMProvider:
     """Construct a provider from settings, degrading to Null when unavailable."""
     enabled, configured_model = True, model
     if conn is not None:
-        rows = {r[0]: r[1] for r in conn.execute(
+        rows = {r["key"]: r["value"] for r in conn.execute(
             "SELECT key, value FROM setting WHERE key IN ('llm_enabled','llm_model')")}
         enabled = rows.get("llm_enabled", "0") == "1"
         configured_model = model or rows.get("llm_model")

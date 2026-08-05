@@ -1,0 +1,12 @@
+.git
+.venv
+web/node_modules
+tests
+inbox
+statements
+exports
+archive
+*.pdf
+*.csv
+*.xlsx
+*.db

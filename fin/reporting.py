@@ -34,12 +34,11 @@ GROUP_BY_SQL: dict[str, str] = {
     "merchant": "COALESCE(t.merchant, t.description_norm)",
     "account": "t.account_id",
     "institution": "a.institution_id",
-    "card": "COALESCE(t.card_id, '(unattributed)')",
+    "card": "COALESCE(t.card_id, '(primary)')",
     # Supplementary spend is separable here: primary vs (supp) labelled by name.
     "cardholder": (
-        "CASE WHEN c.id IS NULL THEN '(unattributed)' "
-        "WHEN c.is_supplementary = 1 THEN c.cardholder_name || ' (supp)' "
-        "ELSE c.cardholder_name END"
+        "CASE WHEN c.id IS NULL OR c.is_supplementary = 0 THEN 'You' "
+        "ELSE c.cardholder_name || ' (supp)' END"
     ),
     "kind": "t.kind",
     "currency": "t.currency_booked",
@@ -105,24 +104,36 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
     params: list[Any] = []
 
     def in_clause(column: str, values: Sequence[str]) -> None:
-        clauses.append(f"{column} IN ({','.join('?' * len(values))})")
+        clauses.append(f"{column} IN ({','.join(['%s'] * len(values))})")
         params.extend(values)
 
     if f.get("from"):
-        clauses.append("t.txn_date >= ?")
+        clauses.append("t.txn_date >= %s")
         params.append(str(f["from"]))
     if f.get("to"):
-        clauses.append("t.txn_date <= ?")
+        clauses.append("t.txn_date <= %s")
         params.append(str(f["to"]))
     if f.get("accounts"):
         in_clause("t.account_id", f["accounts"])
     if f.get("cards"):
         in_clause("t.card_id", f["cards"])
     if f.get("cardholders"):
-        ph = ",".join("?" * len(f["cardholders"]))
-        clauses.append(
-            f"t.card_id IN (SELECT id FROM card WHERE cardholder_name IN ({ph}))")
-        params.extend(f["cardholders"])
+        requested = list(f["cardholders"])
+        primary = "You" in requested
+        named = [name.removesuffix(" (supp)") for name in requested if name != "You"]
+        parts: list[str] = []
+        if primary:
+            parts.append(
+                "(t.card_id IS NULL OR t.card_id IN "
+                "(SELECT id FROM card WHERE is_supplementary=0))"
+            )
+        if named:
+            ph = ",".join(["%s"] * len(named))
+            parts.append(
+                f"t.card_id IN (SELECT id FROM card WHERE cardholder_name IN ({ph}))"
+            )
+            params.extend(named)
+        clauses.append("(" + " OR ".join(parts) + ")")
     if f.get("institutions"):
         in_clause("a.institution_id", f["institutions"])
     if f.get("categories"):
@@ -130,43 +141,59 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
     if f.get("kinds"):
         in_clause("t.kind", f["kinds"])
     if f.get("currency"):
-        clauses.append("t.currency_booked = ?")
+        clauses.append("t.currency_booked = %s")
         params.append(f["currency"])
     if f.get("minAmount") is not None:
-        clauses.append("t.amount_booked >= ?")
+        clauses.append("t.amount_booked >= %s")
         params.append(int(f["minAmount"]))
     if f.get("maxAmount") is not None:
-        clauses.append("t.amount_booked <= ?")
+        clauses.append("t.amount_booked <= %s")
         params.append(int(f["maxAmount"]))
     if f.get("uncategorisedOnly"):
         clauses.append("t.category IS NULL")
     if f.get("installmentsOnly"):
         clauses.append("t.installment_plan_id IS NOT NULL")
     if not f.get("includeTransfers"):
-        clauses.append("t.transfer_group_id IS NULL")
-    # Exact detail lookup: "travel.passenger_name=YIXIANG ZHOU". This is what
+        scoped_accounts = list(f.get("accounts") or [])
+        if f.get("boundaryTransfers") and scoped_accounts:
+            # A linked transfer only disappears when both sides are inside the
+            # reporting scope. If its peer is outside, this leg crossed the
+            # scope boundary and belongs in the scoped cash-flow result.
+            placeholders = ",".join(["%s"] * len(scoped_accounts))
+            clauses.append(
+                "(t.transfer_group_id IS NULL OR NOT EXISTS ("
+                "SELECT 1 FROM transfer_leg boundary_leg "
+                "JOIN txn boundary_peer ON boundary_peer.id=boundary_leg.txn_id "
+                "WHERE boundary_leg.transfer_group_id=t.transfer_group_id "
+                "AND boundary_peer.id<>t.id "
+                f"AND boundary_peer.account_id IN ({placeholders})))"
+            )
+            params.extend(scoped_accounts)
+        else:
+            clauses.append("t.transfer_group_id IS NULL")
+    # Exact detail lookup: "travel.passenger_name=ALEX EXAMPLE". This is what
     # txn_detail exists for — a JSON blob cannot answer "every flight booked
     # for this passenger", and `q` only does substrings across every key.
     for tag in f.get("tags") or []:
         clauses.append(
-            "EXISTS (SELECT 1 FROM txn_tag tg WHERE tg.txn_id = t.id AND tg.tag = ?)")
+            "EXISTS (SELECT 1 FROM txn_tag tg WHERE tg.txn_id = t.id AND tg.tag = %s)")
         params.append(tag)
 
     for pair in f.get("detail") or []:
         key, _, value = str(pair).partition("=")
         clauses.append(
             "EXISTS (SELECT 1 FROM txn_detail d WHERE d.txn_id = t.id "
-            "        AND d.key = ?" + (" AND d.value = ?" if value else "") + ")")
+            "        AND d.key = %s" + (" AND d.value = %s" if value else "") + ")")
         params.append(key)
         if value:
             params.append(value)
 
     for term in str(f.get("q") or "").split():
         clauses.append(
-            "(t.description_raw LIKE ? OR t.description_norm LIKE ? "
-            " OR COALESCE(t.merchant,'') LIKE ? OR COALESCE(t.counterparty,'') LIKE ? "
+            "(t.description_raw ILIKE %s OR t.description_norm ILIKE %s "
+            " OR COALESCE(t.merchant,'') ILIKE %s OR COALESCE(t.counterparty,'') ILIKE %s "
             " OR EXISTS (SELECT 1 FROM txn_detail d "
-            "            WHERE d.txn_id = t.id AND d.value LIKE ?))")
+            "            WHERE d.txn_id = t.id AND d.value ILIKE %s))")
         params.extend([f"%{term}%"] * 5)
 
     return " AND ".join(clauses), params
@@ -187,8 +214,8 @@ def detail_values(conn, key: str, limit: int = 200) -> dict:
     return {"key": key, "values": [dict(r) for r in conn.execute(
         "SELECT d.value, COUNT(*) AS transactions FROM txn_detail d "
         "JOIN txn t ON t.id = d.txn_id "
-        "WHERE d.key = ? AND t.duplicate_of_id IS NULL AND t.status <> 'void' "
-        "GROUP BY d.value ORDER BY transactions DESC, d.value LIMIT ?",
+        "WHERE d.key = %s AND t.duplicate_of_id IS NULL AND t.status <> 'void' "
+        "GROUP BY d.value ORDER BY transactions DESC, d.value LIMIT %s",
         (key, int(limit)))]}
 
 
@@ -314,12 +341,13 @@ def coverage(conn) -> dict:
     return {"months": months, "accounts": out}
 
 
-def flows(conn, *, filters: dict | None = None) -> dict:
+def flows(conn, *, filters: dict | None = None, to_currency: str = "USD") -> dict:
     """Where money moved: between your own accounts, and across the boundary.
 
     A transfer between accounts you own is the same money in a different place,
     so it is counted apart from what actually entered or left your control.
     """
+    target = to_currency.upper()
     where, params = build_where({**(filters or {}), "includeTransfers": True})
 
     internal = conn.execute(f"""
@@ -348,6 +376,130 @@ def flows(conn, *, filters: dict | None = None) -> dict:
         GROUP BY 1 ORDER BY 1
     """, params).fetchall()
 
+    external_accounts = conn.execute(f"""
+        SELECT t.account_id, t.currency_booked AS currency,
+               SUM(CASE WHEN t.amount_booked > 0 THEN t.amount_booked ELSE 0 END) AS in_minor,
+               SUM(CASE WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS out_minor,
+               COUNT(*) AS moves
+        FROM txn t JOIN account a ON a.id = t.account_id
+        WHERE {where} AND t.transfer_group_id IS NULL
+        GROUP BY 1, 2 ORDER BY 2, GREATEST(
+          SUM(CASE WHEN t.amount_booked > 0 THEN t.amount_booked ELSE 0 END),
+          SUM(CASE WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END)
+        ) DESC
+    """, params).fetchall()
+
+    # Charts compare accounts on one scale. Convert monthly aggregates (rather
+    # than a whole-history lump) so each period uses a contemporaneous rate.
+    monthly_accounts = conn.execute(f"""
+        SELECT t.account_id, substr(t.txn_date, 1, 7) AS month,
+               t.currency_booked AS currency,
+               SUM(CASE WHEN t.amount_booked > 0 THEN t.amount_booked ELSE 0 END) AS in_minor,
+               SUM(CASE WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS out_minor,
+               COUNT(*) AS moves
+        FROM txn t JOIN account a ON a.id = t.account_id
+        WHERE {where} AND t.transfer_group_id IS NULL
+        GROUP BY 1, 2, 3
+    """, params).fetchall()
+    monthly_internal = conn.execute(f"""
+        SELECT src.account_id AS from_account, dst.account_id AS to_account,
+               substr(src.txn_date, 1, 7) AS month,
+               src.currency_booked AS currency, COUNT(*) AS moves,
+               SUM(-src.amount_booked) AS amount_minor
+        FROM transfer_leg lo
+        JOIN transfer_leg li ON li.transfer_group_id=lo.transfer_group_id
+                            AND li.role='in'
+        JOIN txn src ON src.id=lo.txn_id
+        JOIN txn dst ON dst.id=li.txn_id
+        WHERE lo.role='out' AND src.account_id<>dst.account_id
+          AND src.id IN (SELECT t.id FROM txn t JOIN account a ON a.id=t.account_id
+                         WHERE {where})
+        GROUP BY 1, 2, 3, 4
+    """, params).fetchall()
+    monthly_external_nodes = conn.execute(f"""
+        SELECT t.account_id, substr(t.txn_date, 1, 7) AS month,
+               t.currency_booked AS currency,
+               COALESCE(t.category, t.kind, '(uncategorised)') AS bucket,
+               SUM(CASE WHEN t.amount_booked > 0 THEN t.amount_booked ELSE 0 END) AS in_minor,
+               SUM(CASE WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS out_minor,
+               COUNT(*) AS moves
+        FROM txn t JOIN account a ON a.id=t.account_id
+        WHERE {where} AND t.transfer_group_id IS NULL
+        GROUP BY 1, 2, 3, 4
+    """, params).fetchall()
+    from decimal import Decimal
+
+    from .fx import convert
+    from .models import Money, minor_exponent
+    normalised: dict[str, dict] = {}
+    normalised_internal: dict[tuple[str, str], dict] = {}
+    normalised_external_nodes: dict[tuple[str, str], dict] = {}
+    unconvertible: set[str] = set()
+    rates: dict[tuple[str, str], Any] = {}
+    for r in monthly_accounts:
+        key = (r["currency"], r["month"])
+        rate = rates.get(key)
+        if rate is None:
+            rate = convert(
+                conn, Money(amount=0, currency=r["currency"]), target,
+                f"{r['month']}-15", nearest=True)
+            rates[key] = rate
+        if not rate.ok or rate.rate is None:
+            unconvertible.add(r["currency"])
+            continue
+        scale = Decimal(10) ** (
+            minor_exponent(target) - minor_exponent(r["currency"])
+        )
+        incoming = int((Decimal(r["in_minor"]) * rate.rate * scale).quantize(Decimal(1)))
+        outgoing = int((Decimal(r["out_minor"]) * rate.rate * scale).quantize(Decimal(1)))
+        item = normalised.setdefault(
+            r["account_id"], {"in": 0, "out": 0, "moves": 0})
+        item["in"] += incoming
+        item["out"] += outgoing
+        item["moves"] += r["moves"]
+
+    for r in monthly_internal:
+        key = (r["currency"], r["month"])
+        rate = rates.get(key)
+        if rate is None:
+            rate = convert(
+                conn, Money(amount=0, currency=r["currency"]), target,
+                f"{r['month']}-15", nearest=True)
+            rates[key] = rate
+        if not rate.ok or rate.rate is None:
+            unconvertible.add(r["currency"])
+            continue
+        scale = Decimal(10) ** (
+            minor_exponent(target) - minor_exponent(r["currency"])
+        )
+        amount = int((Decimal(r["amount_minor"]) * rate.rate * scale).quantize(Decimal(1)))
+        pair = normalised_internal.setdefault(
+            (r["from_account"], r["to_account"]), {"amount": 0, "moves": 0})
+        pair["amount"] += amount
+        pair["moves"] += r["moves"]
+
+    for r in monthly_external_nodes:
+        key = (r["currency"], r["month"])
+        rate = rates.get(key)
+        if rate is None:
+            rate = convert(
+                conn, Money(amount=0, currency=r["currency"]), target,
+                f"{r['month']}-15", nearest=True)
+            rates[key] = rate
+        if not rate.ok or rate.rate is None:
+            unconvertible.add(r["currency"])
+            continue
+        scale = Decimal(10) ** (
+            minor_exponent(target) - minor_exponent(r["currency"])
+        )
+        incoming = int((Decimal(r["in_minor"]) * rate.rate * scale).quantize(Decimal(1)))
+        outgoing = int((Decimal(r["out_minor"]) * rate.rate * scale).quantize(Decimal(1)))
+        node = normalised_external_nodes.setdefault(
+            (r["account_id"], r["bucket"]), {"in": 0, "out": 0, "moves": 0})
+        node["in"] += incoming
+        node["out"] += outgoing
+        node["moves"] += r["moves"]
+
     return {
         "internal": [{
             "from_account": r["from_account"], "to_account": r["to_account"],
@@ -360,6 +512,33 @@ def flows(conn, *, filters: dict | None = None) -> dict:
             "out": money(-r["out_minor"], r["currency"]),
             "net": money(r["in_minor"] - r["out_minor"], r["currency"]),
         } for r in external],
+        "external_accounts": [{
+            "account_id": r["account_id"], "currency": r["currency"],
+            "moves": r["moves"],
+            "in": money(r["in_minor"], r["currency"]),
+            "out": money(-r["out_minor"], r["currency"]),
+            "net": money(r["in_minor"] - r["out_minor"], r["currency"]),
+        } for r in external_accounts],
+        "normalised": {
+            "currency": target,
+            "unconvertible_currencies": sorted(unconvertible),
+            "external_accounts": [{
+                "account_id": account_id, "currency": target,
+                "moves": item["moves"],
+                "in": money(item["in"], target),
+                "out": money(-item["out"], target),
+                "net": money(item["in"] - item["out"], target),
+            } for account_id, item in normalised.items()],
+            "internal": [{
+                "from_account": pair[0], "to_account": pair[1],
+                "moves": item["moves"], "amount": money(item["amount"], target),
+            } for pair, item in normalised_internal.items()],
+            "external_nodes": [{
+                "account_id": pair[0], "bucket": pair[1], "moves": item["moves"],
+                "in": money(item["in"], target),
+                "out": money(-item["out"], target),
+            } for pair, item in normalised_external_nodes.items()],
+        },
     }
 
 
@@ -387,16 +566,17 @@ def positions(conn, *, as_of: str | None = None) -> list[dict]:
         FROM txn t JOIN account a ON a.id = t.account_id
         WHERE t.duplicate_of_id IS NULL AND t.status <> 'void'
         {as_of}
-        GROUP BY t.account_id, t.currency_booked
+        GROUP BY t.account_id, t.currency_booked,
+                 a.display_name, a.institution_id, a.account_type
         ORDER BY a.display_name, t.currency_booked
-    """.format(as_of="AND t.txn_date <= ?" if as_of else "")
+    """.format(as_of="AND t.txn_date <= %s" if as_of else "")
     params = (as_of,) if as_of else ()
 
     for r in conn.execute(sql, params):
         assertion = conn.execute(
             "SELECT balance, as_of_date FROM balance_assertion "
-            "WHERE account_id=? AND currency=? " +
-            ("AND as_of_date <= ? " if as_of else "") +
+            "WHERE account_id=%s AND currency=%s " +
+            ("AND as_of_date <= %s " if as_of else "") +
             # A statement with no printed period dates its opening on the
             # statement day too, so the closing has to win that tie.
             "ORDER BY as_of_date DESC, "
@@ -452,7 +632,7 @@ def summary(conn, *, group_by: str = "month", filters: dict | None = None) -> li
     """
     if group_by != "tag" and group_by not in GROUP_BY_SQL:
         raise ValueError(f"unknown group_by: {group_by}")
-    where, params = build_where(filters)
+    where, params = build_where({**(filters or {}), "boundaryTransfers": True})
 
     # A tag fans out: a transaction under two tags counts under each. Every
     # other dimension is one value per row, so it groups on an expression.
@@ -470,8 +650,13 @@ def summary(conn, *, group_by: str = "month", filters: dict | None = None) -> li
         SELECT {bucket} AS bucket, t.currency_booked AS currency,
                COUNT(*) AS txn_count,
                SUM(t.amount_booked) AS net_minor,
-               SUM(CASE WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS spend_minor,
-               SUM(CASE WHEN t.amount_booked > 0 THEN t.amount_booked ELSE 0 END) AS income_minor
+               SUM(CASE
+                   WHEN t.amount_booked > 0 AND (t.refund_of_id IS NOT NULL OR t.kind='refund')
+                     THEN -t.amount_booked
+                   WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS spend_minor,
+               SUM(CASE WHEN t.amount_booked > 0
+                              AND t.refund_of_id IS NULL AND t.kind<>'refund'
+                        THEN t.amount_booked ELSE 0 END) AS income_minor
         {source}
         WHERE {where}
         GROUP BY bucket, t.currency_booked
@@ -489,12 +674,17 @@ def summary(conn, *, group_by: str = "month", filters: dict | None = None) -> li
 
 def totals(conn, *, filters: dict | None = None) -> list[dict]:
     """Headline figures, one row per currency."""
-    where, params = build_where(filters)
+    where, params = build_where({**(filters or {}), "boundaryTransfers": True})
     sql = f"""
         SELECT t.currency_booked AS currency, COUNT(*) AS txn_count,
                SUM(t.amount_booked) AS net_minor,
-               SUM(CASE WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS spend_minor,
-               SUM(CASE WHEN t.amount_booked > 0 THEN t.amount_booked ELSE 0 END) AS income_minor,
+               SUM(CASE
+                   WHEN t.amount_booked > 0 AND (t.refund_of_id IS NOT NULL OR t.kind='refund')
+                     THEN -t.amount_booked
+                   WHEN t.amount_booked < 0 THEN -t.amount_booked ELSE 0 END) AS spend_minor,
+               SUM(CASE WHEN t.amount_booked > 0
+                              AND t.refund_of_id IS NULL AND t.kind<>'refund'
+                        THEN t.amount_booked ELSE 0 END) AS income_minor,
                SUM(CASE WHEN t.category IS NULL THEN 1 ELSE 0 END) AS uncategorised
         FROM txn t JOIN account a ON a.id = t.account_id
         WHERE {where}
@@ -540,14 +730,14 @@ def transactions(conn, *, filters: dict | None = None, limit: int = 100,
         LEFT JOIN card c ON c.id = t.card_id
         WHERE {where}
         ORDER BY {order} {dirn}, t.id
-        LIMIT ? OFFSET ?
+        LIMIT %s OFFSET %s
     """
     rows = list(conn.execute(sql, [*params, int(limit), int(offset)]))
     ids = [r["id"] for r in rows]
 
     details: dict[str, dict[str, str]] = {}
     if ids:
-        q = ",".join("?" * len(ids))
+        q = ",".join(["%s"] * len(ids))
         for d in conn.execute(
                 f"SELECT txn_id, key, value FROM txn_detail WHERE txn_id IN ({q})",
                 ids):
@@ -613,19 +803,19 @@ def transaction_detail(conn, txn_id: str) -> dict | None:
         "SELECT t.*, a.display_name AS account_name, a.institution_id, "
         "       c.cardholder_name, c.last4 "
         "FROM txn t JOIN account a ON a.id=t.account_id "
-        "LEFT JOIN card c ON c.id=t.card_id WHERE t.id=?", (txn_id,)).fetchone()
+        "LEFT JOIN card c ON c.id=t.card_id WHERE t.id=%s", (txn_id,)).fetchone()
     if r is None:
         return None
 
     details = {d["key"]: d["value"] for d in conn.execute(
-        "SELECT key, value FROM txn_detail WHERE txn_id=?", (txn_id,))}
+        "SELECT key, value FROM txn_detail WHERE txn_id=%s", (txn_id,))}
     from . import db as _dbm
     out = _txn_dict(r, details, _dbm.load_tags(conn, [txn_id]).get(txn_id, []))
 
     raw = conn.execute(
         "SELECT rr.payload, sf.source_path, sf.parser_id, sf.imported_at "
         "FROM raw_record rr JOIN statement_file sf ON sf.id = rr.statement_file_id "
-        "WHERE rr.id = ?", (r["raw_record_id"],)).fetchone() if r["raw_record_id"] else None
+        "WHERE rr.id = %s", (r["raw_record_id"],)).fetchone() if r["raw_record_id"] else None
     if raw:
         import json as _json
         out["provenance"] = {
@@ -641,7 +831,36 @@ def transaction_detail(conn, txn_id: str) -> dict | None:
             "SELECT tl.role, t.id, t.description_raw, t.amount_booked, "
             "       t.currency_booked, t.account_id, t.txn_date "
             "FROM transfer_leg tl JOIN txn t ON t.id = tl.txn_id "
-            "WHERE tl.transfer_group_id = ?", (r["transfer_group_id"],))]
+            "WHERE tl.transfer_group_id = %s", (r["transfer_group_id"],))]
+    related = []
+    if r["refund_of_id"]:
+        row = conn.execute(
+            "SELECT 'purchase' AS relation, id, description_raw, amount_booked, "
+            "currency_booked, account_id, txn_date FROM txn WHERE id=%s",
+            (r["refund_of_id"],),
+        ).fetchone()
+        if row:
+            related.append(dict(row))
+    related.extend(dict(x) for x in conn.execute(
+        "SELECT 'refund' AS relation, id, description_raw, amount_booked, "
+        "currency_booked, account_id, txn_date FROM txn WHERE refund_of_id=%s",
+        (txn_id,),
+    ))
+    if r["duplicate_of_id"]:
+        row = conn.execute(
+            "SELECT 'canonical' AS relation, id, description_raw, amount_booked, "
+            "currency_booked, account_id, txn_date FROM txn WHERE id=%s",
+            (r["duplicate_of_id"],),
+        ).fetchone()
+        if row:
+            related.append(dict(row))
+    related.extend(dict(x) for x in conn.execute(
+        "SELECT 'duplicate' AS relation, id, description_raw, amount_booked, "
+        "currency_booked, account_id, txn_date FROM txn WHERE duplicate_of_id=%s",
+        (txn_id,),
+    ))
+    if related:
+        out["related_transactions"] = related
     return out
 
 
@@ -651,7 +870,7 @@ def transaction_detail(conn, txn_id: str) -> dict | None:
 
 def facets(conn) -> dict:
     def col(sql: str) -> list:
-        return [r[0] for r in conn.execute(sql) if r[0] is not None]
+        return [r["item_value"] for r in conn.execute(sql) if r["item_value"] is not None]
 
     return {
         "accounts": [dict(r) for r in conn.execute(
@@ -662,12 +881,12 @@ def facets(conn) -> dict:
             "FROM card ORDER BY cardholder_name")],
         "institutions": [dict(r) for r in conn.execute(
             "SELECT id, display_name, country FROM institution ORDER BY display_name")],
-        "categories": col("SELECT DISTINCT category FROM txn "
+        "categories": col("SELECT DISTINCT category AS item_value FROM txn "
                           "WHERE category IS NOT NULL ORDER BY category"),
-        "kinds": col("SELECT DISTINCT kind FROM txn ORDER BY kind"),
-        "currencies": col("SELECT DISTINCT currency_booked FROM txn "
+        "kinds": col("SELECT DISTINCT kind AS item_value FROM txn ORDER BY kind"),
+        "currencies": col("SELECT DISTINCT currency_booked AS item_value FROM txn "
                           "ORDER BY currency_booked"),
-        "detail_keys": col("SELECT DISTINCT key FROM txn_detail ORDER BY key"),
+        "detail_keys": col("SELECT DISTINCT key AS item_value FROM txn_detail ORDER BY key"),
         "date_range": dict(conn.execute(
             "SELECT MIN(txn_date) AS min_date, MAX(txn_date) AS max_date "
             "FROM txn").fetchone() or {}),
@@ -676,23 +895,24 @@ def facets(conn) -> dict:
 
 def stats(conn) -> dict:
     def one(sql: str):
-        return conn.execute(sql).fetchone()[0]
+        return conn.execute(sql).fetchone()["count_value"]
 
     return {
-        "transactions": one("SELECT COUNT(*) FROM v_ledger"),
+        "transactions": one("SELECT COUNT(*) AS count_value FROM v_ledger"),
         "suppressed_duplicates":
-            one("SELECT COUNT(*) FROM txn WHERE duplicate_of_id IS NOT NULL"),
-        "transfer_groups": one("SELECT COUNT(*) FROM transfer_group"),
-        "installment_plans": one("SELECT COUNT(*) FROM installment_plan"),
+            one("SELECT COUNT(*) AS count_value FROM txn WHERE duplicate_of_id IS NOT NULL"),
+        "transfer_groups": one("SELECT COUNT(*) AS count_value FROM transfer_group"),
+        "installment_plans": one("SELECT COUNT(*) AS count_value FROM installment_plan"),
         "open_duplicate_candidates":
-            one("SELECT COUNT(*) FROM duplicate_candidate WHERE resolution='open'"),
+            one("SELECT COUNT(*) AS count_value FROM duplicate_candidate "
+                "WHERE resolution='open'"),
         "open_transfer_candidates":
-            one("SELECT COUNT(*) FROM transfer_candidate WHERE resolution='open'"),
+            one("SELECT COUNT(*) AS count_value FROM transfer_candidate "
+                "WHERE resolution='open'"),
         "open_installment_candidates":
-            one("SELECT COUNT(*) FROM installment_candidate WHERE resolution='open'"),
-        "uncategorised": one("SELECT COUNT(*) FROM v_ledger WHERE category IS NULL"),
-        "unattributed_card_txns": one(
-            "SELECT COUNT(*) FROM v_ledger WHERE card_id IS NULL AND account_id IN "
-            "(SELECT DISTINCT account_id FROM card)"),
+            one("SELECT COUNT(*) AS count_value FROM installment_candidate "
+                "WHERE resolution='open'"),
+        "uncategorised": one(
+            "SELECT COUNT(*) AS count_value FROM v_ledger WHERE category IS NULL"),
         "positions": positions(conn),
     }

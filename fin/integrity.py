@@ -1,15 +1,7 @@
-"""Integrity checks.
+"""Balance reconciliation and structural ledger checks.
 
-The single most important thing this module does is answer: "did I actually
-capture every transaction?"
-
-Dedup can be perfect and transfer linking can be perfect while the ledger is
-still wrong, because a parser silently skipped four rows it couldn't read. The
-statement's own running balance is the independent check — it comes from the
-bank, not from our parsing. If our transactions don't reproduce the balance
-delta between two dates, something is missing.
-
-This is why parsers should capture the balance column when one exists.
+Statement balance assertions are compared with imported transaction deltas.
+Structural checks cover duplicate chains, transfer groups, and linked records.
 """
 
 from __future__ import annotations
@@ -28,8 +20,9 @@ def record_balance(conn, *, account_id: str, as_of, balance: Money,
     # is the end-of-day figure; later same-day rows are mid-day snapshots that
     # would make check_account invent a phantom delta.
     conn.execute(
-        "INSERT OR IGNORE INTO balance_assertion (id, account_id, as_of_date, "
-        "balance, currency, kind, statement_file_id) VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO balance_assertion (id, account_id, as_of_date, "
+        "balance, currency, kind, statement_file_id) VALUES (%s,%s,%s,%s,%s,%s,%s) "
+        "ON CONFLICT (id) DO NOTHING",
         (str(uuid.uuid4()), account_id,
          as_of.isoformat() if hasattr(as_of, "isoformat") else str(as_of),
          balance.amount, balance.currency, kind, statement_file_id),
@@ -41,10 +34,10 @@ def record_balance(conn, *, account_id: str, as_of, balance: Money,
 _STATEMENT_ROWS = """
 SELECT COALESCE(SUM(t.amount_booked), 0) AS total FROM txn t
 WHERE t.duplicate_of_id IS NULL AND t.status <> 'void'
-  AND t.account_id = ? AND t.currency_booked = ?
-  AND (t.statement_file_id = ?
+  AND t.account_id = %s AND t.currency_booked = %s
+  AND (t.statement_file_id = %s
        OR EXISTS (SELECT 1 FROM txn d WHERE d.duplicate_of_id = t.id
-                    AND d.statement_file_id = ?))
+                    AND d.statement_file_id = %s))
 """
 
 
@@ -60,7 +53,7 @@ def check_account(conn, account_id: str, *, record: bool = True) -> list[dict]:
     question pass False, so a page load neither appends a row nor takes a write
     lock a concurrent reader deadlocks against.
     """
-    name_row = conn.execute("SELECT display_name FROM account WHERE id=?",
+    name_row = conn.execute("SELECT display_name FROM account WHERE id=%s",
                             (account_id,)).fetchone()
     account_name = name_row["display_name"] if name_row else account_id
 
@@ -81,7 +74,7 @@ def check_account(conn, account_id: str, *, record: bool = True) -> list[dict]:
             conn.execute(
                 "INSERT INTO reconciliation_check (id, account_id, period_start, "
                 "period_end, expected_delta, actual_delta, discrepancy, currency, "
-                "status, checked_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "status, checked_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                 (str(uuid.uuid4()), account_id, c["period_start"], c["period_end"],
                  c["expected_delta"]["amount"], c["actual_delta"]["amount"],
                  c["discrepancy"]["amount"], c["currency"], c["status"],
@@ -118,7 +111,7 @@ def _check_statements(conn, account_id: str) -> list[dict]:
             "  ON c.statement_file_id = o.statement_file_id "
             " AND c.account_id = o.account_id "
             " AND c.currency = o.currency AND c.kind = 'closing' "
-            "WHERE o.account_id = ? AND o.kind = 'opening' "
+            "WHERE o.account_id = %s AND o.kind = 'opening' "
             "  AND o.statement_file_id IS NOT NULL "
             "ORDER BY c.as_of_date", (account_id,)):
         actual = conn.execute(
@@ -133,7 +126,7 @@ def _check_running(conn, account_id: str, kinds: tuple[str, ...]) -> list[dict]:
     """Consecutive balances, against everything dated between them."""
     assertions = list(conn.execute(
         "SELECT as_of_date, balance, currency FROM balance_assertion "
-        f"WHERE account_id=? AND kind IN ({','.join('?' * len(kinds))}) "
+        f"WHERE account_id=%s AND kind IN ({','.join(['%s'] * len(kinds))}) "
         "ORDER BY currency, as_of_date", (account_id, *kinds)))
     out = []
     for prev, curr in zip(assertions, assertions[1:]):
@@ -141,8 +134,8 @@ def _check_running(conn, account_id: str, kinds: tuple[str, ...]) -> list[dict]:
             continue
         actual = conn.execute(
             "SELECT COALESCE(SUM(amount_booked), 0) AS total FROM txn "
-            "WHERE account_id=? AND duplicate_of_id IS NULL AND status<>'void' "
-            "AND currency_booked=? AND txn_date > ? AND txn_date <= ?",
+            "WHERE account_id=%s AND duplicate_of_id IS NULL AND status<>'void' "
+            "AND currency_booked=%s AND txn_date > %s AND txn_date <= %s",
             (account_id, curr["currency"], prev["as_of_date"], curr["as_of_date"])
         ).fetchone()["total"]
         out.append(_outcome(prev["as_of_date"], curr["as_of_date"],
@@ -178,7 +171,7 @@ def resolve_duplicate_chains(conn) -> int:
             seen.add(cur)
             cur = links[cur]
         if cur != links[node] and cur is not None:
-            conn.execute("UPDATE txn SET duplicate_of_id=? WHERE id=?", (cur, node))
+            conn.execute("UPDATE txn SET duplicate_of_id=%s WHERE id=%s", (cur, node))
             fixed += 1
     conn.commit()
     return fixed

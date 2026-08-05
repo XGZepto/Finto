@@ -1,149 +1,217 @@
-<div class="page-head">
-  <h1>Accounts</h1>
-</div>
-
-@if (loading()) {
-  <div class="spinner">loading </div>
-} @else {
-  <div class="card">
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Account</th>
-            <th>Type</th>
-            <th>Holds</th>
-            <th class="num">Cards</th>
-            <th class="num">Balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (r of rows(); track r.account.id) {
-            <tr class="clickable" [class.on]="selected() === r.account.id"
-                (click)="select(r.account.id)">
-              <td>{{ r.account.display_name }}</td>
-              <td class="muted small">{{ r.account.account_type }}</td>
-              <td>
-                @for (c of r.account.settlement_currencies; track c) {
-                  <span class="tag">{{ c }}</span>
-                }
-              </td>
-              <td class="num muted">{{ r.cards || '' }}</td>
-              <td class="num">
-                @for (p of r.positions; track p.currency) {
-                  <span class="bal block"
-                        [class.neg]="p.balance.amount < 0" [class.pos]="p.balance.amount > 0">
-                    {{ p.balance | money: 'bare' }} <span class="ccy">{{ p.currency }}</span>
-                  </span>
-                } @empty { <span class="dim">—</span> }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
+@if (selected(); as selectedId) {
+  <div class="page-head account-head">
+    <button class="bare back" (click)="back()">← Accounts</button>
+    @if (current(); as c) {
+      <div>
+        <h1>{{ c.account.display_name }}</h1>
+        <p class="sub">{{ c.account.institution_id }} · {{ c.account.account_type }} · {{ c.account.masked_number || c.account.id }}</p>
+      </div>
+      <button class="ghost" (click)="openInBlotter(c.account.id)">Open transactions →</button>
+    }
   </div>
 
   @if (current(); as c) {
-    <div class="card detail">
-      <div class="section-head">
-        <h2>{{ c.account.display_name }}</h2>
-        <button class="ghost" (click)="openInBlotter(c.account.id)">Open in blotter →</button>
-      </div>
+    <section class="account-hero">
+      @for (p of c.positions; track p.currency) {
+        <div class="card balance-card">
+          <label>{{ p.currency }} balance</label>
+          <strong class="mono" [class.neg]="p.balance.amount < 0" [class.pos]="p.balance.amount > 0">{{ p.balance | money }}</strong>
+          <span class="small muted">{{ p.basis }} basis · {{ p.basis_date | shortDate }}</span>
+        </div>
+      } @empty {
+        <div class="card balance-card"><label>Balance</label><strong class="mono dim">No movement</strong></div>
+      }
+    </section>
 
-      <div class="panes">
+    @if (siblings().length > 1) {
+      <section class="card sibling-card">
+        <div class="section-head"><h2>{{ humanize(c.account.balance_group || '') }}</h2><span class="small muted">Subaccounts</span></div>
+        <div class="subaccount-strip">
+          @for (s of siblings(); track s.account.id) {
+            <button class="subaccount" [class.on]="s.account.id === selectedId" (click)="open(s.account.id)">
+              <span>{{ s.account.display_name }}</span>
+              <small class="mono">{{ s.account.primary_currency }}</small>
+            </button>
+          }
+        </div>
+      </section>
+    }
+
+    <section class="card detail-flow-card">
+      <div class="section-head"><h2>Money flow</h2><div class="flow-tools"><span class="tag">{{ flows().normalised.currency }} normalised</span><div class="view-switch" role="group" aria-label="Money flow view"><button [class.on]="detailFlowView() === 'chart'" (click)="setFlowView('chart', true)">Chart</button><button [class.on]="detailFlowView() === 'list'" (click)="setFlowView('list', true)">List</button></div></div></div>
+      @if (detailLoading()) {
+        <div class="flow-skeleton skeleton" aria-label="Loading money flow"></div>
+      } @else {
+        @if (detailFlowView() === 'chart') { <div class="detail-sankey-scroll"><svg class="detail-sankey" viewBox="0 0 800 360" role="img"
+             [attr.aria-label]="'Money flowing through ' + c.account.display_name">
+          @for (node of detailFlow().incoming; track node.key) {
+            <path [attr.d]="'M 208 ' + node.y + ' C 270 ' + node.y + ', 272 180, 330 180'"
+                  class="detail-link in" [class.internal]="node.kind === 'account'" [attr.stroke-width]="node.width"><title>{{ node.label }} → {{ c.account.display_name }} · {{ { amount: node.amount, currency: flows().normalised.currency } | money }}</title></path>
+            <rect x="18" [attr.y]="node.y - 16" width="190" height="32" class="detail-node" [class.account]="node.kind === 'account'"></rect>
+            <text x="30" [attr.y]="node.y + 4">{{ node.label }}</text>
+          }
+          <rect x="330" y="154" width="140" height="52" class="detail-node centre"></rect>
+          <text x="400" y="176" text-anchor="middle" class="centre-label">{{ c.account.display_name }}</text>
+          <text x="400" y="192" text-anchor="middle" class="centre-sub">ACCOUNT</text>
+          @for (node of detailFlow().outgoing; track node.key) {
+            <path [attr.d]="'M 470 180 C 528 180, 530 ' + node.y + ', 592 ' + node.y"
+                  class="detail-link out" [class.internal]="node.kind === 'account'" [attr.stroke-width]="node.width"><title>{{ c.account.display_name }} → {{ node.label }} · {{ { amount: node.amount, currency: flows().normalised.currency } | money }}</title></path>
+            <rect x="592" [attr.y]="node.y - 16" width="190" height="32" class="detail-node" [class.account]="node.kind === 'account'"></rect>
+            <text x="604" [attr.y]="node.y + 4">{{ node.label }}</text>
+          }
+        </svg></div> }
+        @if (detailFlowView() === 'list') { <div class="detail-flow-mobile">
+          <h3>In</h3>
+          @for (node of detailFlow().incoming; track node.key) {
+            <div class="detail-flow-row"><span>{{ node.label }}</span><span class="tag">{{ node.kind }}</span><strong class="mono pos">{{ { amount: node.amount, currency: flows().normalised.currency } | money }}</strong></div>
+          }
+          <h3>Out</h3>
+          @for (node of detailFlow().outgoing; track node.key) {
+            <div class="detail-flow-row"><span>{{ node.label }}</span><span class="tag">{{ node.kind }}</span><strong class="mono neg">{{ { amount: -node.amount, currency: flows().normalised.currency } | money }}</strong></div>
+          }
+        </div> }
+      }
+    </section>
+
+    <div class="detail-grid">
+      <section class="card chart-card">
+        <div class="section-head"><h2>Monthly outflow</h2></div>
+        <div class="month-chart">
+          @for (m of byMonth(); track m.bucket + m.currency) {
+            <div class="month-row">
+              <span class="mono small">{{ m.bucket }}</span>
+              <span class="month-track"><i [style.width]="monthWidth(m)"></i></span>
+              <span class="mono neg">{{ m.spend | money: 'bare' }} <small>{{ m.currency }}</small></span>
+            </div>
+          } @empty { <div class="empty">No outflow history</div> }
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Account structure</h2>
         @if (lineages().length) {
-          <section>
-            <h3>Cards</h3>
-            @for (l of lineages(); track l.holder + l.numbers.join()) {
-              <div class="holder-row">
-                <span class="who">{{ l.holder }}</span>
-                @if (l.supplementary) { <span class="tag">supp</span> }
-                <span class="numbers mono small">
-                  @for (n of l.numbers; track n) {
-                    <span class="num-chip">·{{ n }}</span>
-                  }
-                </span>
-                @if (l.reissued) { <span class="tag reissued">reissued</span> }
-              </div>
-            }
-          </section>
+          <h3>Cards</h3>
+          @for (l of lineages(); track l.holder + l.numbers.join()) {
+            <div class="holder-row">
+              <span class="who">{{ l.holder }}</span>
+              @if (l.supplementary) { <span class="tag">supp</span> }
+              <span class="numbers mono small">@for (n of l.numbers; track n) { <span class="num-chip">·{{ n }}</span> }</span>
+              @if (l.reissued) { <span class="tag reissued">reissued</span> }
+            </div>
+          }
         }
-
         @if (byHolder().length) {
-          <section>
-            <h3>By cardholder</h3>
-            @for (h of byHolder(); track h.bucket + h.currency) {
-              <div class="stat-row">
-                <span class="k">{{ h.bucket }}</span>
-                <span class="v mono neg">{{ h.spend | money: 'bare' }}</span>
-                <span class="c mono">{{ h.currency }}</span>
-                <span class="n muted small">{{ h.txn_count }}</span>
-              </div>
-            }
-          </section>
+          <h3>Spend by cardholder</h3>
+          @for (h of byHolder(); track h.bucket + h.currency) {
+            <div class="stat-row"><span class="k">{{ h.bucket }}</span><span class="v mono neg">{{ h.spend | money: 'bare' }}</span><span class="c mono">{{ h.currency }}</span></div>
+          }
         }
-
-        @if (byKind().length) {
-          <section>
-            <h3>By type</h3>
-            @for (k of byKind(); track k.bucket + k.currency) {
-              <div class="stat-row">
-                <span class="k">{{ k.bucket }}</span>
-                <span class="v mono neg">{{ k.spend | money: 'bare' }}</span>
-                <span class="c mono">{{ k.currency }}</span>
-                <span class="n muted small">{{ k.txn_count }}</span>
-              </div>
-            }
-          </section>
-        }
-
         @if (accountFlows().length) {
-          <section>
-            <h3>Money flow</h3>
-            @for (f of accountFlows(); track f.from_account + f.to_account) {
-              <div class="flow-row" [class.out]="f.from_account === c.account.id">
-                <span class="arrow mono">{{ f.from_account === c.account.id ? '→' : '←' }}</span>
-                <span class="peer">
-                  {{ f.from_account === c.account.id ? f.to_account : f.from_account }}
-                </span>
-                <span class="v mono">{{ f.amount | money: 'bare' }}</span>
-                <span class="n muted small">{{ f.moves }}</span>
-              </div>
-            }
-          </section>
+          <h3>Internal transfers</h3>
+          @for (f of accountFlows(); track f.from_account + f.to_account + f.amount.currency) {
+            <div class="flow-row" [class.out]="f.from_account === c.account.id">
+              <span class="arrow mono">{{ f.from_account === c.account.id ? '→' : '←' }}</span>
+              <span class="peer">{{ f.from_account === c.account.id ? f.to_account : f.from_account }}</span>
+              <span class="v mono">{{ f.amount | money: 'bare' }} {{ f.amount.currency }}</span>
+            </div>
+          }
         }
-      </div>
+      </section>
+    </div>
+
+    <div class="detail-grid lower">
+      <section class="card">
+        <h2>By transaction type</h2>
+        @for (k of byKind(); track k.bucket + k.currency) {
+          <div class="stat-row"><span class="k">{{ humanize(k.bucket) }}</span><span class="v mono neg">{{ k.spend | money: 'bare' }}</span><span class="c mono">{{ k.currency }}</span><span class="n muted">{{ k.txn_count }}</span></div>
+        }
+      </section>
+      <section class="card recent">
+        <div class="section-head"><h2>Recent activity</h2><button class="bare" (click)="openInBlotter(c.account.id)">view all →</button></div>
+        @for (t of recent(); track t.id) {
+          <div class="txn-row">
+            <span class="mono small muted">{{ t.date | shortDate }}</span>
+            <span class="txn-desc">{{ t.merchant || t.description }}</span>
+            <span class="mono" [class.neg]="t.booked.amount < 0" [class.pos]="t.booked.amount > 0">{{ t.booked | money: 'bare' }}</span>
+          </div>
+        }
+      </section>
     </div>
   }
-
-  <div class="card">
-    <h3>Across the boundary</h3>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Currency</th>
-            <th class="num">In</th>
-            <th class="num">Out</th>
-            <th class="num">Net</th>
-            <th class="num">Rows</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (e of flows().external; track e.currency) {
-            <tr>
-              <td><span class="tag">{{ e.currency }}</span></td>
-              <td class="num pos">{{ e.in | money: 'bare' }}</td>
-              <td class="num neg">{{ e.out | money: 'bare' }}</td>
-              <td class="num" [class.neg]="e.net.amount < 0" [class.pos]="e.net.amount > 0">
-                {{ e.net | money: 'bare' }}
-              </td>
-              <td class="num muted">{{ e.moves }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
+} @else {
+  <div class="page-head">
+    <h1>Accounts</h1>
   </div>
+
+  @if (loading()) {
+    <section class="account-groups account-skeletons" aria-label="Loading accounts">
+      @for (row of [1,2,3,4,5,6]; track row) { <div class="card skeleton account-skeleton"></div> }
+    </section>
+  } @else {
+    <section class="account-groups">
+      @for (g of groups(); track g.key) {
+        <article class="card account-group">
+          @if (g.children.length === 1) {
+            <button class="single-account" (click)="open(g.children[0].account.id)">
+              <span class="child-main"><span class="eyebrow mono">{{ g.institution }}</span><strong>{{ g.name }}</strong><small>{{ g.children[0].account.account_type }} @if (g.children[0].cards) { · {{ g.children[0].cards }} cards }</small></span>
+              <span class="group-totals">@for (total of g.totals; track total.currency) { <span class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money: 'bare' }} <small>{{ total.currency }}</small></span> }</span>
+              <span class="arrow">→</span>
+            </button>
+          } @else {
+            <header>
+              <div><span class="eyebrow mono">{{ g.institution }}</span><h2>{{ g.name }}</h2></div>
+              <div class="group-totals">@for (total of g.totals; track total.currency) { <span class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money: 'bare' }} <small>{{ total.currency }}</small></span> }</div>
+            </header>
+            <div class="children">
+              @for (r of g.children; track r.account.id) {
+                <button class="account-child" (click)="open(r.account.id)">
+                  <span class="child-main"><strong>{{ r.account.display_name }}</strong><small>{{ r.account.account_type }} @if (r.cards) { · {{ r.cards }} card{{ r.cards > 1 ? 's' : '' }} }</small></span>
+                  <span class="child-balances">@for (p of r.positions; track p.currency) { <span class="mono" [class.neg]="p.balance.amount < 0" [class.pos]="p.balance.amount > 0">{{ p.balance | money: 'bare' }} <small>{{ p.currency }}</small></span> } @empty { <span class="dim">—</span> }</span>
+                  <span class="arrow">→</span>
+                </button>
+              }
+            </div>
+          }
+        </article>
+      }
+    </section>
+
+    <section class="card sankey-card">
+      <div class="section-head">
+        <h2>Money flow · {{ flows().normalised.currency }}</h2>
+        <div class="flow-tools"><span class="tag">normalised</span><div class="view-switch" role="group" aria-label="Money flow view"><button [class.on]="flowView() === 'chart'" (click)="setFlowView('chart')">Chart</button><button [class.on]="flowView() === 'list'" (click)="setFlowView('list')">List</button></div></div>
+      </div>
+      @if (flowView() === 'chart') { <div class="sankey-frame"><span class="pan-cue">Swipe to explore ↔</span><div class="sankey-scroll" tabindex="0" aria-label="Scrollable money flow chart">
+        <svg class="sankey" viewBox="0 0 1000 800" preserveAspectRatio="xMidYMin meet" [attr.viewBox]="'0 0 1000 ' + flowHeight()">
+          <defs><marker id="internal-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="internal-arrow"></path></marker></defs>
+          <text x="26" y="22">MONEY IN</text><text x="468" y="22">ACCOUNTS</text><text x="900" y="22">MONEY OUT</text>
+          @for (r of flowRows(); track r.account_id) {
+            @if (r.in.amount) { <path [attr.d]="'M 70 ' + r.y + ' C 250 ' + r.y + ', 280 ' + r.y + ', 430 ' + r.y" class="link in" [attr.stroke-width]="r.inWidth"><title>{{ r.name }}: {{ r.in.amount / 100 }} {{ r.currency }} in</title></path> }
+            @if (r.out.amount) { <path [attr.d]="'M 570 ' + r.y + ' C 720 ' + r.y + ', 750 ' + r.y + ', 930 ' + r.y" class="link out" [attr.stroke-width]="r.outWidth"><title>{{ r.name }}: {{ -r.out.amount / 100 }} {{ r.currency }} out</title></path> }
+            <rect x="430" [attr.y]="r.y - 17" width="140" height="34" class="node"></rect>
+            <text x="500" [attr.y]="r.y + 4" text-anchor="middle" class="account-label">{{ r.name }}</text>
+          }
+          @for (r of internalFlowRows(); track r.from_account + r.to_account) {
+            <path [attr.d]="'M 570 ' + r.fromY + ' C 675 ' + r.fromY + ', 675 ' + r.toY + ', 570 ' + r.toY"
+                  class="link internal" [attr.stroke-width]="r.width" marker-end="url(#internal-arrow)">
+              <title>{{ r.fromName }} → {{ r.toName }}: {{ r.amount | money }} · {{ r.moves }} transfers</title>
+            </path>
+          }
+          <rect x="30" y="35" width="40" [attr.height]="flowHeight() - 65" class="boundary in"></rect>
+          <rect x="930" y="35" width="40" [attr.height]="flowHeight() - 65" class="boundary out"></rect>
+        </svg>
+      </div></div> }
+      @if (flowView() === 'list') { <div class="flow-mobile">
+        @for (r of flowRows(); track r.account_id) {
+          <div class="mobile-flow"><strong>{{ r.name }}</strong><span class="pos mono">+{{ r.in | money: 'bare' }}</span><span class="neg mono">{{ r.out | money: 'bare' }}</span></div>
+        }
+        @if (allInternalFlows().length) {
+          <h3>Internal transfers</h3>
+          @for (r of allInternalFlows(); track r.from_account + r.to_account) {
+            <div class="mobile-internal"><span>{{ r.fromName }}</span><b>→</b><span>{{ r.toName }}</span><strong class="mono">{{ r.amount | money }}</strong></div>
+          }
+        }
+      </div> }
+    </section>
+  }
 }

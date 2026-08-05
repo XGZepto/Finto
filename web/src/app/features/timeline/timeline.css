@@ -70,6 +70,11 @@
 .legend-inline .cell { margin-left: 8px; }
 
 @media (max-width: 700px) {
+  .cols { gap: 1px; height: 230px; }
+  .tick { visibility: hidden; font-size: 8px; }
+  .col:first-child .tick, .col:last-child .tick, .col:nth-child(3n + 1) .tick { visibility: visible; }
+  .head-controls { width: 100%; display: grid; grid-template-columns: 1fr 82px; }
+  .head-controls .seg { grid-column: 1 / -1; }
   .cov-name { width: 84px; }
   .cov-scale { margin-left: 92px; }
   .legend .key .muted { display: none; }

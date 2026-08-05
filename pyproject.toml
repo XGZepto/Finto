@@ -1,10 +1,11 @@
 [project]
 name = "finto"
-version = "0.1.0"
-description = "Personal finance ledger: multi-institution ingest, dedup, and transfer linking"
+version = "0.2.0"
+description = "Self-hosted multi-user finance ledger with statement ingestion and account ACLs"
 requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.0",
+    "psycopg[binary]>=3.2",
     "PyYAML>=6.0",
 ]
 

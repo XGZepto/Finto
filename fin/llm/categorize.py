@@ -1,24 +1,8 @@
-"""LLM-assisted categorisation.
+"""Optional model-assisted merchant categorisation.
 
-This is the task LLMs are actually good at: turning "CTY SPR TST 3 KLN" into
-"groceries". It is fuzzy by nature, low-stakes to get slightly wrong, and
-touches no money math.
-
-Three properties make it safe:
-
-* **Deterministic rules always win.** The LLM is only asked about transactions
-  that no rule matched. Once you write a rule for a merchant, the model is
-  never consulted about it again.
-* **It never sees or returns an amount.** The output schema contains a category
-  and a confidence, nothing else. It cannot alter what a transaction cost.
-* **It categorises MERCHANTS, not transactions.** Input is deduplicated by
-  normalised description, so 300 Starbucks charges cost one classification. On
-  a typical year of statements this collapses a few thousand transactions into
-  a few hundred distinct merchants.
-
-Low-confidence answers are left uncategorised rather than guessed at, and every
-applied category is annotated with source='llm' so you can always tell what the
-model touched.
+Only descriptions unmatched by deterministic rules are submitted. Results must
+use the stored taxonomy, meet the confidence threshold, and are recorded in the
+annotation audit trail.
 """
 
 from __future__ import annotations
@@ -28,33 +12,14 @@ from collections import defaultdict
 from collections.abc import Sequence
 
 from .. import db as dbm
+from ..taxonomy import BASE_TAXONOMY, load_taxonomy, register_merchant
 from . import cache
 from .provider import LLMProvider, LLMUnavailable
 
 PROMPT_VERSION = "cat-v1"
 
-# A closed taxonomy. The model must pick from this list; anything else is
-# rejected. An open-ended taxonomy drifts — you get "Food", "food", "Dining",
-# "Restaurants" and "Eating out" for the same thing, and your reports lie.
-# The top level matches the deterministic category_rule scheme, so a category
-# the model fills reads the same as one a rule filled. Subcategories add detail
-# the flat rules don't carry.
-TAXONOMY: dict[str, list[str]] = {
-    "dining": ["restaurants", "coffee", "bars", "delivery", "fast_food"],
-    "groceries": ["supermarket", "convenience"],
-    "transport": ["transit", "taxi_rideshare", "fuel", "parking", "tolls"],
-    "travel": ["hotels", "flights", "tours", "agency"],
-    "shopping": ["clothing", "electronics", "home_goods", "general", "cosmetics"],
-    "services": ["subscriptions", "software", "telecom", "professional", "education"],
-    "housing": ["rent", "utilities", "internet", "maintenance"],
-    "health": ["medical", "pharmacy", "fitness"],
-    "entertainment": ["streaming", "events", "gaming", "hobbies"],
-    "fees": ["bank", "card", "service"],
-    "interest": ["interest"],
-    "income": ["salary", "refund", "other_income"],
-    "rewards": ["cashback", "points"],
-    "other": ["charity", "gifts", "cash", "uncategorised"],
-}
+# Model output is limited to the same taxonomy used by deterministic rules.
+TAXONOMY: dict[str, list[str]] = {key: list(values) for key, values in BASE_TAXONOMY.items()}
 
 CONFIDENCE_FLOOR = 0.60   # below this, leave uncategorised rather than guess
 BATCH_SIZE = 40
@@ -82,15 +47,15 @@ worse than abstaining here.
 - Return only the JSON array. No commentary."""
 
 
-def _user_prompt(descriptions: Sequence[str]) -> str:
+def _user_prompt(descriptions: Sequence[str], taxonomy: dict[str, list[str]]) -> str:
     return (
-        f"Taxonomy:\n{json.dumps(TAXONOMY, indent=0)}\n\n"
+        f"Taxonomy:\n{json.dumps(taxonomy, indent=0)}\n\n"
         f"Descriptions:\n{json.dumps(list(descriptions), indent=0)}"
     )
 
 
-def _valid(cat: str, sub: str) -> bool:
-    return cat in TAXONOMY and sub in TAXONOMY[cat]
+def _valid(cat: str, sub: str, taxonomy: dict[str, list[str]]) -> bool:
+    return cat in taxonomy and sub in taxonomy[cat]
 
 
 def categorize_merchants(
@@ -107,6 +72,7 @@ def categorize_merchants(
     """
     results: dict[str, dict] = {}
     todo: list[str] = []
+    taxonomy = load_taxonomy(conn) or TAXONOMY
 
     for d in descriptions:
         hit = cache.lookup(conn, "categorize", cache.input_hash("categorize", d),
@@ -119,9 +85,11 @@ def categorize_merchants(
     for start in range(0, len(todo), batch_size):
         batch = todo[start:start + batch_size]
         try:
-            resp = provider.complete_json(SYSTEM, _user_prompt(batch), max_tokens=4000)
+            resp = provider.complete_json(
+                SYSTEM, _user_prompt(batch, taxonomy), max_tokens=4000
+            )
         except (LLMUnavailable, ValueError):
-            # Degrade silently: uncategorised is a valid, honest state.
+            # Leave the rows uncategorised when the provider is unavailable.
             continue
 
         rows = resp.data if isinstance(resp.data, list) else []
@@ -132,13 +100,11 @@ def categorize_merchants(
             except (KeyError, ValueError, IndexError, TypeError):
                 continue
             cat, sub = row.get("category"), row.get("subcategory")
-            if not _valid(cat, sub):
+            if not _valid(cat, sub, taxonomy):
                 continue          # reject anything outside the closed taxonomy
             conf = float(row.get("confidence", 0.0))
-            tags = [str(x).strip() for x in (row.get("tags") or [])
-                    if str(x).strip()][:2]
             out = {"category": cat, "subcategory": sub,
-                   "merchant": row.get("merchant"), "tags": tags,
+                   "merchant": row.get("merchant"), "tags": [],
                    "confidence": conf}
             cache.record(conn, task="categorize",
                          ihash=cache.input_hash("categorize", desc),
@@ -156,7 +122,8 @@ def apply_to_ledger(conn, provider: LLMProvider, *, dry_run: bool = False) -> di
     of the cost saving comes from.
     """
     rows = list(conn.execute(
-        "SELECT id, description_norm, description_raw FROM txn "
+        "SELECT t.id, t.description_norm, t.description_raw, a.user_id FROM txn t "
+        "JOIN account a ON a.id=t.account_id "
         "WHERE category IS NULL AND duplicate_of_id IS NULL "
         "AND kind NOT IN ('transfer','cc_payment','fx_conversion')"))
     if not rows:
@@ -182,12 +149,12 @@ def apply_to_ledger(conn, provider: LLMProvider, *, dry_run: bool = False) -> di
             skipped += len(txn_ids)
             continue
         did = conn.execute(
-            "SELECT id FROM llm_decision WHERE task='categorize' AND input_hash=?",
+            "SELECT id FROM llm_decision WHERE task='categorize' AND input_hash=%s",
             (cache.input_hash("categorize", desc),)).fetchone()
         for tid in txn_ids:
             conn.execute(
-                "UPDATE txn SET category=?, subcategory=?, merchant=COALESCE(merchant,?) "
-                "WHERE id=?",
+                "UPDATE txn SET category=%s, subcategory=%s, merchant=COALESCE(merchant,%s) "
+                "WHERE id=%s",
                 (res["category"], res["subcategory"], res.get("merchant"), tid))
             cache.annotate(conn, txn_id=tid, field="category",
                            value=res["category"], source="llm",
@@ -196,39 +163,39 @@ def apply_to_ledger(conn, provider: LLMProvider, *, dry_run: bool = False) -> di
             for tag in res.get("tags") or []:
                 dbm.add_tag(conn, tid, tag, source="llm")
             applied += 1
+        if res.get("merchant"):
+            owner = next(r["user_id"] for r in rows if r["id"] in txn_ids)
+            register_merchant(
+                conn, owner, res["merchant"], aliases=[desc],
+                category=res["category"], subcategory=res["subcategory"], source="llm",
+            )
     conn.commit()
     return {"transactions": len(rows), "distinct_merchants": len(distinct),
             "applied": applied, "skipped_low_confidence": skipped}
 
 
 def promote_to_rules(conn, *, min_confidence: float = 0.9, min_occurrences: int = 3) -> int:
-    """Convert confident, frequently-seen LLM categorisations into real rules.
-
-    This is the ratchet that stops the LLM layer from being a permanent
-    dependency: merchants you see often get promoted to deterministic rules, so
-    next import they're handled for free and identically. Over time the model
-    only ever sees genuinely new merchants.
-    """
+    """Promote frequent high-confidence classifications to exact rules."""
     import uuid
     rows = list(conn.execute(
         "SELECT d.input_summary AS desc, d.output, d.confidence, COUNT(t.id) n "
         "FROM llm_decision d "
         "JOIN txn t ON t.description_norm = d.input_summary "
-        "WHERE d.task='categorize' AND d.confidence >= ? "
-        "GROUP BY d.input_summary HAVING n >= ?",
+        "WHERE d.task='categorize' AND d.confidence >= %s "
+        "GROUP BY d.input_summary, d.output, d.confidence HAVING COUNT(t.id) >= %s",
         (min_confidence, min_occurrences)))
     created = 0
     for r in rows:
         out = json.loads(r["output"])
         exists = conn.execute(
-            "SELECT 1 FROM category_rule WHERE pattern=? AND match_field='description_norm'",
+            "SELECT 1 FROM category_rule WHERE pattern=%s AND match_field='description_norm'",
             (r["desc"],)).fetchone()
         if exists:
             continue
         conn.execute(
             "INSERT INTO category_rule (id, priority, match_field, match_type, "
             "pattern, set_category, set_subcategory, enabled) "
-            "VALUES (?,?,?,?,?,?,?,1)",
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,1)",
             (str(uuid.uuid4()), 50, "description_norm", "exact", r["desc"],
              out["category"], out["subcategory"]))
         created += 1

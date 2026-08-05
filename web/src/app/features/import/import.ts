@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Api } from '../../core/api.service';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { Facets, Job, StagePreview } from '../../core/models';
+import { FintoSelect } from '../../shared/finto-select';
 
 /**
  * One staged file, from drop to committed.
@@ -38,7 +39,7 @@ interface Entry {
  */
 @Component({
   selector: 'app-import',
-  imports: [FormsModule, MoneyPipe, ShortDatePipe],
+  imports: [FormsModule, MoneyPipe, ShortDatePipe, FintoSelect],
   templateUrl: './import.html',
   styleUrl: './import.css',
 })
@@ -78,6 +79,23 @@ export class ImportPage implements OnDestroy {
     const all = this.facets()?.accounts ?? [];
     const inst = this.defaultInstitution();
     return inst ? all.filter((a) => a.institution_id === inst) : all;
+  }
+
+  institutionOptions() {
+    return [{ id: '', display_name: 'detect' }, ...(this.facets()?.institutions ?? [])];
+  }
+
+  allAccountOptions() {
+    return [{ id: '', display_name: 'detect' }, ...(this.facets()?.accounts ?? [])];
+  }
+
+  detectedAccountOptions() {
+    return [{ id: '', display_name: 'detect' }, ...this.accountOptions()];
+  }
+
+  currencyOptions() {
+    return [{ value: '', label: 'detect' },
+      ...(this.facets()?.currencies ?? []).map((value) => ({ value, label: value }))];
   }
 
   onDragOver(event: DragEvent): void {
@@ -199,7 +217,7 @@ export class ImportPage implements OnDestroy {
   }
 
   /**
-   * Jobs are queued rather than run in the request, because SQLite takes one
+   * Jobs are queued rather than run in the request, because reconciliation takes one
    * writer and a UI button makes concurrent invocation trivial in a way the CLI
    * never did. So the client waits by asking.
    */

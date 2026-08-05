@@ -4,13 +4,14 @@ import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { MoneyPipe } from '../../core/money.pipe';
 import { Composition, Coverage } from '../../core/models';
+import { FintoSelect } from '../../shared/finto-select';
 
 /** A band's colour, cycling through the categorical ramp. */
 const RAMP = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--info', '--warn'];
 
 @Component({
   selector: 'app-timeline',
-  imports: [FormsModule, MoneyPipe],
+  imports: [FormsModule, MoneyPipe, FintoSelect],
   templateUrl: './timeline.html',
   styleUrl: './timeline.css',
 })
@@ -23,7 +24,7 @@ export class TimelinePage {
   coverage = signal<Coverage | null>(null);
 
   dimension = signal('category');
-  convertTo = signal('HKD');
+  convertTo = signal('USD');
   mode = signal<'share' | 'amount'>('share');
   hovered = signal<number | null>(null);
 

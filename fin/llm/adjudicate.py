@@ -1,29 +1,8 @@
-"""LLM adjudication of ambiguous duplicate and transfer candidates.
+"""Optional adjudication for duplicate and transfer candidates.
 
-This one needs more care than categorisation, because a wrong answer silently
-deletes or fabricates money. The design constrains it heavily:
-
-**The LLM only ever sees the middle band.** Candidates the deterministic layer
-is confident about — exact key collisions, exact amount matches — never reach
-it. It is asked only about pairs scoring between the review floor and the
-auto-merge ceiling, which is a small slice.
-
-**It cannot merge anything on its own.** Its verdict adjusts a score. Merging
-still requires clearing the same deterministic threshold as before. In practice
-the model can promote a 0.85 to auto-merge or demote it to rejected, but it
-cannot conjure a merge out of a 0.4.
-
-**It never adjudicates upward on amount mismatches.** If two rows differ in
-amount, no amount of textual plausibility makes them the same transaction. That
-check runs before the model is consulted.
-
-**Its reasoning is stored.** Every verdict is recorded with the text it saw and
-the explanation it gave, so a wrong merge is diagnosable rather than mysterious.
-
-The genuine value here is context the deterministic layer cannot have: knowing
-that "SQ *BLUE BOTTLE" and "BLUE BOTTLE COFFEE HK" are the same shop, or that
-"AMEX AUTOPAY" on HSBC and "PAYMENT RECEIVED" on AMEX are two halves of one
-event. String similarity cannot see that. A model can.
+Only candidates within configured review bands are submitted. Model output can
+adjust a score by at most ``MAX_ADJUSTMENT``; deterministic thresholds still
+control resolution. Inputs and results are stored in ``llm_decision``.
 """
 
 from __future__ import annotations
@@ -39,8 +18,7 @@ PROMPT_VERSION = "adj-v1"
 DUPE_BAND = (0.70, 0.97)
 XFER_BAND = (0.55, 0.90)
 
-# How much an LLM verdict can move a score. Deliberately bounded: the model
-# adjusts confidence, it does not replace the scoring function.
+# Model output adjusts confidence but does not replace deterministic scoring.
 MAX_ADJUSTMENT = 0.20
 
 DUPE_SYSTEM = """You are auditing a personal finance ledger for duplicate \
@@ -121,8 +99,8 @@ def adjudicate_duplicates(
            FROM duplicate_candidate dc
            JOIN txn a ON a.id = dc.keep_txn_id
            JOIN txn b ON b.id = dc.dupe_txn_id
-           WHERE dc.resolution='open' AND dc.score >= ? AND dc.score < ?
-           LIMIT ?""", (lo, hi, limit)))
+           WHERE dc.resolution='open' AND dc.score >= %s AND dc.score < %s
+           LIMIT %s""", (lo, hi, limit)))
     if not rows or dry_run:
         return {"considered": len(rows), "adjudicated": 0,
                 "note": "dry run" if dry_run else "nothing in band"}
@@ -167,8 +145,8 @@ def adjudicate_transfers(
            FROM transfer_candidate tc
            JOIN txn o ON o.id = tc.out_txn_id
            JOIN txn i ON i.id = tc.in_txn_id
-           WHERE tc.resolution='open' AND tc.score >= ? AND tc.score < ?
-           LIMIT ?""", (lo, hi, limit)))
+           WHERE tc.resolution='open' AND tc.score >= %s AND tc.score < %s
+           LIMIT %s""", (lo, hi, limit)))
     if not rows or dry_run:
         return {"considered": len(rows), "adjudicated": 0,
                 "note": "dry run" if dry_run else "nothing in band"}
@@ -250,7 +228,7 @@ def _run_adjudication(conn, provider, system, items, meta, *,
         else:
             unsure += 1
             continue
-        conn.execute(f"UPDATE {table} SET score=?, reasons=? WHERE id=?",
+        conn.execute(f"UPDATE {table} SET score=%s, reasons=%s WHERE id=%s",
                      (new_score,
                       json.dumps([f"llm:{verdict} ({conf:.2f}) — "
                                   f"{v.get('reason', '')}"]),

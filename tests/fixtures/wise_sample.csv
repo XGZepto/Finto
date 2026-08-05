@@ -1,6 +1,6 @@
 TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Merchant,Total fees
 TW-100001,05/01/2025,-450.00,HKD,Card transaction of 450.00 HKD issued by CITY SUPER,,12550.00,,,,,,CITY SUPER,0.00
-TW-100002,08/01/2025,20000.00,HKD,Received money from HSBC HK,Transfer to Wise,32550.00,,,,ZEPTO,,,0.00
+TW-100002,08/01/2025,20000.00,HKD,Received money from HSBC HK,Transfer to Wise,32550.00,,,,ALEX,,,0.00
 TW-100003,12/01/2025,-1288.00,HKD,Card transaction of 1288.00 HKD issued by APPLE STORE,,31262.00,,,,,,APPLE STORE,0.00
 TW-100004,15/01/2025,-5000.00,HKD,Converted 5000.00 HKD to 640.12 USD,,26262.00,HKD,USD,0.128024,,,,18.50
 TW-100005,20/01/2025,-899.00,HKD,Card transaction of 899.00 HKD issued by CATHAY PACIFIC,,25363.00,,,,,,CATHAY PACIFIC,0.00

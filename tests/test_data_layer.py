@@ -6,7 +6,6 @@ from datetime import date
 from pathlib import Path
 
 from fin.db import (
-    init_db,
     load_account_alias_index,
     load_self_aliases,
     upsert_account,
@@ -53,12 +52,12 @@ def test_self_transfer_named_destination_auto_links(tmp_path):
     d = date(2025, 3, 1)
     txns = [
         _txn("hsbc", -500000, d, "FPS to MOX BANK"),
-        _txn("mox", 500000, d, "FPS from YIXIANG ZHOU"),
+        _txn("mox", 500000, d, "FPS from ALEX EXAMPLE"),
         # A same-day equal P2P that must NOT steal the match.
         _txn("hsbc", -500000, d, "FPS to FRIEND NAME", counterparty="FRIEND NAME"),
     ]
     ctx = TransferContext(
-        self_aliases={"YIXIANGZHOU"},
+        self_aliases={"ALEXEXAMPLE"},
         account_aliases={"MOX": "mox", "MOXBANK": "mox", "HSBC": "hsbc"},
         person_aliases={"FRIENDNAME": "person_friend"},
     )
@@ -108,11 +107,61 @@ def test_cc_payment_window_is_wider_than_internal():
     assert report.groups[0].kind.value == "cc_payment"
 
 
-def test_party_aliases_round_trip(tmp_path):
-    import sqlite3
-    conn = sqlite3.connect(tmp_path / "t.db")
-    conn.row_factory = sqlite3.Row
-    init_db(conn)
+def test_cross_currency_exchange_debit_links_card_payment():
+    accounts = {
+        "hsbc": Account(id="hsbc", institution_id="hsbc_hk", display_name="HSBC",
+                        account_type=AccountType.SAVINGS, primary_currency="HKD"),
+        "pulse": Account(id="pulse", institution_id="hsbc_hk", display_name="Pulse CNY",
+                         account_type=AccountType.CREDIT_CARD, primary_currency="CNY"),
+    }
+    out = _txn("hsbc", -453500, date(2025, 5, 12),
+               "GOLD/EXCHANGE DEBIT EXAMPLE ALEX", currency="HKD")
+    inc = _txn("pulse", 416531, date(2025, 5, 12),
+               "IFS PAYMENT - THANK YOU", currency="CNY")
+    report = find_transfers(
+        [out, inc], accounts,
+        fx_lookup=lambda _d, base, quote: 1 / 1.0888 if (base, quote) == ("HKD", "CNY") else None,
+    )
+    assert len(report.groups) == 1
+    assert report.groups[0].kind.value == "cc_payment"
+
+
+def test_exchange_rate_alone_does_not_create_transfer_candidate():
+    accounts = {
+        "card_hkd": Account(id="card_hkd", institution_id="amex_hk",
+                            display_name="HK card", account_type=AccountType.CREDIT_CARD,
+                            primary_currency="HKD"),
+        "card_usd": Account(id="card_usd", institution_id="amex_us",
+                            display_name="US card", account_type=AccountType.CREDIT_CARD,
+                            primary_currency="USD"),
+    }
+    out = _txn("card_hkd", -78000, date(2025, 1, 1), "RESTAURANT", currency="HKD")
+    inc = _txn("card_usd", 10000, date(2025, 1, 1), "DINING CREDIT", currency="USD")
+    report = find_transfers(
+        [out, inc], accounts,
+        fx_lookup=lambda *_args: 1 / 7.8,
+    )
+    assert report.groups == [] and report.candidates == []
+
+
+def test_shared_fx_reference_auto_links_multicurrency_legs():
+    accounts = {
+        "wise_gbp": Account(id="wise_gbp", institution_id="wise", display_name="Wise GBP",
+                            account_type=AccountType.MULTI_CURRENCY, primary_currency="GBP",
+                            balance_group="wise"),
+        "wise_usd": Account(id="wise_usd", institution_id="wise", display_name="Wise USD",
+                            account_type=AccountType.MULTI_CURRENCY, primary_currency="USD",
+                            balance_group="wise"),
+    }
+    out = _txn("wise_gbp", -2500, date(2025, 1, 1), "Converted GBP to USD", currency="GBP")
+    inc = _txn("wise_usd", 3319, date(2025, 1, 1), "Converted GBP to USD", currency="USD")
+    out.external_ref = inc.external_ref = "BALANCE-123"
+    out.kind = inc.kind = TxnKind.FX_CONVERSION
+    report = find_transfers([out, inc], accounts, fx_lookup=lambda *_args: 1.3276)
+    assert len(report.groups) == 1
+
+
+def test_party_aliases_round_trip(conn):
     upsert_institution(conn, Institution(id="mox", display_name="Mox", country="HK"))
     upsert_account(conn, Account(
         id="mox_hkd", institution_id="mox", display_name="Mox HKD",
@@ -121,14 +170,14 @@ def test_party_aliases_round_trip(tmp_path):
     ))
     upsert_party(conn, Party(
         id="self", display_name="Me", kind="self",
-        aliases=["YIXIANG ZHOU", "ZEPTO ZHOU YIXIANG"],
+        aliases=["ALEX EXAMPLE", "ALEX EXAMPLE"],
     ))
     conn.commit()
     assert "MOXBANK" in load_account_alias_index(conn)
-    assert "YIXIANGZHOU" in load_self_aliases(conn)
+    assert "ALEXEXAMPLE" in load_self_aliases(conn)
 
 
-def test_hsbc_mpf_position_xlsx_parses_and_stores():
+def test_hsbc_mpf_position_xlsx_parses_and_stores(conn):
     path = Path(
         "Documents/Finto-Data/HSBC_HK/MPF_Investment/Positions/"
         "HSBC_MPF_Position_2026-07-31.xlsx")
@@ -146,10 +195,6 @@ def test_hsbc_mpf_position_xlsx_parses_and_stores():
         "hsbc_mpf_regular", "hsbc_mpf_personal", "hsbc_mpf_tdvc",
     }
 
-    import sqlite3
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    init_db(conn)
     upsert_institution(conn, Institution(id="hsbc_hk", display_name="HSBC", country="HK"))
     for aid, name in [
         ("hsbc_mpf_regular", "Regular"),

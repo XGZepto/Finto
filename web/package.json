@@ -1,6 +1,9 @@
 {
   "name": "web",
-  "version": "0.0.0",
+  "version": "0.2.0",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "ng": "ng",
     "start": "ng serve",

@@ -15,6 +15,7 @@ An unmatched PDF is refused too: templates are the only deterministic path.
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 
 from ..enrich import extract_details
@@ -129,6 +130,7 @@ def _to_parse_result(
     allow_empty: bool = False,
 ) -> ParseResult:
     txns: list[ParsedTxn] = []
+    document_plans = _document_installment_facts(doc)
     raw_rows: list[dict] = [
         {"extraction": doc.to_json(), "template_id": template_id},
     ]
@@ -137,6 +139,11 @@ def _to_parse_result(
         details = extract_details(
             extended="\n".join(row.detail_lines), description=row.description)
         details.update(row.details)
+        for subject, facts in document_plans.items():
+            if subject in row.description.upper():
+                for key, value in facts.items():
+                    details.setdefault(key, value)
+        marker_text = "\n".join([row.description, *row.detail_lines])
         txns.append(ParsedTxn(
             txn_date=row.txn_date,
             posted_date=row.settlement_date,
@@ -147,7 +154,7 @@ def _to_parse_result(
             card_last4=details.pop("card.last4", None),
             cardholder_hint=details.pop("card.holder", None),
             description_raw=row.description,
-            installment_hint=parse_installment_marker(row.description),
+            installment_hint=parse_installment_marker(marker_text),
             details=details,
             line_no=i,
             extra={
@@ -193,6 +200,31 @@ def _to_parse_result(
         statement_date=result.statement_date,
         allow_empty=allow_empty,
     )
+
+
+def _document_installment_facts(doc) -> dict[str, dict[str, str]]:
+    """Plan metadata printed in statement summaries outside transaction tables."""
+    lines = [" ".join(line.split()) for line in doc.layout.splitlines()]
+    found: dict[str, dict[str, str]] = {}
+    for i, line in enumerate(lines):
+        m = re.match(
+            r"(.+?) FOR \$?([\d,]+\.\d{2}).*?(\d{1,2}) of (\d{1,2})$",
+            line, re.IGNORECASE,
+        )
+        if not m:
+            continue
+        subject, principal, seq, term = m.groups()
+        facts = {
+            "installment.principal": principal.replace(",", ""),
+            "installment.sequence": seq,
+            "installment.term": term,
+        }
+        for nearby in lines[i + 1:i + 4]:
+            apr = re.search(r"APR\s+([\d.]+)%", nearby, re.IGNORECASE)
+            if apr:
+                facts["installment.apr"] = apr.group(1)
+        found[subject.upper()] = facts
+    return found
 
 
 def _try_llm_extract(doc, ctx: ParseContext, failed: TemplateResult | None = None):

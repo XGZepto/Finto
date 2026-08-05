@@ -24,8 +24,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
-def conn(tmp_path):
-    c = dbm.connect(tmp_path / "test.db")
+def conn(database_url):
+    c = dbm.connect(database_url)
     dbm.init_db(c)
     dbm.upsert_institution(c, Institution(
         id="hsbc_hk", display_name="HSBC HK", country="HK"))
@@ -44,7 +44,8 @@ def conn(tmp_path):
         id="amex_us_main", institution_id="amex_us", display_name="AMEX US",
         account_type="credit_card", primary_currency="USD"))
     c.commit()
-    return c
+    yield c
+    c.close()
 
 
 # ---------------------------------------------------------------------------
@@ -70,8 +71,10 @@ def test_reconcile_is_idempotent(conn):
     for _ in range(3):
         reconcile(conn)
         counts.append((
-            conn.execute("SELECT COUNT(*) FROM transfer_group").fetchone()[0],
-            conn.execute("SELECT COUNT(*) FROM transfer_leg").fetchone()[0],
+            conn.execute("SELECT COUNT(*) AS count_value FROM transfer_group"
+                         ).fetchone()["count_value"],
+            conn.execute("SELECT COUNT(*) AS count_value FROM transfer_leg"
+                         ).fetchone()["count_value"],
         ))
 
     assert counts[0] == counts[1] == counts[2], f"groups grew across runs: {counts}"
@@ -79,9 +82,25 @@ def test_reconcile_is_idempotent(conn):
 
     # And no transaction should ever be a leg of more than one group.
     multi = conn.execute(
-        "SELECT COUNT(*) FROM (SELECT txn_id FROM transfer_leg "
-        "GROUP BY txn_id HAVING COUNT(*) > 1)").fetchone()[0]
+        "SELECT COUNT(*) AS count_value FROM (SELECT txn_id FROM transfer_leg "
+        "GROUP BY txn_id HAVING COUNT(*) > 1) x").fetchone()["count_value"]
     assert multi == 0
+
+
+def test_reconcile_open_transfer_queue_is_idempotent(conn):
+    ingest_file(conn, FIXTURES / "hsbc_sample.csv",
+                institution_id="hsbc_hk", account_id="hsbc_hk_current",
+                default_currency="HKD")
+    ingest_file(conn, FIXTURES / "wise_sample.csv",
+                institution_id="wise", account_id="wise_hkd",
+                default_currency="HKD")
+    counts = []
+    for _ in range(3):
+        reconcile(conn)
+        counts.append(conn.execute(
+            "SELECT COUNT(*) AS count_value FROM transfer_candidate WHERE resolution='open'"
+        ).fetchone()["count_value"])
+    assert counts[0] == counts[1] == counts[2]
 
 
 def test_transfer_group_id_is_order_independent():
@@ -137,8 +156,9 @@ def test_zero_txn_import_does_not_burn_the_file_hash(conn, tmp_path):
                      account_id="hsbc_hk_current", default_currency="HKD")
     assert r2["status"] == "error"
     assert conn.execute(
-        "SELECT COUNT(*) FROM statement_file WHERE source_path LIKE '%broken%'"
-    ).fetchone()[0] == 0
+        "SELECT COUNT(*) AS count_value FROM statement_file "
+        "WHERE source_path LIKE '%broken%'"
+    ).fetchone()["count_value"] == 0
 
     # The same path, once it actually parses, imports normally.
     broken.write_text(
@@ -155,14 +175,14 @@ def test_zero_txn_import_does_not_burn_the_file_hash(conn, tmp_path):
 
 def _cards():
     return [
-        Card(id="old", account_id="amex_us_main", cardholder_name="ZEPTO X",
+        Card(id="old", account_id="amex_us_main", cardholder_name="ALEX E",
              last4="1001", closed_on=date(2025, 6, 30)),
-        Card(id="new", account_id="amex_us_main", cardholder_name="ZEPTO X",
+        Card(id="new", account_id="amex_us_main", cardholder_name="ALEX E",
              last4="5566", issued_on=date(2025, 7, 1), replaces_card_id="old"),
     ]
 
 
-def _parsed(when: date, last4: str | None, hint: str | None = "ZEPTO X"):
+def _parsed(when: date, last4: str | None, hint: str | None = "ALEX E"):
     return ParsedTxn(txn_date=when, booked=Money(amount=-1000, currency="USD"),
                      description_raw="COFFEE", card_last4=last4,
                      cardholder_hint=hint)
@@ -204,7 +224,7 @@ def test_ambiguous_substring_name_does_not_win():
 def test_unknown_last4_produces_a_warning():
     """An unregistered card number must not fail attribution silently."""
     cards = [Card(id="old", account_id="amex_us_main",
-                  cardholder_name="ZEPTO X", last4="1001")]
+                  cardholder_name="ALEX E", last4="1001")]
     parsed = [_parsed(date(2025, 8, 1), "9999", hint=None)]
     txns = [Txn(account_id="amex_us_main", txn_date=date(2025, 8, 1),
                 booked=Money(amount=-1000, currency="USD"),
@@ -215,11 +235,11 @@ def test_unknown_last4_produces_a_warning():
 
 
 def test_card_lineage_rolls_up_reissue_chains(conn):
-    for c in (Card(id="c1", account_id="amex_us_main", cardholder_name="ZEPTO X",
+    for c in (Card(id="c1", account_id="amex_us_main", cardholder_name="ALEX E",
                    last4="1001"),
-              Card(id="c2", account_id="amex_us_main", cardholder_name="ZEPTO X",
+              Card(id="c2", account_id="amex_us_main", cardholder_name="ALEX E",
                    last4="5566", replaces_card_id="c1"),
-              Card(id="c3", account_id="amex_us_main", cardholder_name="ZEPTO X",
+              Card(id="c3", account_id="amex_us_main", cardholder_name="ALEX E",
                    last4="7788", replaces_card_id="c2")):
         dbm.upsert_card(conn, c)
     conn.commit()

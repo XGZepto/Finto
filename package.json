@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "@vercel/functions": "3.7.7"
+  }
+}

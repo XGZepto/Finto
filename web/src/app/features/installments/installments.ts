@@ -5,10 +5,12 @@ import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { InstallmentPlan, Money } from '../../core/models';
 
 interface ScheduleRow {
-  seq: number;
+  key: string;
+  seq: number | null;
   date: string;
   amount: Money;
   paid: boolean;
+  settlement?: boolean;
   description?: string;
   txnId?: string;
 }
@@ -75,6 +77,7 @@ export class InstallmentsPage {
   }
 
   progress(plan: InstallmentPlan): string {
+    if (plan.status === 'completed') return '100%';
     return `${(plan.paid_count / Math.max(1, plan.term_months)) * 100}%`;
   }
 
@@ -87,13 +90,15 @@ export class InstallmentsPage {
   schedule(plan: InstallmentPlan): ScheduleRow[] {
     const charges = plan.charges ?? [];
     const bySeq = new Map<number, (typeof charges)[number]>();
-    charges.forEach((c, i) => bySeq.set(c.installment_seq ?? i + 1, c));
+    charges.filter((c) => c.installment_seq != null)
+      .forEach((c) => bySeq.set(c.installment_seq!, c));
 
     const rows: ScheduleRow[] = [];
     for (let seq = 1; seq <= plan.term_months; seq++) {
       const charge = bySeq.get(seq);
       if (charge) {
         rows.push({
+          key: `charge-${charge.id}`,
           seq,
           date: charge.txn_date,
           amount: { amount: charge.amount_booked, currency: charge.currency_booked },
@@ -102,13 +107,27 @@ export class InstallmentsPage {
           txnId: charge.id,
         });
       } else {
+        if (plan.status === 'completed') continue;
         rows.push({
+          key: `due-${seq}`,
           seq,
           date: addMonths(plan.start_date, seq - 1),
           amount: plan.per_installment,
           paid: false,
         });
       }
+    }
+    for (const charge of charges.filter((c) => c.is_settlement)) {
+      rows.push({
+        key: `settlement-${charge.id}`,
+        seq: null,
+        date: charge.txn_date,
+        amount: { amount: charge.amount_booked, currency: charge.currency_booked },
+        paid: true,
+        settlement: true,
+        description: charge.description_raw,
+        txnId: charge.id,
+      });
     }
     return rows;
   }

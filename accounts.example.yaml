@@ -1,481 +1,75 @@
-# Copy to accounts.yaml (gitignored) and fill in real names.
-# Account ids are stable slugs — once chosen, don't rename them.
-#
-# parties.self aliases are how the transfer matcher recognises "FPS to myself"
-# across institutions that spell your name differently. parties.person aliases
-# mark P2P counterparties so those movements are NOT auto-netted as
-# self-transfers. account.aliases are tokens that appear on the *other* leg
-# ("MOX", "AMEX") so HSBC→Mox can link even among several same-day equal amounts.
+# Synthetic configuration example. Copy to accounts.yaml, which is gitignored.
+# IDs are stable slugs and should not be renamed after transactions are imported.
 
 institutions:
-  - id: amex_us
-    display_name: American Express (US)
-    country: US
-    timezone: America/New_York
-  - id: amex_hk
-    display_name: American Express (HK)
+  - id: example_bank
+    display_name: Example Bank
     country: HK
-  - id: hsbc_hk
-    display_name: HSBC Hong Kong
-    country: HK
-  - id: wise
-    display_name: Wise
-    country: HK
-  - id: mox
-    display_name: Mox Bank
-    country: HK
-  - id: chase_us
-    display_name: JPMorgan Chase (US)
+    timezone: Asia/Hong_Kong
+  - id: example_card
+    display_name: Example Card Issuer
     country: US
     timezone: America/New_York
 
 parties:
-  # Every spelling of your own name that appears on statements / FPS.
   - id: self
     display_name: Me
     kind: self
-    aliases:
-      - YIXIANG ZHOU
-      - ZEPTO ZHOU YIXIANG
-      - ZHOU YIXIANG
-  # People you send money to. Their transfers are real spend — labelled, not netted.
-  # - id: person_example
-  #   display_name: Friend Name
-  #   kind: person
-  #   aliases: ["FRIEND NAME", "FPS FRIEND"]
+    aliases: ["YOUR NAME", "YOUR BANK TRANSFER NAME"]
+  - id: example_friend
+    display_name: Example Friend
+    kind: person
+    aliases: ["EXAMPLE FRIEND"]
 
 accounts:
-  # --- AMEX US ---
-  - id: amex_us_platinum
-    institution_id: amex_us
-    display_name: AMEX US Platinum
-    account_type: credit_card
-    primary_currency: USD
-    masked_number: "****62003"
-    aliases: ["AMEX", "AMERICAN EXPRESS", "PLATINUM"]
-
-  - id: amex_us_marriott
-    institution_id: amex_us
-    display_name: AMEX US Marriott Bonvoy Brilliant
-    account_type: credit_card
-    primary_currency: USD
-    masked_number: "****53006"
-    aliases: ["MARRIOTT", "BONVOY", "BRILLIANT"]
-
-  - id: amex_us_savings
-    institution_id: amex_us
-    display_name: AMEX US High Yield Savings
-    account_type: savings
-    primary_currency: USD
-    masked_number: "****7782"
-    aliases: ["HIGH YIELD SAVINGS", "AMEX SAVINGS"]
-
-  # --- AMEX HK ---
-  - id: amex_hk_platinum
-    institution_id: amex_hk
-    display_name: AMEX HK Platinum
-    account_type: credit_card
-    primary_currency: HKD
-    masked_number: "****31003"
-    aliases: ["AMEX HK", "AMEX PLATINUM"]
-
-  - id: amex_hk_explorer
-    institution_id: amex_hk
-    display_name: AMEX HK Explorer
-    account_type: credit_card
-    primary_currency: HKD
-    masked_number: "****03002"
-    aliases: ["EXPLORER"]
-
-  - id: amex_hk_essential
-    institution_id: amex_hk
-    display_name: AMEX HK Essential
-    account_type: credit_card
-    primary_currency: HKD
-    masked_number: "****02009"
-    aliases: ["ESSENTIAL"]
-
-  # --- HSBC HK cash ---
-  - id: hsbc_hk_savings_hkd
-    institution_id: hsbc_hk
-    display_name: HSBC One HKD Savings
+  - id: example_hkd_savings
+    institution_id: example_bank
+    display_name: Example HKD Savings
     account_type: savings
     primary_currency: HKD
-    balance_group: hsbc_one
-    aliases: ["HSBC", "HSBC ONE", "HKD SAVINGS"]
-
-  - id: hsbc_hk_savings_cny
-    institution_id: hsbc_hk
-    display_name: HSBC One RMB Savings
-    account_type: savings
-    primary_currency: CNY
-    settlement_currencies: [CNY]
-    balance_group: hsbc_one
-    aliases: ["RMB SAVINGS", "CNY SAVINGS", "FOREIGN CURRENCY SAVINGS"]
-
-  - id: hsbc_hk_pulse_hkd
-    institution_id: hsbc_hk
-    display_name: HSBC Pulse Dual Currency (HKD)
-    account_type: credit_card
-    primary_currency: HKD
-    masked_number: "****0071"
     settlement_currencies: [HKD]
-    balance_group: hsbc_pulse
-    aliases: ["PULSE", "HSBC PULSE"]
+    balance_group: example_bank_personal
+    masked_number: "****1234"
+    aliases: ["EXAMPLE BANK", "HKD SAVINGS"]
 
-  - id: hsbc_hk_pulse_cny
-    institution_id: hsbc_hk
-    display_name: HSBC Pulse Dual Currency (RMB)
-    account_type: credit_card
-    primary_currency: CNY
-    masked_number: "****2217"
-    settlement_currencies: [CNY]
-    balance_group: hsbc_pulse
-    aliases: ["PULSE RMB", "PULSE CNY"]
-
-  - id: hsbc_hk_everymile
-    institution_id: hsbc_hk
-    display_name: HSBC EveryMile
-    account_type: credit_card
-    primary_currency: HKD
-    masked_number: "****3315"
-    aliases: ["EVERYMILE"]
-
-  # --- HSBC MPF (investment) ---
-  # Unit holdings live in investment_* tables; cash contributions that leave
-  # HSBC One still land here as ordinary transfer legs when linked.
-  - id: hsbc_mpf_regular
-    institution_id: hsbc_hk
-    display_name: HSBC MPF Regular Employee
-    account_type: investment
-    primary_currency: HKD
-    balance_group: hsbc_mpf
-    notes: "Member account 65841230"
-
-  - id: hsbc_mpf_personal
-    institution_id: hsbc_hk
-    display_name: HSBC MPF Personal
-    account_type: investment
-    primary_currency: HKD
-    balance_group: hsbc_mpf
-    notes: "Member account 15921678"
-
-  - id: hsbc_mpf_tdvc
-    institution_id: hsbc_hk
-    display_name: HSBC MPF Tax Deductible Voluntary Contribution
-    account_type: investment
-    primary_currency: HKD
-    balance_group: hsbc_mpf
-    notes: "Member account 84303079"
-
-  # --- Mox ---
-  - id: mox_hkd
-    institution_id: mox
-    display_name: Mox HKD
-    account_type: multi_currency
-    primary_currency: HKD
-    balance_group: mox_personal
-    aliases: ["MOX", "MOX BANK", "HKD MOX ACCOUNT"]
-
-  - id: mox_jpy
-    institution_id: mox
-    display_name: Mox JPY
-    account_type: multi_currency
-    primary_currency: JPY
-    balance_group: mox_personal
-    aliases: ["MOX JPY", "JPY MOX ACCOUNT"]
-
-  - id: mox_credit
-    institution_id: mox
-    display_name: Mox Credit
-    account_type: credit_card
-    primary_currency: HKD
-    aliases: ["MOX CREDIT"]
-
-  # --- Chase US ---
-  - id: chase_checking
-    institution_id: chase_us
-    display_name: Chase Total Checking
-    account_type: checking
-    primary_currency: USD
-    balance_group: chase_us
-    masked_number: "****8076"
-    aliases: ["CHASE", "TOTAL CHECKING", "CHASE TOTAL CHECKING", "JPMORGAN"]
-
-  - id: chase_savings
-    institution_id: chase_us
-    display_name: Chase Savings
+  - id: example_usd_savings
+    institution_id: example_bank
+    display_name: Example USD Savings
     account_type: savings
     primary_currency: USD
-    balance_group: chase_us
-    masked_number: "****9116"
-    aliases: ["CHASE SAVINGS"]
+    settlement_currencies: [USD]
+    balance_group: example_bank_personal
+    masked_number: "****5678"
+    aliases: ["USD SAVINGS"]
 
-  # --- Wise (one account per currency balance) ---
-  - id: wise_hkd
-    institution_id: wise
-    display_name: Wise HKD
-    account_type: multi_currency
-    primary_currency: HKD
-    balance_group: wise_personal
-    aliases: ["WISE", "TRANSFERWISE"]
-
-  - id: wise_usd
-    institution_id: wise
-    display_name: Wise USD
-    account_type: multi_currency
+  - id: example_credit_card
+    institution_id: example_card
+    display_name: Example Credit Card
+    account_type: credit_card
     primary_currency: USD
-    balance_group: wise_personal
-
-  - id: wise_eur
-    institution_id: wise
-    display_name: Wise EUR
-    account_type: multi_currency
-    primary_currency: EUR
-    balance_group: wise_personal
-
-  - id: wise_gbp
-    institution_id: wise
-    display_name: Wise GBP
-    account_type: multi_currency
-    primary_currency: GBP
-    balance_group: wise_personal
-
-  - id: wise_jpy
-    institution_id: wise
-    display_name: Wise JPY
-    account_type: multi_currency
-    primary_currency: JPY
-    balance_group: wise_personal
-
-  - id: wise_nzd
-    institution_id: wise
-    display_name: Wise NZD
-    account_type: multi_currency
-    primary_currency: NZD
-    balance_group: wise_personal
-
-  - id: wise_krw
-    institution_id: wise
-    display_name: Wise KRW
-    account_type: multi_currency
-    primary_currency: KRW
-    balance_group: wise_personal
+    settlement_currencies: [USD]
+    masked_number: "****9012"
+    aliases: ["EXAMPLE CARD", "CARD PAYMENT"]
 
 cards:
-  # cardholder_name MUST match the CSV "Card Member" field exactly (case folded
-  # by ingest). last4 is the trailing four of Account #.
-  # Primary holder
-  - id: amex_hk_platinum_primary
-    account_id: amex_hk_platinum
-    cardholder_name: ZEPTO ZHOU YIXIANG
-    last4: "31003"
+  - id: example_credit_card_primary
+    account_id: example_credit_card
+    cardholder_name: YOUR NAME
+    last4: "9012"
     is_supplementary: false
 
-  - id: amex_hk_platinum_supp_cong
-    account_id: amex_hk_platinum
-    cardholder_name: CONG WANG
-    last4: "31029"
+  - id: example_credit_card_supplementary
+    account_id: example_credit_card
+    cardholder_name: EXAMPLE FAMILY MEMBER
+    last4: "3456"
     is_supplementary: true
 
-  - id: amex_hk_platinum_supp_jun
-    account_id: amex_hk_platinum
-    cardholder_name: JUN YAN
-    last4: "31011"
-    is_supplementary: true
-
-  - id: amex_hk_explorer_primary
-    account_id: amex_hk_explorer
-    cardholder_name: ZEPTO ZHOU YIXIANG
-    last4: "03002"
-    is_supplementary: false
-
-  - id: amex_hk_explorer_supp_ho
-    account_id: amex_hk_explorer
-    cardholder_name: HO CHING LEUNG
-    last4: "03010"
-    is_supplementary: true
-
-  - id: amex_hk_explorer_supp_feng
-    account_id: amex_hk_explorer
-    cardholder_name: FENG TIAN
-    last4: "02020"
-    is_supplementary: true
-
-  - id: amex_us_platinum_primary
-    account_id: amex_us_platinum
-    cardholder_name: YIXIANG ZHOU
-    last4: "62003"
-    is_supplementary: false
-
-  - id: amex_us_platinum_supp_yi
-    account_id: amex_us_platinum
-    cardholder_name: YI SHEN
-    last4: "62029"
-    is_supplementary: true
-
-  - id: amex_us_platinum_supp_haonan
-    account_id: amex_us_platinum
-    cardholder_name: Haonan Bai
-    last4: "63019"
-    is_supplementary: true
-
-  - id: amex_us_marriott_primary
-    account_id: amex_us_marriott
-    cardholder_name: YIXIANG ZHOU
-    last4: "53006"
-    is_supplementary: false
-
-  - id: amex_us_marriott_supp
-    account_id: amex_us_marriott
-    cardholder_name: Chenxi Huang
-    last4: "51034"
-    is_supplementary: true
-
-# Labels the statements themselves justify. Lower priority runs first and the
-# first match wins, so the specific cases sit above the general ones — a cash
-# advance fee is a fee, not the interest its wording also mentions.
 rules:
-  - id: cash_advance_fee
-    priority: 10
-    pattern: 'CASH ADVANCE FEE'
-    set_kind: fee
-    set_category: fees
-    set_subcategory: cash_advance
-  - id: card_fee
-    priority: 15
-    match_type: regex
-    pattern: '\b(ANNUAL|MEMBERSHIP|HANDLING|LATE|OVERLIMIT|RENEWAL MEMBERSHIP) FEE\b'
-    set_kind: fee
-    set_category: fees
-  - id: interest
-    priority: 20
-    match_type: regex
-    pattern: '\b(INTEREST|FINANCE CHARGE)\b|PAGO DE INTERESES'
-    set_kind: interest
-    set_category: interest
-  - id: salary
-    priority: 30
-    match_type: regex
-    pattern: '\bSALARY\b'
-    set_kind: income
-    set_category: income
-    set_subcategory: salary
-  - id: rent
-    priority: 35
-    pattern: 'RENTSMART'
-    set_category: housing
-    set_subcategory: rent
-  - id: rewards
-    priority: 40
-    match_type: regex
-    pattern: '\b(CASHBACK|REWARDCASH)\b'
-    set_kind: reward
-    set_category: rewards
-  - id: card_payment
-    priority: 50
-    match_type: regex
-    pattern: '(THANK YOU|IFS PAYMENT|PAYMENT RECEIVED|PAGADO A|AMERICAN EXPRESS CARDS)'
-    set_kind: cc_payment
-    set_category: transfers
-  - id: installment
-    priority: 60
-    match_type: regex
-    pattern: '\bINSTAL?LMENTS?\b'
-    set_kind: installment
-    set_category: credit
-
-  # AMEX states the merchant's category on the statement. Renaming its
-  # vocabulary to the ledger's is a mapping, not an inference — so these are
-  # rules, not a job for the model. Priority 80 leaves the wording-based rules
-  # above free to override, since a cash advance fee at a restaurant is a fee.
-  - id: cat_transport
-    priority: 80
-    match_field: merchant_category
-    match_type: regex
-    pattern: 'TAXICAB|LIMOUSINE|LOCAL TRANSPORTATION|RAILROAD|BUS LINE|PARKING|TOLL'
-    set_category: transport
-  - id: cat_travel
-    priority: 80
-    match_field: merchant_category
-    match_type: regex
-    pattern: 'LODGING|TRAVEL AGENCY|AIRWAYS|AIRLINE|CAR RENTAL|CRUISE'
-    set_category: travel
-  - id: cat_dining
-    priority: 80
-    match_field: merchant_category
-    match_type: regex
-    pattern: 'RESTAURANT|BAR/NIGHTCLUB|CATERER|FAST FOOD'
-    set_category: dining
-  - id: cat_groceries
-    priority: 80
-    match_field: merchant_category
-    match_type: regex
-    pattern: 'GROCERY|SUPERMARKET|CONVENIENCE STORE'
+  - id: example_grocery_rule
+    priority: 100
+    match_field: description
+    match_type: contains
+    pattern: EXAMPLE SUPERMARKET
+    set_kind: purchase
     set_category: groceries
-  - id: cat_utilities
-    priority: 80
-    match_field: merchant_category
-    match_type: regex
-    pattern: 'TELECOM|UTILIT|CABLE|INTERNET SERVICE'
-    set_category: utilities
-  - id: cat_shopping
-    priority: 80
-    match_field: merchant_category
-    match_type: regex
-    pattern: "GENERAL MERCHANDISE|CLOTH|COSMETIC|RECORD STORE|DEPARTMENT STORE|JEWEL"
-    set_category: shopping
-  - id: cat_services
-    priority: 85
-    match_field: merchant_category
-    match_type: regex
-    pattern: 'COMPUTER|PROFESSIONAL SERVICE|ADVERTISING|BUSINESS SERVICE'
-    set_category: services
-
-  # Named merchants. A rule here is a fact about who was paid, not a guess at
-  # what for, which is why these are safe to state deterministically. Note what
-  # is deliberately absent: Alipay, WeChat Pay, UnionPay, Taobao and the other
-  # payment rails. Those name the processor, never the merchant — the statement
-  # simply does not say what was bought, and inventing a category for ~900 rows
-  # of "ALIPAY CHN CN" would be fabricating the most common line in the ledger.
-  - id: m_ridehail
-    priority: 90
-    match_type: regex
-    pattern: 'UBER TRIP|GAO DE TAXI|DIDICHUXING|DIDI TAXI|\bGRAB\*|GRAB RIDES|LYFT'
-    set_category: transport
-    set_subcategory: ride_hailing
-  - id: m_transit
-    priority: 90
-    match_type: regex
-    pattern: 'MTR - RIDES|SHENZHEN METRO|OCTOPUS|JR EAST|LONG WIN BUS|CITYBUS'
-    set_category: transport
-    set_subcategory: transit
-  - id: m_food_delivery
-    priority: 90
-    match_type: regex
-    pattern: 'FOOD ?PANDA|DELIVEROO|MEITUANDIANPING|DAZHONGDIANPING|KEETA'
-    set_category: dining
-    set_subcategory: delivery
-  - id: m_software
-    priority: 90
-    match_type: regex
-    pattern: 'VERCEL|OPENAI|CLAUDE\.AI|ANTHROPIC|MONGODB|GITHUB|CURSOR|AWS|CLOUDFLARE'
-    set_category: services
-    set_subcategory: software
-  - id: m_streaming
-    priority: 90
-    match_type: regex
-    pattern: 'SPOTIFY|NETFLIX|DISNEYPLUS|YOUTUBEPREMIUM|APPLE\.COM/BILL'
-    set_category: services
-    set_subcategory: subscriptions
-  - id: m_travel_booking
-    priority: 90
-    match_type: regex
-    pattern: 'TRIP\.COM|QATARAIRWAYS|QATAR AIRWAYS|CATHAY|EXPEDIA|AGODA|BOOKING\.COM|AIRBNB'
-    set_category: travel
-  - id: m_loyalty
-    priority: 90
-    match_type: regex
-    pattern: 'ASIA MILES|MEMBERSHIP REWARDS'
-    set_kind: reward
-    set_category: rewards
+    set_subcategory: supermarket

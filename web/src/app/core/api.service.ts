@@ -1,10 +1,10 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { EMPTY, Observable, catchError, concat, shareReplay, take, tap } from 'rxjs';
 import {
   Account, Card, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
   InstallmentPlan, IntegrityReport, InvestmentDetail, InvestmentSnapshot, Job,
-  LedgerFilter, Money, Page, Position, QueryResult, StagePreview, SummaryRow,
+  LedgerFilter, Money, Page, Position, QueryResult, StagePreview, StatementFreshness, SummaryRow,
   TotalRow, Txn,
 } from './models';
 
@@ -44,33 +44,101 @@ export function filterToParams(f: LedgerFilter): HttpParams {
 export class Api {
   private http = inject(HttpClient);
   private base = '/api';
+  private reads = new Map<string, { at: number; value: Observable<unknown> }>();
+  private cacheVersion = Number(localStorage.getItem('finto.cacheVersion') || 0);
+
+  private readonly activityTtl = 5 * 60_000;
+  private readonly computedTtl = 30 * 60_000;
+  private readonly referenceTtl = 60 * 60_000;
+
+  /** Reuse identical route reads inside a warm app session. Expired entries are
+   * emitted once while a fresh request runs, preventing route revisits from
+   * collapsing into a loading state. Mutations and user changes clear the map. */
+  private cached<T>(url: string, ttlMs = 30_000): Observable<T> {
+    const hit = this.reads.get(url);
+    if (hit && Date.now() - hit.at < ttlMs) return hit.value as Observable<T>;
+    const separator = url.includes('?') ? '&' : '?';
+    const request = this.http.get<T>(`${url}${separator}_cv=${this.cacheVersion}`).pipe(
+      shareReplay({ bufferSize: 1, refCount: false }),
+    );
+    const value = hit
+      ? concat(
+          (hit.value as Observable<T>).pipe(take(1)),
+          request.pipe(catchError(() => EMPTY)),
+        ).pipe(shareReplay({ bufferSize: 1, refCount: false }))
+      : request;
+    this.reads.set(url, { at: Date.now(), value });
+    if (this.reads.size > 200) this.reads.delete(this.reads.keys().next().value!);
+    return value;
+  }
+
+  private invalidateReads(): void {
+    this.reads.clear();
+    this.cacheVersion += 1;
+    localStorage.setItem('finto.cacheVersion', String(this.cacheVersion));
+  }
+
+  login(identifier: string, password: string): Observable<{ ok: boolean; user: AuthUser }> {
+    return this.http.post<{ ok: boolean; user: AuthUser }>(
+      `${this.base}/auth/login`, { identifier, password }).pipe(
+        tap(() => this.invalidateReads()),
+      );
+  }
+
+  me(): Observable<AuthUser> { return this.http.get<AuthUser>(`${this.base}/auth/me`); }
+
+  updatePreferences(preferences: Partial<UserPreferences>): Observable<AuthUser> {
+    return this.http.patch<AuthUser>(`${this.base}/auth/preferences`, preferences);
+  }
+
+  apiKeys(): Observable<{ keys: ApiKeyMeta[] }> {
+    return this.http.get<{ keys: ApiKeyMeta[] }>(`${this.base}/auth/api-keys`);
+  }
+
+  createApiKey(name = 'Agent access'): Observable<ApiKeyMeta & { key: string }> {
+    return this.http.post<ApiKeyMeta & { key: string }>(`${this.base}/auth/api-keys`, { name });
+  }
+
+  revokeApiKey(id: string): Observable<{ ok: boolean }> {
+    return this.http.delete<{ ok: boolean }>(`${this.base}/auth/api-keys/${id}`);
+  }
+
+  logout(): Observable<{ ok: boolean }> {
+    this.invalidateReads();
+    return this.http.post<{ ok: boolean }>(`${this.base}/auth/logout`, {});
+  }
 
   transactions(
     f: LedgerFilter,
-    opts: { limit?: number; offset?: number; sort?: string; direction?: string } = {},
+    opts: { limit?: number; offset?: number; sort?: string; direction?: string; convertTo?: string } = {},
   ): Observable<Page<Txn>> {
     let p = filterToParams(f);
     if (opts.limit != null) p = p.set('limit', String(opts.limit));
     if (opts.offset != null) p = p.set('offset', String(opts.offset));
     if (opts.sort) p = p.set('sort', opts.sort);
     if (opts.direction) p = p.set('direction', opts.direction);
-    return this.http.get<Page<Txn>>(`${this.base}/transactions`, { params: p });
+    if (opts.convertTo) p = p.set('convert_to', opts.convertTo);
+    return this.cached<Page<Txn>>(
+      `${this.base}/transactions?${p.toString()}`, this.activityTtl);
   }
 
   transaction(id: string): Observable<Txn> {
-    return this.http.get<Txn>(`${this.base}/transactions/${id}`);
+    return this.cached<Txn>(`${this.base}/transactions/${id}`, this.computedTtl);
   }
 
 addTag(id: string, tag: string): Observable<Txn> {
+    this.invalidateReads();
     return this.http.post<Txn>(`${this.base}/transactions/${id}/tags`, { tag });
   }
 
   removeTag(id: string, tag: string): Observable<Txn> {
+    this.invalidateReads();
     return this.http.delete<Txn>(
       `${this.base}/transactions/${id}/tags/${encodeURIComponent(tag)}`);
   }
 
   patchTransaction(id: string, patch: Partial<Txn>): Observable<Txn> {
+    this.invalidateReads();
     return this.http.patch<Txn>(`${this.base}/transactions/${id}`, patch);
   }
 
@@ -84,7 +152,7 @@ addTag(id: string, tag: string): Observable<Txn> {
   }> {
     let p = filterToParams(f).set('group_by', groupBy);
     if (convertTo) p = p.set('convert_to', convertTo);
-    return this.http.get<any>(`${this.base}/summary`, { params: p });
+    return this.cached<any>(`${this.base}/summary?${p.toString()}`, this.computedTtl);
   }
 
   positions(convertTo?: string, asOf?: string): Observable<{
@@ -101,23 +169,29 @@ addTag(id: string, tag: string): Observable<Txn> {
     let p = new HttpParams();
     if (convertTo) p = p.set('convert_to', convertTo);
     if (asOf) p = p.set('as_of', asOf);
-    return this.http.get<any>(`${this.base}/positions`, { params: p });
+    return this.cached<any>(
+      `${this.base}/positions${p.keys().length ? `?${p.toString()}` : ''}`, this.computedTtl);
   }
 
   stats(): Observable<any> {
-    return this.http.get(`${this.base}/stats`);
+    return this.cached(`${this.base}/stats`, this.activityTtl);
   }
 
   facets(): Observable<Facets> {
-    return this.http.get<Facets>(`${this.base}/facets`);
+    return this.cached<Facets>(`${this.base}/facets`, this.referenceTtl);
   }
 
   accounts(): Observable<{ accounts: Account[] }> {
-    return this.http.get<{ accounts: Account[] }>(`${this.base}/accounts`);
+    return this.cached<{ accounts: Account[] }>(`${this.base}/accounts`, this.referenceTtl);
   }
 
   cards(): Observable<{ cards: Card[] }> {
-    return this.http.get<{ cards: Card[] }>(`${this.base}/cards`);
+    return this.cached<{ cards: Card[] }>(`${this.base}/cards`, this.referenceTtl);
+  }
+
+  statementFreshness(): Observable<StatementFreshness> {
+    return this.cached<StatementFreshness>(
+      `${this.base}/statement-freshness`, this.computedTtl);
   }
 
   // --- Import -------------------------------------------------------------
@@ -134,6 +208,7 @@ addTag(id: string, tag: string): Observable<Txn> {
 
   confirmImport(stagedId: string, meta: { institution_id?: string; account_id?: string; currency?: string }):
     Observable<Job> {
+    this.invalidateReads();
     const form = new FormData();
     if (meta.institution_id) form.append('institution_id', meta.institution_id);
     if (meta.account_id) form.append('account_id', meta.account_id);
@@ -146,70 +221,83 @@ addTag(id: string, tag: string): Observable<Txn> {
   }
 
   importHistory(): Observable<{ files: any[] }> {
-    return this.http.get<{ files: any[] }>(`${this.base}/imports/history`);
+    return this.cached<{ files: any[] }>(`${this.base}/imports/history`, this.activityTtl);
   }
 
   reconcile(): Observable<Job> {
+    this.invalidateReads();
     return this.http.post<Job>(`${this.base}/reconcile`, {});
   }
 
   reattribute(): Observable<Job> {
+    this.invalidateReads();
     return this.http.post<Job>(`${this.base}/reattribute`, {});
   }
 
   harvestFx(): Observable<Job> {
+    this.invalidateReads();
     return this.http.post<Job>(`${this.base}/fx/harvest`, {});
   }
 
   job(id: string): Observable<Job> {
-    return this.http.get<Job>(`${this.base}/jobs/${id}`);
+    return this.http.get<Job>(`${this.base}/jobs/${id}`).pipe(
+      tap((job) => {
+        if (job.status === 'done') this.invalidateReads();
+      }),
+    );
   }
 
   // --- Review -------------------------------------------------------------
 
   reviewQueue(queue: 'duplicates' | 'transfers' | 'installments'):
     Observable<{ items: any[]; total: number }> {
-    return this.http.get<any>(`${this.base}/review/${queue}`);
+    return this.cached<any>(`${this.base}/review/${queue}`, this.activityTtl);
   }
 
   resolve(queue: string, id: string, action: 'accept' | 'reject'): Observable<any> {
+    this.invalidateReads();
     return this.http.post(`${this.base}/review/${queue}/${id}`, { action });
   }
 
   // --- Other --------------------------------------------------------------
 
   investments(): Observable<{ snapshots: InvestmentSnapshot[] }> {
-    return this.http.get<{ snapshots: InvestmentSnapshot[] }>(`${this.base}/investments`);
+    return this.cached<{ snapshots: InvestmentSnapshot[] }>(
+      `${this.base}/investments`, this.computedTtl);
   }
 
   investment(id: string): Observable<InvestmentDetail> {
-    return this.http.get<InvestmentDetail>(`${this.base}/investments/${id}`);
+    return this.cached<InvestmentDetail>(
+      `${this.base}/investments/${id}`, this.computedTtl);
   }
 
   detailKeys(): Observable<{ keys: DetailKey[] }> {
-    return this.http.get<{ keys: DetailKey[] }>(`${this.base}/details`);
+    return this.cached<{ keys: DetailKey[] }>(`${this.base}/details`, this.referenceTtl);
   }
 
   detailValues(key: string): Observable<{ key: string; values: DetailValue[] }> {
-    return this.http.get<{ key: string; values: DetailValue[] }>(
-      `${this.base}/details/${encodeURIComponent(key)}`);
+    return this.cached<{ key: string; values: DetailValue[] }>(
+      `${this.base}/details/${encodeURIComponent(key)}`, this.computedTtl);
   }
 
   composition(convertTo: string, dimension: string, f: LedgerFilter = {}): Observable<Composition> {
     const p = filterToParams(f).set('convert_to', convertTo).set('dimension', dimension);
-    return this.http.get<Composition>(`${this.base}/composition`, { params: p });
+    return this.cached<Composition>(
+      `${this.base}/composition?${p.toString()}`, this.computedTtl);
   }
 
   coverage(): Observable<Coverage> {
-    return this.http.get<Coverage>(`${this.base}/coverage`);
+    return this.cached<Coverage>(`${this.base}/coverage`, this.computedTtl);
   }
 
-  flows(f: LedgerFilter = {}): Observable<Flows> {
-    return this.http.get<Flows>(`${this.base}/flows`, { params: filterToParams(f) });
+  flows(f: LedgerFilter = {}, convertTo = 'USD'): Observable<Flows> {
+    const query = filterToParams(f).set('convert_to', convertTo).toString();
+    return this.cached<Flows>(
+      `${this.base}/flows${query ? `?${query}` : ''}`, this.computedTtl);
   }
 
   integrity(): Observable<IntegrityReport> {
-    return this.http.get<IntegrityReport>(`${this.base}/integrity`);
+    return this.cached<IntegrityReport>(`${this.base}/integrity`, this.computedTtl);
   }
 
   installments(activeOnly = false): Observable<{
@@ -218,11 +306,13 @@ addTag(id: string, tag: string): Observable<Txn> {
     committed_monthly_by_currency: Array<{ currency: string; amount: number }>;
   }> {
     const p = new HttpParams().set('active_only', String(activeOnly));
-    return this.http.get<any>(`${this.base}/installments`, { params: p });
+    return this.cached<any>(
+      `${this.base}/installments?${p.toString()}`, this.computedTtl);
   }
 
   installment(id: string): Observable<InstallmentPlan> {
-    return this.http.get<InstallmentPlan>(`${this.base}/installments/${id}`);
+    return this.cached<InstallmentPlan>(
+      `${this.base}/installments/${id}`, this.computedTtl);
   }
 
   ask(question: string, convertTo?: string): Observable<QueryResult> {
@@ -230,4 +320,24 @@ addTag(id: string, tag: string): Observable<Txn> {
       question, convert_to: convertTo,
     });
   }
+}
+
+export interface UserPreferences {
+  theme?: 'system' | 'dark' | 'light';
+  language?: 'en' | 'zh-Hant';
+  base_currency?: string;
+}
+export interface AuthUser {
+  id: string;
+  username: string;
+  email: string;
+  preferences: UserPreferences;
+}
+export interface ApiKeyMeta {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  created_at: string;
+  last_used_at: string | null;
 }

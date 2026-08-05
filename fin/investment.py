@@ -136,12 +136,12 @@ def save_snapshot(conn, snap: InvestmentSnapshot) -> str:
     """Persist a snapshot, replacing any previous one for the same scheme+date+source."""
     snap_id = str(uuid.uuid4())
     conn.execute(
-        "DELETE FROM investment_snapshot WHERE scheme=? AND as_of_date=? AND source=?",
+        "DELETE FROM investment_snapshot WHERE scheme=%s AND as_of_date=%s AND source=%s",
         (snap.scheme, snap.as_of_date.isoformat(), snap.source),
     )
     conn.execute(
         "INSERT INTO investment_snapshot (id, as_of_date, scheme, currency, total_value, "
-        "source, statement_file_id, notes, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        "source, statement_file_id, notes, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (snap_id, snap.as_of_date.isoformat(), snap.scheme, snap.currency,
          snap.total_value.amount, snap.source, snap.statement_file_id, snap.notes,
          datetime.now().isoformat()),
@@ -150,7 +150,7 @@ def save_snapshot(conn, snap: InvestmentSnapshot) -> str:
         conn.execute(
             "INSERT INTO investment_subaccount_balance "
             "(snapshot_id, account_id, member_no, balance, currency, allocation) "
-            "VALUES (?,?,?,?,?,?)",
+            "VALUES (%s,%s,%s,%s,%s,%s)",
             (snap_id, s.account_id, s.member_no, s.balance.amount, s.balance.currency,
              str(s.allocation) if s.allocation is not None else None),
         )
@@ -158,7 +158,7 @@ def save_snapshot(conn, snap: InvestmentSnapshot) -> str:
         conn.execute(
             "INSERT INTO investment_holding "
             "(id, snapshot_id, instrument, units, unit_price, market_value, currency, allocation) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
             (str(uuid.uuid4()), snap_id, h.instrument,
              str(h.units) if h.units is not None else None,
              str(h.unit_price) if h.unit_price is not None else None,
@@ -189,7 +189,7 @@ def list_snapshots(conn) -> list[dict]:
 
 def snapshot_detail(conn, snapshot_id: str) -> dict | None:
     r = conn.execute(
-        "SELECT * FROM investment_snapshot WHERE id=?", (snapshot_id,)
+        "SELECT * FROM investment_snapshot WHERE id=%s", (snapshot_id,)
     ).fetchone()
     if not r:
         return None
@@ -201,7 +201,7 @@ def snapshot_detail(conn, snapshot_id: str) -> dict | None:
             "allocation": s["allocation"],
         }
         for s in conn.execute(
-            "SELECT * FROM investment_subaccount_balance WHERE snapshot_id=?",
+            "SELECT * FROM investment_subaccount_balance WHERE snapshot_id=%s",
             (snapshot_id,),
         )
     ]
@@ -214,7 +214,7 @@ def snapshot_detail(conn, snapshot_id: str) -> dict | None:
             "allocation": h["allocation"],
         }
         for h in conn.execute(
-            "SELECT * FROM investment_holding WHERE snapshot_id=? ORDER BY market_value DESC",
+            "SELECT * FROM investment_holding WHERE snapshot_id=%s ORDER BY market_value DESC",
             (snapshot_id,),
         )
     ]

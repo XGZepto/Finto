@@ -1,0 +1,26 @@
+<div class="login-screen">
+  <div class="ambient grid-a"></div><div class="ambient grid-b"></div>
+  <main class="login-panel">
+    <img class="mark" src="/favicon.svg" alt="">
+    <div class="wordmark">Finto</div>
+
+    <form (ngSubmit)="submit()">
+      <label for="identifier">Username or email</label>
+      <input id="identifier" name="identifier" type="text" autocomplete="username"
+             autofocus [ngModel]="identifier()" (ngModelChange)="identifier.set($event)"
+             placeholder="Username or email" />
+      <label for="password">Password</label>
+      <div class="password-row">
+        <input id="password" name="password" type="password" autocomplete="current-password"
+               [ngModel]="password()" (ngModelChange)="password.set($event)"
+               placeholder="Enter password" />
+        <button class="unlock" type="submit"
+                [disabled]="loading() || !identifier() || !password()">
+          {{ loading() ? 'Opening…' : 'Unlock →' }}
+        </button>
+      </div>
+      @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+    </form>
+
+  </main>
+</div>

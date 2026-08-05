@@ -472,16 +472,16 @@ class GenericCsvParser(StatementParser):
 
 _PAYMENT_WORDS = re.compile(
     r"\b(PAYMENT RECEIVED|AUTOPAY|THANK YOU|DIRECT DEBIT|PAYMENT - THANK|"
-    r"AMEX EPAYMENT|ACH PMT)\b", re.I)
+    r"AMEX EPAYMENT|ACH PMT)\b", re.IGNORECASE)
 _TRANSFER_WORDS = re.compile(
     r"\b(TRANSFER|FPS|FASTER PAYMENT|ATM|CASH WITHDRAWAL|INTERNAL|"
-    r"MOVE BETWEEN|OWN ACCOUNT)\b", re.I)
+    r"MOVE BETWEEN|OWN ACCOUNT)\b", re.IGNORECASE)
 _INCOME_WORDS = re.compile(
     r"\b(SALARY|PAYROLL|WAGES|DIVIDEND|TAX REFUND|GOVERNMENT|"
-    r"EMPLOYER|DIRECT CREDIT)\b", re.I)
-_INTEREST_WORDS = re.compile(r"\b(INTEREST|INT\.?\s*PAID|CREDIT INTEREST)\b", re.I)
+    r"EMPLOYER|DIRECT CREDIT)\b", re.IGNORECASE)
+_INTEREST_WORDS = re.compile(r"\b(INTEREST|INT\.?\s*PAID|CREDIT INTEREST)\b", re.IGNORECASE)
 _REWARD_WORDS = re.compile(
-    r"\b(CASHBACK|REWARD|STATEMENT CREDIT|MEMBERSHIP REWARDS)\b", re.I)
+    r"\b(CASHBACK|REWARD|STATEMENT CREDIT|MEMBERSHIP REWARDS)\b", re.IGNORECASE)
 
 
 def _looks_like_payment(desc: str) -> bool:
@@ -526,7 +526,7 @@ def _hsbc_kind(desc: str) -> TxnKind | None:
         return None
     if _PAYMENT_WORDS.search(desc):
         return TxnKind.CC_PAYMENT
-    if re.search(r"\b(ATM|CASH WITHDRAWAL)\b", desc, re.I):
+    if re.search(r"\b(ATM|CASH WITHDRAWAL)\b", desc, re.IGNORECASE):
         return TxnKind.ATM
     if _INTEREST_WORDS.search(desc):
         return TxnKind.INTEREST

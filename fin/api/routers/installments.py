@@ -47,6 +47,8 @@ def get_plan(plan_id: str, conn=Depends(get_conn)) -> dict:
         raise HTTPException(404, "no such plan")
     plan["charges"] = [dict(r) for r in conn.execute(
         "SELECT id, txn_date, description_raw, amount_booked, currency_booked, "
-        "       installment_seq FROM txn WHERE installment_plan_id=? "
-        "AND duplicate_of_id IS NULL ORDER BY installment_seq", (plan_id,))]
+        "       installment_seq, "
+        "       CASE WHEN installment_seq IS NULL THEN TRUE ELSE FALSE END AS is_settlement "
+        "FROM txn WHERE installment_plan_id=%s AND duplicate_of_id IS NULL "
+        "ORDER BY txn_date, installment_seq NULLS LAST", (plan_id,))]
     return plan

@@ -1,12 +1,10 @@
 <div class="page-head">
   <h1>Timeline</h1>
   <div class="head-controls">
-    <select [ngModel]="dimension()" (ngModelChange)="set(dimension, $event)">
-      @for (d of dimensions; track d) { <option [value]="d">{{ d }}</option> }
-    </select>
-    <select [ngModel]="convertTo()" (ngModelChange)="set(convertTo, $event)">
-      @for (c of currencies; track c) { <option [value]="c">{{ c }}</option> }
-    </select>
+    <finto-select ariaLabel="Dimension" [options]="dimensions" [ngModel]="dimension()"
+                  (ngModelChange)="set(dimension, $event)" />
+    <finto-select ariaLabel="Currency" [options]="currencies" [ngModel]="convertTo()"
+                  (ngModelChange)="set(convertTo, $event)" />
     <div class="seg">
       <button [class.on]="mode() === 'share'" (click)="mode.set('share')">share</button>
       <button [class.on]="mode() === 'amount'" (click)="mode.set('amount')">amount</button>

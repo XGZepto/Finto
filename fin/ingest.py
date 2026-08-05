@@ -1,4 +1,4 @@
-"""Ingest orchestration: file -> parser -> canonical Txn -> SQLite.
+"""Ingest orchestration: file -> parser -> canonical Txn -> PostgreSQL.
 
 Pipeline order matters and is fixed:
 
@@ -77,7 +77,7 @@ def _institution_of(conn, account_id: str | None) -> str | None:
     if account_id is None:
         return None
     row = conn.execute(
-        "SELECT institution_id FROM account WHERE id=?", (account_id,)
+        "SELECT institution_id FROM account WHERE id=%s", (account_id,)
     ).fetchone()
     return row["institution_id"] if row else None
 
@@ -130,7 +130,7 @@ def resolve_card(parsed: ParsedTxn, account_id: str, cards: list[Card]) -> str |
 def _name_key(name: str) -> tuple[str, ...]:
     """A person's name reduced to something two issuers can agree on.
 
-    One cardholder is "HO CHING LEUNG" on the account map and "LEUNG HO CHING"
+    One cardholder is "TAYLOR SAMPLE" on the account map and "SAMPLE TAYLOR"
     on the statement, so the parts are compared as a set.
     """
     return tuple(sorted(re.findall(r"[a-z]+", name.lower())))
@@ -173,6 +173,11 @@ def to_txn(
     raw_record_id: str | None,
     cards: list[Card],
 ) -> Txn:
+    details = dict(parsed.details or {})
+    if parsed.installment_hint:
+        seq, term = parsed.installment_hint
+        details.setdefault("installment.sequence", str(seq))
+        details.setdefault("installment.term", str(term))
     return Txn(
         account_id=account_id,
         card_id=resolve_card(parsed, account_id, cards),
@@ -190,7 +195,7 @@ def to_txn(
         kind=parsed.kind_hint or TxnKind.UNKNOWN,
         statement_file_id=statement_file_id,
         raw_record_id=raw_record_id,
-        details=parsed.details,
+        details=details,
     )
 
 
@@ -215,7 +220,7 @@ def apply_category_rules(conn, txns: Iterable[Txn]) -> int:
             hit = (
                 pat.upper() in field.upper() if r["match_type"] == "contains"
                 else field.upper() == pat.upper() if r["match_type"] == "exact"
-                else bool(re.search(pat, field, re.I))
+                else bool(re.search(pat, field, re.IGNORECASE))
             )
             if hit:
                 if r["set_category"]:
@@ -400,7 +405,7 @@ def reattribute_cards(conn) -> int:
         resolved = resolve_card(parsed, r["account_id"], cards)
         if resolved != r["card_id"]:
             updates.append((resolved, r["id"]))
-    conn.executemany("UPDATE txn SET card_id=? WHERE id=?", updates)
+    dbm.execute_many(conn, "UPDATE txn SET card_id=%s WHERE id=%s", updates)
     return len(updates)
 
 
@@ -492,6 +497,51 @@ def assign_default_kinds(txns: Iterable[Txn], accounts: dict) -> int:
     return changed
 
 
+def correct_semantic_kinds(txns: Iterable[Txn], accounts: dict) -> int:
+    """Correct direction-sensitive labels and itemised instalment fees."""
+    cards = {aid for aid, a in accounts.items()
+             if a.account_type in (AccountType.CREDIT_CARD, AccountType.CHARGE_CARD)}
+    changed = 0
+    for t in txns:
+        detail_text = " ".join((t.details or {}).values()).upper()
+        if (t.kind is TxnKind.CC_PAYMENT and t.account_id in cards
+                and t.booked.amount < 0):
+            t.kind = TxnKind.UNKNOWN
+            changed += 1
+        if ("HANDLING FEE" in detail_text and
+                re.search(r"INSTAL?LMENT|INSTAL\b", t.description_raw, re.IGNORECASE)):
+            t.kind = TxnKind.FEE
+            t.category = t.category or "fees"
+            t.subcategory = t.subcategory or "installment"
+            changed += 1
+    return changed
+
+
+def reset_automatic_reconciliation(conn) -> None:
+    """Remove replaceable auto state before recomputing the full ledger.
+
+    Confirmed/manual groups and resolved review decisions survive. Open queues
+    and unconfirmed automatic links are derived state and must converge when
+    scoring improves or new source rows arrive.
+    """
+    conn.execute(
+        "UPDATE txn SET transfer_group_id=NULL WHERE transfer_group_id IN "
+        "(SELECT id FROM transfer_group WHERE is_confirmed=0 AND match_method='auto')"
+    )
+    conn.execute(
+        "DELETE FROM transfer_group WHERE is_confirmed=0 AND match_method='auto'"
+    )
+    conn.execute("DELETE FROM transfer_candidate WHERE resolution='open'")
+    conn.execute(
+        "UPDATE txn SET installment_plan_id=NULL, installment_seq=NULL "
+        "WHERE installment_plan_id IN "
+        "(SELECT id FROM installment_plan WHERE is_confirmed=0)"
+    )
+    conn.execute("DELETE FROM installment_plan WHERE is_confirmed=0")
+    conn.execute("DELETE FROM installment_candidate WHERE resolution='open'")
+    conn.commit()
+
+
 def reconcile(conn, *, use_llm: bool = False) -> dict:
     """Run dedup + transfer matching over the whole ledger.
 
@@ -500,6 +550,7 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
     over, and only adjusts scores — the merge decision stays with the
     deterministic threshold.
     """
+    reset_automatic_reconciliation(conn)
     txns = dbm.load_txns(conn, include_duplicates=True)
     accounts = dbm.load_accounts(conn)
 
@@ -508,6 +559,12 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
     dbm.insert_duplicate_candidates(conn, report.candidates)
 
     live = [t for t in txns if t.duplicate_of_id is None]
+    semantic_kinds_corrected = correct_semantic_kinds(live, accounts)
+
+    # Transfer matching needs rates on its first clean run. Harvesting at the
+    # end made cross-currency card payments appear only after a second pass.
+    from .fx import harvest_rates
+    harvest_rates(conn)
     from .transfers import TransferContext
     tr_ctx = TransferContext(
         self_aliases=dbm.load_self_aliases(conn),
@@ -552,9 +609,6 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
     refunds = find_refunds(live)
     refunds_linked = apply_refund_links(live, refunds)
 
-    from .fx import harvest_rates
-    harvest_rates(conn)
-
     # Regular income on top of whatever the parsers already labelled.
     from .income import apply_income_labels, detect_regular_income
     income_streams = detect_regular_income(live, income_accounts={
@@ -586,6 +640,7 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
         "income_labelled": income_labelled,
         "kinds_defaulted": summary_kinds,
         "payment_gateways_labelled": gateways,
+        "semantic_kinds_corrected": semantic_kinds_corrected,
     }
 
     if use_llm:

@@ -86,7 +86,7 @@ Rules:
 def build_context(conn) -> dict[str, Any]:
     """The vocabulary the model is allowed to use."""
     def col(sql: str) -> list[str]:
-        return [r[0] for r in conn.execute(sql) if r[0]]
+        return [r["item_value"] for r in conn.execute(sql) if r["item_value"]]
 
     return {
         "today": date.today().isoformat(),
@@ -96,9 +96,9 @@ def build_context(conn) -> dict[str, Any]:
             for r in conn.execute(
                 "SELECT id, display_name, account_type, primary_currency "
                 "FROM account ORDER BY display_name")],
-        "categories": col("SELECT DISTINCT category FROM txn "
+        "categories": col("SELECT DISTINCT category AS item_value FROM txn "
                           "WHERE category IS NOT NULL ORDER BY category"),
-        "currencies": col("SELECT DISTINCT currency_booked FROM txn "
+        "currencies": col("SELECT DISTINCT currency_booked AS item_value FROM txn "
                           "ORDER BY currency_booked"),
         "kinds": sorted(VALID_KINDS),
         "group_by_options": sorted(VALID_GROUP_BY),

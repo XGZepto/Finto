@@ -7,31 +7,21 @@
 <div class="card defaults">
   <div class="field">
     <label for="inst">Institution</label>
-    <select id="inst" [ngModel]="defaultInstitution()"
-            (ngModelChange)="defaultInstitution.set($event); defaultAccount.set('')">
-      <option value="">detect</option>
-      @for (i of facets()?.institutions ?? []; track i.id) {
-        <option [value]="i.id">{{ i.display_name }}</option>
-      }
-    </select>
+    <finto-select id="inst" ariaLabel="Institution" [options]="institutionOptions()"
+                  valueKey="id" labelKey="display_name" [ngModel]="defaultInstitution()"
+                  (ngModelChange)="defaultInstitution.set($event); defaultAccount.set('')" />
   </div>
   <div class="field">
     <label for="acct">Account</label>
-    <select id="acct" [ngModel]="defaultAccount()" (ngModelChange)="defaultAccount.set($event)">
-      <option value="">detect</option>
-      @for (a of accountOptions(); track a.id) {
-        <option [value]="a.id">{{ a.display_name }}</option>
-      }
-    </select>
+    <finto-select id="acct" ariaLabel="Account" [options]="detectedAccountOptions()"
+                  valueKey="id" labelKey="display_name" [ngModel]="defaultAccount()"
+                  (ngModelChange)="defaultAccount.set($event)" />
   </div>
   <div class="field narrow">
     <label for="ccy">Currency</label>
-    <select id="ccy" [ngModel]="defaultCurrency()" (ngModelChange)="defaultCurrency.set($event)">
-      <option value="">detect</option>
-      @for (c of facets()?.currencies ?? []; track c) {
-        <option [value]="c">{{ c }}</option>
-      }
-    </select>
+    <finto-select id="ccy" ariaLabel="Currency" [options]="currencyOptions()"
+                  valueKey="value" labelKey="label" [ngModel]="defaultCurrency()"
+                  (ngModelChange)="defaultCurrency.set($event)" />
   </div>
 </div>
 
@@ -82,31 +72,21 @@
       <div class="binding">
         <div class="field">
           <label>Institution</label>
-          <select [ngModel]="e.institutionId"
-                  (ngModelChange)="e.institutionId = $event; e.accountId = ''">
-            <option value="">detect</option>
-            @for (i of facets()?.institutions ?? []; track i.id) {
-              <option [value]="i.id">{{ i.display_name }}</option>
-            }
-          </select>
+          <finto-select ariaLabel="Institution" [options]="institutionOptions()"
+                        valueKey="id" labelKey="display_name" [ngModel]="e.institutionId"
+                        (ngModelChange)="e.institutionId = $event; e.accountId = ''" />
         </div>
         <div class="field">
           <label>Account</label>
-          <select [ngModel]="e.accountId" (ngModelChange)="e.accountId = $event">
-            <option value="">detect</option>
-            @for (a of facets()?.accounts ?? []; track a.id) {
-              <option [value]="a.id">{{ a.display_name }}</option>
-            }
-          </select>
+          <finto-select ariaLabel="Account" [options]="allAccountOptions()"
+                        valueKey="id" labelKey="display_name" [ngModel]="e.accountId"
+                        (ngModelChange)="e.accountId = $event" />
         </div>
         <div class="field narrow">
           <label>Currency</label>
-          <select [ngModel]="e.currency" (ngModelChange)="e.currency = $event">
-            <option value="">detect</option>
-            @for (c of facets()?.currencies ?? []; track c) {
-              <option [value]="c">{{ c }}</option>
-            }
-          </select>
+          <finto-select ariaLabel="Currency" [options]="currencyOptions()"
+                        valueKey="value" labelKey="label" [ngModel]="e.currency"
+                        (ngModelChange)="e.currency = $event" />
         </div>
         <div class="field span">
           <label>Period</label>
@@ -250,12 +230,12 @@
       <tbody>
         @for (f of history(); track f.id) {
           <tr>
-            <td class="mono">{{ f.imported_at | shortDate }}</td>
-            <td class="path">{{ f.source_path }}</td>
-            <td>{{ f.account_id }}</td>
-            <td><span class="tag">{{ f.parser_id }}</span></td>
-            <td class="num">{{ f.row_count }}</td>
-            <td class="num">{{ f.txn_count }}</td>
+            <td class="mono" data-label="Imported">{{ f.imported_at | shortDate }}</td>
+            <td class="path" data-label="File">{{ f.source_path }}</td>
+            <td data-label="Account">{{ f.account_id }}</td>
+            <td data-label="Parser"><span class="tag">{{ f.parser_id }}</span></td>
+            <td class="num" data-label="Rows">{{ f.row_count }}</td>
+            <td class="num" data-label="Txns">{{ f.txn_count }}</td>
           </tr>
         } @empty {
           <tr><td colspan="6" class="empty">Nothing imported yet</td></tr>

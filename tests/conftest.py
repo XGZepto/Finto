@@ -5,6 +5,11 @@ No real financial data anywhere in this repo — everything here is invented.
 
 from __future__ import annotations
 
+import os
+import shutil
+import socket
+import subprocess
+import uuid
 import zlib
 from pathlib import Path
 
@@ -16,10 +21,65 @@ from fin.models import Account, Card, Institution
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+@pytest.fixture(scope="session")
+def postgres_base_url(tmp_path_factory):
+    """Use the configured test server or start one for this test session."""
+    configured = os.environ.get("FINTO_TEST_DATABASE_URL")
+    owned = configured is None
+    cluster = None
+    pg_ctl = None
+    if owned:
+        pg_bin = Path("/opt/homebrew/opt/postgresql@17/bin")
+        initdb = shutil.which("initdb") or str(pg_bin / "initdb")
+        pg_ctl = shutil.which("pg_ctl") or str(pg_bin / "pg_ctl")
+        if not Path(initdb).exists() or not Path(pg_ctl).exists():
+            pytest.skip("PostgreSQL 17 is required for database tests")
+        cluster = tmp_path_factory.mktemp("postgres")
+        subprocess.run([initdb, "-D", str(cluster), "--no-locale", "--encoding=UTF8"],
+                       check=True, capture_output=True)
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        subprocess.run([pg_ctl, "-D", str(cluster), "-o", f"-p {port}",
+                        "-l", str(cluster / "server.log"), "start"],
+                       check=True, capture_output=True)
+        configured = f"postgresql://127.0.0.1:{port}/postgres"
+    try:
+        yield configured
+    finally:
+        if owned and cluster is not None and pg_ctl is not None:
+            subprocess.run([pg_ctl, "-D", str(cluster), "stop"],
+                           check=True, capture_output=True)
+
+
 @pytest.fixture
-def conn(tmp_path):
+def database_url(postgres_base_url):
+    """Isolated PostgreSQL schema for a test."""
+    configured = postgres_base_url
+    schema = "test_" + uuid.uuid4().hex
+    admin = dbm.connect(configured)
+    admin.execute(f'CREATE SCHEMA "{schema}"')
+    admin.commit()
+    admin.close()
+    separator = "&" if "?" in configured else "?"
+    scoped = (f"{configured}{separator}options=-csearch_path%3D{schema}"
+              f"&application_name={schema}")
+    try:
+        yield scoped
+    finally:
+        admin = dbm.connect(configured)
+        admin.execute(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            "WHERE application_name=%s AND pid <> pg_backend_pid()", (schema,))
+        admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        admin.commit()
+        admin.close()
+
+
+@pytest.fixture
+def conn(database_url):
     """A database with the standard set of test accounts registered."""
-    c = dbm.connect(tmp_path / "test.db")
+    c = dbm.connect(database_url)
     dbm.init_db(c)
     for inst in (
         Institution(id="hsbc_hk", display_name="HSBC HK", country="HK"),
@@ -52,12 +112,13 @@ def conn(tmp_path):
         dbm.upsert_account(c, acct)
 
     dbm.upsert_card(c, Card(id="amex_us_main_primary", account_id="amex_us_main",
-                            cardholder_name="ZEPTO X", last4="1001"))
+                            cardholder_name="ALEX E", last4="1001"))
     dbm.upsert_card(c, Card(id="amex_us_main_supp1", account_id="amex_us_main",
                             cardholder_name="SUPP HOLDER", last4="1009",
                             is_supplementary=True))
     c.commit()
-    return c
+    yield c
+    c.close()
 
 
 # ---------------------------------------------------------------------------

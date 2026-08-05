@@ -1,368 +1,210 @@
 # Finto
 
-Personal finance ledger. Ingests statements from multiple banks and card
-issuers, deduplicates them, links transfers between accounts you own, and gives
-you one queryable ledger.
+Finto is a PostgreSQL-backed personal finance ledger for bank, credit-card,
+multi-currency, and investment statements. It includes statement ingestion,
+reconciliation, reporting, account-level access control, and a responsive web
+application.
 
-**No financial data is in this repo.** The database, raw statements, and real
-account config are gitignored. Only code and synthetic fixtures are committed.
+No financial data or production credentials are stored in this repository.
 
----
+## Capabilities
 
-## Why this exists
+- CSV, PDF, and XLSX statement ingestion
+- Duplicate detection and statement-source precedence
+- Internal transfer, credit-card payment, refund, and instalment linkage
+- Account, product, subaccount, cardholder, and investment views
+- Native-currency reporting and configurable reporting-currency conversion
+- PostgreSQL row-level security with viewer, editor, and owner account roles
+- Password sessions and revocable per-user API keys
+- Installable PWA with desktop and mobile layouts
+- Vercel deployment in the Tokyo region
 
-Five institutions across two countries produce statements that overlap,
-disagree on date format, disagree on sign convention, and double-count every
-transfer between your own accounts. Naively concatenating them gives you a
-number that is wrong in three separate ways:
+Bundled parsers cover American Express HK/US, HSBC HK, Mox, Wise, and Chase
+statement formats.
 
-1. **Overlapping periods** — the same charge appears in two statements.
-2. **Internal transfers** — HKD 20,000 moved from HSBC to Mox looks like
-   HKD 20,000 of spending *and* HKD 20,000 of income. It is neither.
-3. **Supplementary cards** — charges may appear on both a card-level and an
-   account-level statement.
+## Architecture
 
-Finto's whole job is to make those three problems go away without silently
-throwing away real transactions.
+```text
+Angular web application
+        │
+        ▼
+FastAPI application
+        │
+        ▼
+PostgreSQL
+```
 
----
+Money is stored as integer minor units. Every transaction uses one sign
+convention: negative is money out and positive is money in. Native and booked
+currency values remain separate. Converted totals require an explicit reporting
+currency and dated FX rates.
 
-## Scope
+## Requirements
 
-| | |
-|---|---|
-| **Institutions** | AMEX US, AMEX HK, HSBC HK, Wise, Mox |
-| **Period** | 2025-01-01 onward |
-| **Currency** | Native + booked stored separately; conversion on demand |
-| **Storage** | Local SQLite. Never leaves your machine. |
+- Python 3.12
+- Node.js 22
+- PostgreSQL 17 or a compatible managed PostgreSQL service
+- `psql` for direct database administration
 
----
-
-## Design decisions
-
-**Money is integer minor units, never floats.** `Money(amount=-123456,
-currency="HKD")` is HKD -1,234.56. Currencies with 0 or 3 decimals (JPY, KWD)
-are handled by an exponent table.
-
-**One sign convention everywhere: negative = money out.** This holds for credit
-cards too — a purchase is negative, a payment received is positive. AMEX writes
-the opposite and its parser flips it at the boundary. The benefit is that you
-can `SUM(amount_booked)` across any mix of account types and get a meaningful
-number.
-
-**Two currency pairs per transaction.** `native` is what the merchant charged
-(¥12,000). `booked` is what your account actually moved ($78.20). Both are
-kept; neither is derived from the other at write time. FX conversion happens at
-read time via the `fx_rate` table, so a rate correction never rewrites history.
-
-**Raw rows are immutable and kept forever.** `raw_record` stores the source row
-verbatim as JSON. When a parser improves you re-derive transactions from stored
-raw rows instead of hunting down the original download.
-
-**Parsers only extract.** A parser reads a row, gets the money and dates right,
-and stops. Normalisation, dedup keys, categorisation and transfer linking all
-happen downstream. Adding an institution means writing only the genuinely
-institution-specific part.
-
-**Nothing ambiguous is auto-merged.** Exact key collisions merge silently.
-Everything fuzzy goes to a review queue. A wrongly-merged transaction is far
-harder to notice six months later than a wrongly-kept one.
-
----
-
-## How dedup works
-
-**The statement is authoritative.** A CSV export of an account restates the
-same movements in different words — the payee and the reference swap places,
-names get masked — so where both cover a period the statement wins.
-
-| Source | Detection |
-|---|---|
-| Same file imported twice | `file_sha256` on `statement_file` — refuses at the door |
-| A file that parsed to nothing | *not* recorded, so it stays re-importable once fixed |
-| Export copy of a statement row | `supersede_with_statements`: exact match on account, date, signed amount, currency |
-| Overlapping statement periods | exact `dedup_key` collision, **across files only** |
-| Pending row later posted | `dedup_key` excludes `posted_date`/`status`; date drift is caught by the fuzzy pass, between exports |
-| One provider reporting a movement twice | cross-account pass, scoped to accounts sharing a `balance_group` |
-
-Supersession is counted, not scored: two statement rows suppress two export
-rows and a third export row survives. Two identical rows *within* one file are
-two movements — an issuer lists each once, and the key cannot tell two HK$18
-MTR rides from one ride listed twice.
-
-`dedup_key` hashes `account + date + signed amount + currency + normalised
-description`. It excludes the issuer's reference on purpose: the key exists to
-make one charge collide across sources, and a reference printed on a statement
-is absent from the same issuer's CSV. Dedup scores on the reference instead.
-
-Normalisation strips exactly the fields that differ between two copies of the
-same charge: embedded dates, auth/trace/reference numbers, masked card
-fragments. `STARBUCKS HK REF ABC123 03/08` and `Starbucks HK REF ZZZ999 05/08`
-both normalise to `STARBUCKS HK`.
-
-The fuzzy pass blocks candidates on `(currency, |amount|)` — two rows can only
-be duplicates if the money matches exactly, and amount is the one field
-statements never fudge. That keeps it near-linear instead of O(n²).
-
----
-
-## How transfer linking works
-
-Money you move between your own accounts appears twice. The matcher pairs
-outflows with inflows and scores each pair:
-
-| Signal | Weight |
-|---|---|
-| Amounts equal, same currency | 0.62 |
-| Amounts differ by a fee-sized gap | 0.42 |
-| Cross-currency, reconciles via FX within 3% | 0.35 |
-| Date proximity (0–5 days) | up to 0.20 |
-| Inflow lands on a credit card | 0.12 |
-| Same balance group (in-Wise conversion) | 0.12 |
-| Transfer/payment wording | 0.12 |
-
-At ≥ 0.90 the pair is linked automatically. Between 0.55 and 0.90 it goes to
-`transfer_candidate` for review. Below 0.55 it is discarded.
-
-A transaction can only be one leg of one transfer — pairs are taken greedily
-best-first, and any later pair reusing a claimed leg is dropped. Without this,
-three identical HKD 10,000 movements on the same day produce nine matches.
-
-Groups, not pairs: a Wise FX conversion has an out leg, an in leg, and a fee,
-in two different currencies. `transfer_group` + `transfer_leg` models that
-directly.
-
----
-
-## The LLM layer
-
-Optional, off by default, and deliberately fenced in. The ledger is correct
-without it — the LLM improves categorisation quality and resolves genuinely
-ambiguous matches.
+## Local setup
 
 ```bash
-python -m fin.cli config set llm_enabled 1
-export ANTHROPIC_API_KEY=...
-python -m fin.cli categorize --dry-run   # see the cost before paying it
-python -m fin.cli categorize --promote
-python -m fin.cli reconcile --llm
+python -m venv .venv
+.venv/bin/pip install -e ".[dev,pdf,xlsx,api]"
+npm --prefix web ci
+
+export DATABASE_URL='postgresql://...'
+.venv/bin/finto init
+
+cp accounts.example.yaml accounts.yaml
+FINTO_AUTH_PASSWORD='use-a-unique-password' \
+  .venv/bin/finto users bootstrap \
+  --username owner \
+  --email owner@example.com
+.venv/bin/finto accounts load accounts.yaml --owner owner
 ```
 
-### Categorisation — where an LLM genuinely wins
+Finto has no registration route. Create users from the CLI and grant account
+access explicitly.
 
-Turning `CTY SPR TST 3 KLN` into "City Super, groceries" is exactly the kind of
-fuzzy, context-dependent judgement that regexes lose at and models win at.
-
-- **Merchants, not transactions.** Input is grouped by normalised description,
-  so 300 Starbucks charges cost one classification. A year of statements
-  typically collapses to a few hundred distinct merchants.
-- **Closed taxonomy.** The model must pick from a fixed category/subcategory
-  list; anything invented is discarded. Open-ended taxonomies drift — you get
-  "Food", "Dining", "Restaurants" and "Eating out" for one thing, and your
-  reports lie.
-- **Rules always win.** Only transactions no rule matched are ever sent.
-- **Abstention is allowed.** Below 0.60 confidence, the transaction is left
-  uncategorised. Uncategorised is honest; a wrong category is not.
-- **`--promote` is the ratchet.** Confident results seen 3+ times become
-  deterministic rules, so next import they're free and identical. Over time the
-  model only sees genuinely new merchants.
-
-### Adjudication — where an LLM helps but is kept on a short leash
-
-Deciding whether `SQ *BLUE BOTTLE` and `BLUE BOTTLE COFFEE HK` are the same
-shop, or whether `AMEX AUTOPAY` on HSBC pairs with `PAYMENT RECEIVED` on AMEX,
-needs world knowledge that string similarity doesn't have.
-
-But a wrong answer here silently deletes or fabricates money, so:
-
-| Constraint | Effect |
-|---|---|
-| Only the middle confidence band is sent | 0.70–0.97 for duplicates, 0.55–0.90 for transfers. Confident cases never reach it. |
-| It cannot merge anything | Its verdict adjusts a score by at most ±0.20. The deterministic threshold still decides. |
-| Amount mismatches are filtered first | If two rows differ in amount, no textual plausibility makes them the same transaction. |
-| `"unsure"` is encouraged | Routes to human review, which is the correct outcome for genuine ambiguity. |
-| Every decision is stored | Model, prompt version, input and reasoning, in `llm_decision`. |
-
-### Why decisions are cached
-
-Not primarily cost. A ledger whose numbers shift because a model was updated
-underneath it is not a ledger. Cached decisions freeze the answer until you
-explicitly bump the prompt version or run `llm clear`. It also means re-running
-`reconcile` doesn't re-bill you, and a bad model version can be revoked by
-deleting its rows without touching anything deterministic.
+Run the API and web development server in separate terminals:
 
 ```bash
-python -m fin.cli llm stats     # cache hit counts and average confidence
-python -m fin.cli llm audit     # what the model saw and what it said
-python -m fin.cli llm clear --task categorize
+export DATABASE_URL='postgresql://...'
+export FINTO_SESSION_SECRET='use-a-long-random-value'
+.venv/bin/uvicorn fin.api.app:app --reload --port 8000
 ```
-
-**What the LLM is never allowed to do:** change an amount, currency, date or
-account; merge or unmerge transactions directly; override a rule you wrote or a
-decision you made by hand; invent a category outside the taxonomy. Every
-LLM-set field is recorded in `txn_annotation` with `source='llm'`, so you can
-always tell exactly what the model touched — and undo all of it with one
-`DELETE`.
-
----
-
-## Integrity checking
-
-The most important question this system answers is not "are there duplicates?"
-but **"did I capture every transaction?"** Dedup and linking can both be
-perfect while the ledger is wrong, because a parser silently skipped rows.
-
-The figures a statement prints are the bank's, independent of our parsing.
-`balance_assertion` stores them, and `fin.cli check` verifies the transactions
-we hold reproduce them — in whichever of two shapes the statement supports.
-
-A statement printing an opening and a closing is checked against **its own
-rows**. This is the only correct check for a card: the issuer assigns a charge
-to a statement by posting date, so one dated inside the period may be billed on
-the next, and comparing "everything dated in the period" disagrees with the
-bank even when nothing is missing. A passbook printing a running balance is
-checked date to date, where consecutive figures do bracket what lies between.
-
-```
-$ python -m fin.cli check
-!! hsbc_hk_current 2025-01-08 -> 2025-01-15:
-   expected -13,345.20  actual -12,500.00  diff 845.20 HKD
-```
-
-That is a dropped row, located to the day and the cent. Without this check it
-would be invisible forever. `check` also runs eight structural invariants
-(orphaned transfer groups, one-legged transfers, duplicate chains, currency
-mismatches) that should always return clean.
-
-See [`docs/SCHEMA_REVIEW.md`](docs/SCHEMA_REVIEW.md) for the full design review.
-
----
-
-## Getting started
 
 ```bash
-pip install -e .
-
-python -m fin.cli init                        # create finto.db
-cp accounts.example.yaml accounts.yaml        # then edit with your real accounts
-python -m fin.cli accounts load accounts.yaml
+npm --prefix web start
 ```
 
-**Before importing anything, sniff each new export:**
+The Angular development server is available at `http://localhost:4200` and
+proxies API requests to `http://localhost:8000`.
+
+## Import workflow
+
+Inspect a new statement format without changing the database:
 
 ```bash
-python -m fin.cli sniff ~/Downloads/amex.csv --institution amex_us --currency USD
+.venv/bin/finto sniff statement.csv \
+  --institution hsbc_hk \
+  --currency HKD
 ```
 
-This prints the detected parser, the real column header, and the first five
-parsed transactions — without writing to the database. It is how you verify and
-correct the column mappings in `fin/parsers/institutions.py`. The mappings for
-HSBC HK and Mox are informed guesses; Wise and AMEX are on firmer ground.
-
-Then:
+Import, reconcile, and verify the ledger:
 
 ```bash
-python -m fin.cli import inbox/ --institution hsbc_hk --account hsbc_hk_current
-python -m fin.cli reconcile          # dedup + link transfers across the whole ledger
-python -m fin.cli review transfers   # work the review queue
-python -m fin.cli resolve transfers <id> accept
-python -m fin.cli stats
-python -m fin.cli export ledger.csv
+.venv/bin/finto import statement.csv \
+  --institution hsbc_hk \
+  --account hsbc_hk_current
+.venv/bin/finto reconcile
+.venv/bin/finto check
 ```
 
-`reconcile` always runs over the full ledger, not just the newest file — a
-duplicate or a transfer counterpart usually lives in a different file from a
-different institution.
+An empty statement is retained as evidence that the period was checked. It does
+not make an inactive account overdue or create synthetic transactions.
 
----
+## PostgreSQL administration
 
-## Layout
+The canonical schema is [`fin/schema.sql`](fin/schema.sql). `scripts/psql.sh`
+uses the first available variable in this order:
 
-```
-fin/
-  models.py               Pydantic DTOs, Money, normalisation, dedup key
-  schema.sql              SQLite DDL (incl. investment_*, party_*)
-  db.py                   Persistence. Thin, explicit, no ORM.
-  ingest.py               file -> parser -> Txn -> SQLite, then reconcile
-  dedup.py                exact + fuzzy duplicate detection
-  transfers.py            transfer/payment/FX matching (+ aliases)
-  investment.py           MPF / investment position snapshots
-  integrity.py            balance reconciliation + structural invariants
-  installments.py         plan detection
-  refunds.py              refund→purchase linking
-  reporting.py            shared query layer for CLI + API
-  cli.py                  command line interface
-  parsers/
-    institutions.py       AMEX, HSBC HK, Wise, Mox, Amex savings CSV
-    pdf.py                layout-template PDF ingest
-  pdf/                    lossless extract + declarative templates + verify
-  llm/                    optional categorise / adjudicate
-  api/                    FastAPI
-web/                      Angular frontend
-docs/                     design reviews, push instructions
-scripts/                  development harnesses (pdf_probe)
-tests/
-accounts.example.yaml     full account map for this ledger; copy to accounts.yaml
-```
-
-## Adding an institution
-
-Subclass `StatementParser`, implement `sniff` and `parse`, decorate with
-`@register`. Return `ParsedTxn` objects. Nothing else in the pipeline changes.
-
-```python
-@register
-class MyBankParser(StatementParser):
-    parser_id = "mybank_csv"
-    version = "0.1.0"
-    institution_id = "mybank"
-
-    def sniff(self, ctx, sample): ...   # 0.0-1.0 confidence
-    def parse(self, ctx): ...           # -> ParseResult
-```
-
-## Cards get reissued
-
-A lost or expired card comes back with a new number. The account is unchanged,
-so totals, dedup and balance checks are all unaffected — but per-card history
-would silently split in two, and charges on the new number would fail
-attribution with no warning at all.
-
-Register the replacement as its own card and point `replaces_card_id` at what it
-superseded. Reports roll the chain up into one card. `issued_on`/`closed_on`
-date-scope attribution, so a new number can't claim charges made before it
-existed. Import warns when a card number matches nothing registered.
-
-Note that `card_id` is set at ingest time, so registering a reissue does not
-retroactively attribute transactions already imported under it.
-
----
-
-## Status
-
-Working end to end on the real multi-institution corpus (CSV + PDF templates),
-with targeted synthetic tests for the engine and data layer.
-
-| Layer | State |
-|---|---|
-| Cash ledger, dedup, transfers, refunds, installments, integrity | Done |
-| Supplementary cards + reissue lineage | Done (register every Card Member / last4 in `accounts.yaml`) |
-| Self-transfer vs P2P (parties + account aliases) | Done |
-| HSBC MPF investment positions | Done (`finto investments import`) |
-| PDF templates (Mox, Chase, HSBC, Amex US/HK) | Done; a few Amex HK statements still fail verify |
-| HTTP API + Angular UI | Done |
-| LLM categorise / adjudicate | Optional, off by default |
+1. `POSTGRES_URL_NON_POOLING`
+2. `POSTGRES_URL`
+3. `DATABASE_URL`
 
 ```bash
-pip install -e ".[dev,pdf,xlsx,api]"
-python -m fin.cli init
-cp accounts.example.yaml accounts.yaml   # edit names if needed
-python -m fin.cli accounts load accounts.yaml
-python -m fin.cli import ~/Documents/Finto-Data --dry-run
-python -m fin.cli investments import \
-  ~/Documents/Finto-Data/HSBC_HK/MPF_Investment/Positions/HSBC_MPF_Position_2026-07-31.xlsx
-python -m fin.cli reconcile
-python -m fin.cli check
+scripts/psql.sh --single-transaction -f fin/schema.sql
+scripts/psql.sh -c 'select count(*) from v_ledger'
 ```
 
-See `PLAN.md` for the remaining work list.
+The one-time SQLite migration tool copies supported tables, verifies row counts
+and content digests, and exits without committing if verification fails:
+
+```bash
+export POSTGRES_URL_NON_POOLING='postgresql://...'
+python scripts/migrate_sqlite_to_postgres.py /path/to/legacy.sqlite --reset
+```
+
+After a successful migration, use PostgreSQL only. Runtime code has no SQLite
+fallback.
+
+See [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for user administration,
+backups, maintenance, and deployment.
+
+## Taxonomy maintenance
+
+Categories, tags, merchants, and their aliases are stored in managed taxonomy
+tables. Audit proposed changes before applying them:
+
+```bash
+.venv/bin/finto taxonomy audit --user owner
+.venv/bin/finto taxonomy audit --user owner --apply
+```
+
+Users can mint and revoke taxonomy API keys in Settings. A generated key is
+shown once and stored only as a SHA-256 digest.
+
+```bash
+export FINTO_URL='https://finto.example.com'
+export FINTO_API_KEY='finto_...'
+
+curl -fsS \
+  -H "Authorization: Bearer $FINTO_API_KEY" \
+  "$FINTO_URL/api/agent/taxonomy/audit"
+
+curl -fsS -X POST \
+  -H "Authorization: Bearer $FINTO_API_KEY" \
+  -H 'X-Finto-Confirm: apply-taxonomy' \
+  "$FINTO_URL/api/agent/taxonomy/apply"
+```
+
+Each audit and apply operation is recorded in PostgreSQL. API keys are scoped
+to their owner and can be revoked without changing the login password.
+
+## Tests
+
+```bash
+.venv/bin/pytest -q
+npm --prefix web run build
+```
+
+## Deployment
+
+The production build is configured by [`vercel.json`](vercel.json). It builds
+the Angular application, routes `/api/*` to FastAPI, serves the PWA assets, and
+runs the function in Vercel's `hnd1` region.
+
+Required production variables:
+
+- `POSTGRES_URL` or `DATABASE_URL`
+- `POSTGRES_URL_NON_POOLING` for schema administration
+- `FINTO_SESSION_SECRET`
+- `FINTO_AUTH_USERNAME`, `FINTO_AUTH_EMAIL`, and `FINTO_AUTH_PASSWORD` for the
+  initial owner bootstrap when the database has no users
+
+```bash
+vercel deploy
+vercel deploy --prod
+```
+
+Apply database migrations before deploying code that depends on them. Do not
+place database URLs or API keys in committed files.
+
+## Repository layout
+
+```text
+api/                     Vercel FastAPI entry point
+fin/                     ledger, parsers, reconciliation, reporting, API
+fin/api/routers/         HTTP route modules
+fin/pdf/templates/       declarative PDF statement templates
+scripts/                 PostgreSQL and migration utilities
+tests/                   unit, integration, and regression tests
+web/                     Angular application and PWA assets
+accounts.example.yaml    account configuration example
+vercel.json              production build and routing configuration
+```
+
+Release history is in [`CHANGELOG.md`](CHANGELOG.md). HTTP authentication and
+maintenance endpoints are documented in [`docs/API.md`](docs/API.md).

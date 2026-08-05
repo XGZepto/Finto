@@ -59,7 +59,7 @@
 /* A paper terminal: same structure, inverted. Colours are darkened rather than
    reused, because the dark-mode values do not carry enough contrast on white. */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #f4f4f2;
     --panel: #ffffff;
     --panel-2: #fafaf9;
@@ -96,6 +96,51 @@
   }
 }
 
+:root[data-theme='light'] {
+  --bg: #f4f4f2;
+  --panel: #ffffff;
+  --panel-2: #fafaf9;
+  --panel-3: #eeeeec;
+  --line: #dcdcd8;
+  --line-2: #c4c4bf;
+  --fg: #17181a;
+  --fg-2: #55585c;
+  --fg-3: #7e8286;
+  --fg-4: #a3a7ab;
+  --neg: #c0392f;
+  --pos: #1f7a4d;
+  --warn: #8a6510;
+  --bad: #c0392f;
+  --info: #1d6fa5;
+  --neg-wash: #c0392f14;
+  --pos-wash: #1f7a4d14;
+  --warn-wash: #8a651014;
+  --info-wash: #1d6fa514;
+  --c1: #1d6fa5;
+  --c2: #1f7a4d;
+  --c3: #8a6510;
+  --c4: #6b4b9e;
+  --c5: #a0522d;
+  --c6: #12797c;
+  --c7: #a03a6b;
+  --c8: #4f6478;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] { color-scheme: dark; }
+
+@media (max-width: 700px) {
+  body { font-size: 12.5px; }
+  .page-head { align-items: center; justify-content: space-between; }
+  .card { padding: 12px; }
+  input, select, textarea { min-height: 34px; font-size: 12px; }
+  button, .btn { min-height: 34px; }
+  .section-head { align-items: flex-start; }
+  .section-head > .row { width: 100%; }
+  .table-wrap { margin-inline: -12px; border-left: 0; border-right: 0; }
+  th, td { padding-inline: 9px; }
+}
+
 * { box-sizing: border-box; }
 
 html, body { margin: 0; padding: 0; min-height: 100%; }
@@ -108,6 +153,13 @@ body {
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button, a { touch-action: manipulation; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 1px solid var(--info);
+  outline-offset: 2px;
 }
 
 ::selection { background: var(--fg); color: var(--bg); }
@@ -223,6 +275,14 @@ input:focus, select:focus, textarea:focus {
   background: var(--panel-2);
 }
 input[type='checkbox'] { accent-color: var(--fg-2); }
+input[type='checkbox'] {
+  appearance: none; display: inline-grid; place-content: center; width: 16px; height: 16px;
+  min-height: 16px; padding: 0; border: 1px solid var(--line-2); background: var(--bg);
+}
+input[type='checkbox']::before { content: ''; width: 8px; height: 8px; background: var(--fg); transform: scale(0); transition: transform 80ms linear; }
+input[type='checkbox']:checked::before { transform: scale(1); }
+input[type='date'] { color-scheme: inherit; }
+input[type='date']::-webkit-calendar-picker-indicator { opacity: .55; filter: grayscale(1); }
 
 label {
   display: block;
@@ -385,7 +445,24 @@ th.num, td.num {
 }
 @keyframes blink { 50% { opacity: 0; } }
 
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--panel-2);
+  color: transparent;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fg) 5%, transparent), transparent);
+  animation: skeleton-scan 1.3s ease-in-out infinite;
+}
+@keyframes skeleton-scan { to { transform: translateX(100%); } }
+
 @media (prefers-reduced-motion: reduce) {
   .spinner::after { animation: none; }
+  .skeleton::after { animation: none; }
   * { transition: none !important; }
 }

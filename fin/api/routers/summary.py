@@ -108,10 +108,11 @@ def get_composition(convert_to: str = Query(...),
 
 
 @router.get("/flows")
-def get_flows(f: LedgerFilter = Depends(filter_from_query),
+def get_flows(convert_to: str = Query("USD"),
+              f: LedgerFilter = Depends(filter_from_query),
               conn=Depends(get_conn)) -> dict:
     """Movement between your own accounts, and across the boundary."""
-    return reporting.flows(conn, filters=f.to_query())
+    return reporting.flows(conn, filters=f.to_query(), to_currency=convert_to)
 
 
 @router.get("/positions")

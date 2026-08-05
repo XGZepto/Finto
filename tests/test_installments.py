@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -38,6 +39,7 @@ def _txn(desc, amount, when, *, account="amex_hk_main", ccy="HKD",
     ("BEST BUY TST INSTALMENT 12/12", (12, 12)),
     ("分期 03/12 蘋果專門店", (3, 12)),
     ("INST 7-18 FURNITURE CO", (7, 18)),
+    ("7th of 12 instalments", (7, 12)),
 ])
 def test_marker_is_parsed(desc, expected):
     assert parse_installment_marker(desc) == expected
@@ -93,6 +95,26 @@ def test_completed_plan_is_marked_completed():
     assert plan.status.value == "completed"
 
 
+def test_cancelled_plan_balance_closes_it_early():
+    txns = [
+        _txn(f"INSTALMENT {i:02d}/12 LOAN ON CARD", -1_000_00,
+             date(2025, 8 + i - 1, 8))
+        for i in range(1, 5)
+    ]
+    for txn in txns:
+        txn.details["installment.principal"] = "12000.00"
+    settlement = _txn("UNPAID AMOUNT FROM CANCELLED PLAN", -8_000_00,
+                      date(2025, 12, 1))
+    settlement.details.clear()
+
+    report = find_installments([*txns, settlement])
+
+    assert len(report.plans) == 1
+    assert report.plans[0].status.value == "completed"
+    assert report.assignments[settlement.id] == (report.plans[0].id, None)
+    assert settlement.details["installment.settlement"] == "early"
+
+
 def test_partial_plan_backdates_its_start():
     """Importing from month 4 still dates the plan to when it actually began."""
     txns = [_txn(f"INSTALMENT {i:02d}/12 SOFA CO", -80000, date(2025, i, 20))
@@ -128,6 +150,66 @@ def test_unmarked_monthly_charges_are_never_grouped():
             for i in range(1, 7)]
     report = find_installments(txns)
     assert report.plans == [] and report.candidates == []
+
+
+def test_explicit_unnumbered_completed_plan_is_recovered():
+    txns = [
+        _txn("FCK LABELS - Split Purchase (Statement) Instalment",
+             -(1053822 + (1 if i == 6 else 0)), date(2025, i + 2, 4),
+             account="mox_credit")
+        for i in range(1, 7)
+    ]
+    txns.insert(0, _txn("FCK LABELS - Split Purchase (Statement)", 6174739,
+                        date(2025, 2, 4), account="mox_credit"))
+    txns.append(_txn("LATER PURCHASE", -1000, date(2025, 10, 1),
+                     account="mox_credit"))
+
+    report = find_installments(txns)
+
+    assert len(report.plans) == 1
+    assert report.plans[0].term_months == 6
+    assert report.plans[0].principal.amount == -6174739
+    assert len(report.assignments) == 6
+
+
+def test_marker_in_structured_detail_drives_plan_detection():
+    txns = []
+    for i in range(1, 5):
+        t = _txn("BT INSTALMENT PGM-IPP", -950000, date(2025, i, 13))
+        t.details = {"installment.sequence": str(i), "installment.term": "12"}
+        txns.append(t)
+    report = find_installments(txns)
+    assert len(report.plans) == 1
+    assert report.plans[0].term_months == 12
+
+
+def test_itemised_installment_fee_is_not_a_second_plan():
+    txns = []
+    for i in range(1, 5):
+        principal = _txn("BT INSTALMENT PGM-IPP", -950000, date(2025, i, 13))
+        principal.details = {"installment.sequence": str(i), "installment.term": "12"}
+        fee = _txn("BT INSTALMENT PGM-IPP", -31920, date(2025, i, 13))
+        fee.details = {"installment.sequence": str(i), "installment.term": "12",
+                       "raw.line": "HANDLING FEE"}
+        txns.extend((principal, fee))
+    report = find_installments(txns)
+    assert len(report.plans) == 1
+
+
+def test_variable_loan_charges_use_declared_principal():
+    amounts = [1111973, 1121408, 1134143, 1140545]
+    txns = []
+    for i, amount in enumerate(amounts, 1):
+        t = _txn("LOAN ON CARD", -amount, date(2025, i + 7, 8))
+        t.details = {
+            "installment.sequence": str(i), "installment.term": "12",
+            "installment.principal": "140000.00", "installment.apr": "9.99",
+        }
+        txns.append(t)
+    report = find_installments(txns)
+    assert len(report.plans) == 1
+    assert report.plans[0].principal.amount == -14000000
+    assert report.plans[0].apr == Decimal("9.99")
 
 
 def test_plan_ids_are_deterministic():
@@ -269,15 +351,15 @@ def test_details_survive_ingest(conn, tmp_path):
     f = tmp_path / "amex_travel.csv"
     f.write_text(
         "Date,Description,Card Member,Account #,Amount,Extended Details,Category\n"
-        "03/02/2025,CATHAY PACIFIC,ZEPTO X,-11001,980.00,"
+        "03/02/2025,CATHAY PACIFIC,ALEX E,-11001,980.00,"
         '"PASSENGER NAME  CHAN/MEI LING TICKET NUMBER 160 1234567890 '
         'CARRIER: CX HKG/LHR",Travel\n')
     r = ingest_file(conn, f, institution_id="amex_us",
                     account_id="amex_us_main", default_currency="USD")
     assert r["status"] == "imported"
 
-    details = dict(conn.execute(
-        "SELECT key, value FROM txn_detail").fetchall())
+    details = {row["key"]: row["value"] for row in conn.execute(
+        "SELECT key, value FROM txn_detail")}
     assert details["travel.passenger_name"] == "CHAN/MEI LING"
     assert details["travel.carrier"] == "CX"
     assert "HKG/LHR" in details.values()
@@ -288,7 +370,7 @@ def test_details_are_searchable(conn, tmp_path):
     f = tmp_path / "amex_travel.csv"
     f.write_text(
         "Date,Description,Card Member,Account #,Amount,Extended Details,Category\n"
-        "03/02/2025,CATHAY PACIFIC,ZEPTO X,-11001,980.00,"
+        "03/02/2025,CATHAY PACIFIC,ALEX E,-11001,980.00,"
         '"PASSENGER NAME  CHAN/MEI LING CARRIER: CX",Travel\n')
     ingest_file(conn, f, institution_id="amex_us", account_id="amex_us_main",
                 default_currency="USD")
@@ -304,7 +386,7 @@ def test_installments_survive_reconcile(conn, tmp_path):
     rows = ["Date,Description,Card Member,Account #,Amount,Extended Details,Category"]
     for i in range(1, 7):
         rows.append(f"{i:02d}/15/2025,INSTALMENT {i:02d}/12 BEST BUY TST,"
-                    f"ZEPTO X,-11001,100.00,,Merchandise")
+                    f"ALEX E,-11001,100.00,,Merchandise")
     f = tmp_path / "amex_plan.csv"
     f.write_text("\n".join(rows) + "\n")
 
@@ -327,7 +409,7 @@ def test_reconcile_is_idempotent_with_installments(conn, tmp_path):
     rows = ["Date,Description,Card Member,Account #,Amount,Extended Details,Category"]
     for i in range(1, 5):
         rows.append(f"{i:02d}/15/2025,INSTALMENT {i:02d}/12 BEST BUY TST,"
-                    f"ZEPTO X,-11001,100.00,,Merchandise")
+                    f"ALEX E,-11001,100.00,,Merchandise")
     f = tmp_path / "amex_plan.csv"
     f.write_text("\n".join(rows) + "\n")
     ingest_file(conn, f, institution_id="amex_us", account_id="amex_us_main",
@@ -337,5 +419,6 @@ def test_reconcile_is_idempotent_with_installments(conn, tmp_path):
     for _ in range(3):
         reconcile(conn)
         counts.append(conn.execute(
-            "SELECT COUNT(*) FROM installment_plan").fetchone()[0])
+            "SELECT COUNT(*) AS count_value FROM installment_plan"
+        ).fetchone()["count_value"])
     assert counts == [1, 1, 1]

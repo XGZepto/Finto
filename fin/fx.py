@@ -180,23 +180,23 @@ def convert(conn, money: Money, to_currency: str, on: date | str | None = None,
         when = date.fromisoformat(when)
 
     row = conn.execute(
-        "SELECT rate, rate_date FROM fx_rate WHERE base=? AND quote=? "
-        "AND rate_date <= ? ORDER BY rate_date DESC LIMIT 1",
+        "SELECT rate, rate_date FROM fx_rate WHERE base=%s AND quote=%s "
+        "AND rate_date <= %s ORDER BY rate_date DESC LIMIT 1",
         (money.currency, to_currency, when.isoformat())).fetchone()
     rate, rate_date = (Decimal(row["rate"]), row["rate_date"]) if row else (None, None)
 
     if rate is None:
         inv = conn.execute(
-            "SELECT rate, rate_date FROM fx_rate WHERE base=? AND quote=? "
-            "AND rate_date <= ? ORDER BY rate_date DESC LIMIT 1",
+            "SELECT rate, rate_date FROM fx_rate WHERE base=%s AND quote=%s "
+            "AND rate_date <= %s ORDER BY rate_date DESC LIMIT 1",
             (to_currency, money.currency, when.isoformat())).fetchone()
         if inv and Decimal(inv["rate"]) != 0:
             rate, rate_date = Decimal(1) / Decimal(inv["rate"]), inv["rate_date"]
 
     if rate is None and nearest:
         near = conn.execute(
-            "SELECT base, rate, rate_date, ABS(JULIANDAY(rate_date) - JULIANDAY(?)) AS d "
-            "FROM fx_rate WHERE (base=? AND quote=?) OR (base=? AND quote=?) "
+            "SELECT base, rate, rate_date, ABS(rate_date::date - %s::date) AS d "
+            "FROM fx_rate WHERE (base=%s AND quote=%s) OR (base=%s AND quote=%s) "
             "ORDER BY d LIMIT 1",
             (when.isoformat(), money.currency, to_currency,
              to_currency, money.currency)).fetchone()

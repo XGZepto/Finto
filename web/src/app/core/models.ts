@@ -96,12 +96,27 @@ export interface Txn {
     account_id: string;
     txn_date: string;
   }>;
+  related_transactions?: Array<{
+    relation: 'purchase' | 'refund' | 'canonical' | 'duplicate';
+    id: string;
+    description_raw: string;
+    amount_booked: number;
+    currency_booked: string;
+    account_id: string;
+    txn_date: string;
+  }>;
 }
 
 export interface Page<T> {
   total: number;
   /** What every matching row comes to, not just this page. */
   totals?: TotalRow[];
+  normalised?: {
+    net: Money;
+    spend: Money;
+    income: Money;
+    unconvertible_currencies: string[];
+  };
   limit: number;
   offset: number;
   items: T[];
@@ -161,6 +176,21 @@ export interface Account {
   masked_number: string | null;
 }
 
+export interface StatementFreshness {
+  as_of: string;
+  stale_count: number;
+  accounts: Array<{
+    account_id: string;
+    display_name: string;
+    statement_date: string | null;
+    latest_activity: string | null;
+    expected_on: string | null;
+    status: 'current' | 'stale' | 'unknown' | 'closed';
+    statement_empty: boolean;
+    days_overdue: number;
+  }>;
+}
+
 export interface Card {
   id: string;
   account_id: string;
@@ -197,6 +227,7 @@ export interface InstallmentPlan {
   confidence: number;
   is_confirmed: boolean;
   paid_count: number;
+  settled_early: boolean;
   paid: Money;
   remaining_count: number;
   outstanding: Money;
@@ -208,6 +239,7 @@ export interface InstallmentPlan {
     amount_booked: number;
     currency_booked: string;
     installment_seq: number | null;
+    is_settlement: boolean;
   }>;
 }
 
@@ -336,6 +368,39 @@ export interface Flows {
     out: Money;
     net: Money;
   }>;
+  external_accounts: Array<{
+    account_id: string;
+    currency: string;
+    moves: number;
+    in: Money;
+    out: Money;
+    net: Money;
+  }>;
+  normalised: {
+    currency: string;
+    unconvertible_currencies: string[];
+    external_accounts: Array<{
+      account_id: string;
+      currency: string;
+      moves: number;
+      in: Money;
+      out: Money;
+      net: Money;
+    }>;
+    internal: Array<{
+      from_account: string;
+      to_account: string;
+      moves: number;
+      amount: Money;
+    }>;
+    external_nodes: Array<{
+      account_id: string;
+      bucket: string;
+      moves: number;
+      in: Money;
+      out: Money;
+    }>;
+  };
 }
 
 

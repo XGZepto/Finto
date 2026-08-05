@@ -15,11 +15,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from fin.models import minor_exponent  # noqa: E402
-from fin.pdf.extract import extract_document  # noqa: E402
-from fin.pdf.registry import select_template  # noqa: E402
-from fin.pdf.template import apply_template  # noqa: E402
-from fin.pdf.verify import verify_extraction  # noqa: E402
+from fin.models import minor_exponent
+from fin.pdf.extract import extract_document
+from fin.pdf.registry import select_template
+from fin.pdf.template import apply_template
+from fin.pdf.verify import verify_extraction
 
 
 def fmt(m) -> str:

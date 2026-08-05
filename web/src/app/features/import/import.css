@@ -4,7 +4,7 @@
   gap: 12px;
   margin-bottom: 12px;
 }
-.defaults select { width: 100%; }
+.defaults finto-select { width: 100%; }
 .field.narrow { max-width: 150px; }
 
 .dropzone {
@@ -47,7 +47,7 @@
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
-.binding select { width: 100%; }
+.binding finto-select { width: 100%; }
 .binding .field.span { grid-column: span 2; }
 
 .raw-header { margin-bottom: 12px; }
@@ -85,3 +85,19 @@
 .row.end { justify-content: flex-end; margin-bottom: 16px; }
 section.card { margin-bottom: 12px; }
 td.path { font-family: var(--mono); font-size: 11px; word-break: break-all; }
+
+@media (max-width: 700px) {
+  .defaults { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .defaults .field.narrow { max-width: none; }
+  .dropzone { min-height: 132px; padding: 24px 14px; }
+  td.path { word-break: normal; overflow-wrap: anywhere; }
+  section.card:last-child .table-wrap { overflow: visible; margin-inline: 0; border: 0; }
+  section.card:last-child table, section.card:last-child tbody { display: block; }
+  section.card:last-child thead { display: none; }
+  section.card:last-child tr { display: block; margin-bottom: 8px; border: 1px solid var(--line); background: var(--panel-2); }
+  section.card:last-child td { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; min-height: 34px; padding: 7px 9px; border-bottom: 1px solid var(--line); text-align: left; }
+  section.card:last-child td:last-child { border-bottom: 0; }
+  section.card:last-child td::before { content: attr(data-label); color: var(--fg-4); font: 9px/1.5 var(--mono); letter-spacing: .09em; text-transform: uppercase; }
+  section.card:last-child td.empty { display: block; }
+  section.card:last-child td.empty::before { display: none; }
+}

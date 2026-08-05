@@ -71,7 +71,9 @@
                 <span class="bar-track">
                   <span class="bar-fill" [style.width]="progress(p)"></span>
                 </span>
-                <span class="mono small muted">{{ p.paid_count }}/{{ p.term_months }}</span>
+                <span class="mono small muted">
+                  {{ p.settled_early ? 'settled ' + p.paid_count + '/' + p.term_months : p.paid_count + '/' + p.term_months }}
+                </span>
               </td>
               <td class="num neg">{{ p.per_installment | money: 'bare' }}</td>
               <td class="num neg">{{ p.outstanding | money: 'bare' }}</td>
@@ -92,19 +94,20 @@
                         <div><label>Matched</label><span class="mono">{{ d.is_confirmed ? 'confirmed' : 'automatic' }}</span></div>
                       </div>
                       <ol class="ticks">
-                        @for (s of schedule(d); track s.seq) {
+                        @for (s of schedule(d); track s.key) {
                           <li [class.due]="!s.paid">
-                            <span class="seq mono">{{ s.seq }}</span>
+                            <span class="seq mono">{{ s.settlement ? '↳' : s.seq }}</span>
                             <span class="date mono">{{ s.date | shortDate }}</span>
                             <span class="amt mono" [class.neg]="s.paid">{{ s.amount | money: 'bare' }}</span>
-                            <span class="state">{{ s.paid ? 'charged' : 'due' }}</span>
+                            <span class="state">{{ s.settlement ? 'settled' : (s.paid ? 'charged' : 'due') }}</span>
                           </li>
                         }
                       </ol>
-                      <p class="small muted">
-                        Rows marked <em>due</em> are not in the ledger — they are the
-                        remaining term projected forward from the start date.
-                      </p>
+                      @if (d.settled_early) {
+                        <p class="small muted">The remaining principal was charged when the plan was cancelled and paid early. Nothing remains due.</p>
+                      } @else if (d.status !== 'completed') {
+                        <p class="small muted">Rows marked <em>due</em> are not in the ledger — they are the remaining term projected forward from the start date.</p>
+                      }
                     </div>
                   } @else {
                     <div class="spinner">loading </div>

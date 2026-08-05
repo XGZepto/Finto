@@ -42,7 +42,7 @@ def test_money_roundtrip_two_decimals():
 def test_money_zero_decimal_currency():
     m = Money.from_decimal("1200", "JPY")
     assert m.amount == 1200          # JPY has no minor unit
-    assert m.to_decimal() == Decimal("1200")
+    assert m.to_decimal() == Decimal(1200)
 
 
 def test_money_three_decimal_currency():
@@ -257,9 +257,8 @@ def test_amex_parser_flips_sign():
     assert purchases and purchases[0].booked.amount < 0   # outflow is negative
 
 
-def test_full_pipeline(tmp_path):
-    db = tmp_path / "t.db"
-    conn = dbm.connect(db)
+def test_full_pipeline(database_url):
+    conn = dbm.connect(database_url)
     dbm.init_db(conn)
 
     dbm.upsert_institution(conn, Institution(id="wise", display_name="Wise", country="HK"))

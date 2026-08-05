@@ -1,311 +1,106 @@
 <div class="page-head">
   <h1>Summary</h1>
-  <div class="head-controls">
-    <label for="convert">Normalise to</label>
-    <select id="convert" [ngModel]="convertTo()" (ngModelChange)="setConvert($event)">
-      <option value="">off</option>
-      @for (c of currencies(); track c) {
-        <option [value]="c">{{ c }}</option>
-      }
-    </select>
-  </div>
+  <finto-select class="currency-select" ariaLabel="Reporting currency"
+                [options]="reportingCurrencies" [ngModel]="convertTo()"
+                (ngModelChange)="setConvertTo($event)" />
 </div>
 
-<app-filter-bar (changed)="load()" />
-
-<!-- Headline figures, one card per currency. -->
-<section class="totals">
-  @if (headline(); as h) {
-    <div class="card kpi headline">
-      <div class="kpi-head"><h3>Net · {{ convertTo() }}</h3></div>
-      <div class="kpi-net" [class.neg]="h.net.amount < 0" [class.pos]="h.net.amount > 0">
-        {{ h.net | money: 'bare' }}
-      </div>
-      <div class="kpi-split">
-        <span><label>Out</label><span class="mono neg">{{ h.spend | money: 'bare' }}</span></span>
-        <span><label>In</label><span class="mono pos">{{ h.income | money: 'bare' }}</span></span>
-      </div>
-    </div>
-  }
-  @for (t of totals(); track t.currency) {
-    <div class="card kpi" [class.dim]="!!headline()">
-      <div class="kpi-head">
-        <h3>{{ t.currency }}</h3>
-        <span class="mono small muted">{{ t.txn_count }} rows</span>
-      </div>
-      <div class="kpi-net" [class.neg]="t.net.amount < 0" [class.pos]="t.net.amount > 0">
-        {{ t.net | money: 'bare' }}
-      </div>
-      @if (t.net_converted?.ok && t.net_converted?.converted) {
-        <div class="kpi-converted mono">≈ {{ t.net_converted! | money }}</div>
-      }
-      <div class="kpi-split">
+@if (freshness(); as fresh) {
+  @if (fresh.stale_count) {
+    <section class="freshness-banner">
+      <div class="freshness-icon">!</div>
+      <div class="freshness-copy">
+        <strong>{{ fresh.stale_count }} statement{{ fresh.stale_count === 1 ? '' : 's' }} overdue</strong>
         <span>
-          <label>Out</label>
-          <span class="mono neg">{{ t.spend | money: 'bare' }}</span>
-        </span>
-        <span>
-          <label>In</label>
-          <span class="mono pos">{{ t.income | money: 'bare' }}</span>
-        </span>
-      </div>
-      @if (t.uncategorised > 0) {
-        <div class="kpi-foot">
-          <span class="dot warn"></span>
-          {{ t.uncategorised }} uncategorised
-        </div>
-      }
-    </div>
-  } @empty {
-    <div class="empty card">Nothing imported yet — start on the import page</div>
-  }
-
-  @for (o of outstanding(); track o.currency) {
-    <div class="card kpi liability">
-      <div class="kpi-head">
-        <h3>Instalments {{ o.currency }}</h3>
-        <span class="tag installment">owed</span>
-      </div>
-      <div class="kpi-net neg">{{ o | money: 'bare' }}</div>
-      <div class="kpi-foot">Committed future outflow</div>
-    </div>
-  }
-</section>
-
-<!-- Positions per (account, currency). -->
-<section class="card">
-  @if (netWorth(); as nw) {
-    <div class="networth">
-      <span class="nw-label">Net worth</span>
-      <span class="nw-figure" [class.neg]="nw.amount < 0" [class.pos]="nw.amount > 0">
-        {{ nw | money }}
-      </span>
-    </div>
-  }
-
-  @if (flow().length) {
-    <div class="flowchart">
-      <div class="flow-head">
-        <span class="out">out</span><span class="in">in</span>
-      </div>
-      @for (f of flow(); track f.account_id) {
-        <div class="flow-row" (click)="drillAccount(f.account_id)">
-          <span class="fname">{{ f.name }}</span>
-          <div class="fbar">
-            <div class="fout"><span class="fill" [style.width]="f.outW"></span></div>
-            <div class="fin"><span class="fill" [style.width]="f.inW"></span></div>
-          </div>
-          <span class="fnum out mono">{{ f.out | money: 'bare' }}</span>
-          <span class="fnum in mono">{{ f.inn | money: 'bare' }}</span>
-        </div>
-      }
-    </div>
-  }
-
-  <div class="section-head">
-    <h2>Positions</h2>
-    <div class="row">
-      <label for="asof">As at</label>
-      <input id="asof" type="date" [ngModel]="asOf()" (ngModelChange)="setAsOf($event)" />
-      @if (asOf()) {
-        <button class="ghost" (click)="setAsOf('')">now</button>
-      }
-    </div>
-  </div>
-
-  @if (conversion(); as conv) {
-    @if (conv.unconvertible_currencies.length) {
-      <div class="banner warn small">
-        No {{ conv.to }} rate for {{ conv.unconvertible_currencies.join(', ') }} —
-        native only. Run <span class="mono">fx harvest</span> on the import page.
-      </div>
-    }
-  }
-
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Account</th>
-          <th>Currency</th>
-          <th class="num">Balance</th>
-          @if (convertTo()) { <th class="num">≈ {{ convertTo() }}</th> }
-          <th class="num">In</th>
-          <th class="num">Out</th>
-          <th class="num">Rows</th>
-          <th>Basis</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (p of positions(); track p.account_id + p.currency) {
-          <tr>
-            <td>{{ p.account_name }}</td>
-            <td><span class="tag">{{ p.currency }}</span></td>
-            <td class="num" [class.neg]="p.balance.amount < 0" [class.pos]="p.balance.amount > 0">
-              {{ p.balance | money: 'bare' }}
-            </td>
-            @if (convertTo()) {
-              <td class="num muted">
-                @if (p.balance_converted?.ok && p.balance_converted?.converted) {
-                  ≈ {{ p.balance_converted! | money: 'bare' }}
-                } @else { — }
-              </td>
-            }
-            <td class="num pos">{{ p.inflow | money: 'bare' }}</td>
-            <td class="num neg">{{ p.outflow | money: 'bare' }}</td>
-            <td class="num">{{ p.txn_count }}</td>
-            <td>
-              <!-- 'statement' is the bank's own closing figure. 'movements' is a
-                   sum with no opening balance in it, so it is a net change, not
-                   a balance — worth saying out loud rather than implying. -->
-              <span class="tag" [class.good]="p.basis === 'statement'"
-                    [title]="p.basis === 'statement'
-                      ? 'Anchored to the bank\'s closing balance on ' + (p.basis_date || '')
-                      : 'Sum of movements only — no opening balance was available'">
-                {{ p.basis }}
-              </span>
-            </td>
-          </tr>
-        } @empty {
-          <tr><td colspan="8" class="empty">No positions</td></tr>
-        }
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<!-- Aggregation. One control drives every level, so month / category / merchant
-     / account / card is one screen instead of five. -->
-<section class="card">
-  <div class="section-head">
-    <h2>Breakdown</h2>
-    <div class="row">
-      @if (isTimeDimension() && chartCurrencies().length > 1) {
-        <div class="seg">
-          @for (c of chartCurrencies(); track c) {
-            <button [class.on]="shownCurrency() === c" (click)="chartCurrency.set(c)">{{ c }}</button>
+          @for (a of fresh.accounts; track a.account_id) {
+            @if (a.status === 'stale') { <b>{{ a.display_name }}</b><small>expected {{ a.expected_on }}</small> }
           }
-        </div>
-      }
-      <label for="groupby">Group by</label>
-      <select id="groupby" [ngModel]="groupBy()" (ngModelChange)="setGroupBy($event)">
-        @for (d of dimensions; track d) {
-          <option [value]="d">{{ d }}</option>
-        }
-      </select>
+        </span>
+      </div>
+      <button class="btn" (click)="go('/import')">Import →</button>
+    </section>
+  }
+}
+
+<section class="totals">
+  <button class="card kpi" (click)="go('/accounts')">
+    <label>Net worth</label>
+    @if (netWorth(); as nw) {
+      <strong [class.neg]="nw.amount < 0" [class.pos]="nw.amount > 0">{{ nw | money: 'bare' }}</strong>
+    } @else { <strong>—</strong> }
+    <span>Accounts →</span>
+  </button>
+  @if (headline(); as h) {
+    <div class="card kpi">
+      <label>Net flow</label>
+      <strong [class.neg]="h.net.amount < 0" [class.pos]="h.net.amount > 0">{{ h.net | money: 'bare' }}</strong>
     </div>
+    <div class="card kpi"><label>In</label><strong class="pos">{{ h.income | money: 'bare' }}</strong></div>
+    <div class="card kpi"><label>Out</label><strong class="neg">{{ h.spend | money: 'bare' }}</strong></div>
+  }
+</section>
+
+@if (positionChart().length) {
+  <section class="card positions-card">
+    <div class="section-head"><h2>Positions</h2><button class="bare" (click)="go('/accounts')">Accounts →</button></div>
+    <div class="position-scale" aria-hidden="true"><span>Liabilities</span><i></i><span>Assets</span></div>
+    <div class="position-chart" role="img" aria-label="USD-normalised positions by account type">
+      @for (row of positionChart(); track row.account_type) {
+        <button class="position-row" (click)="go('/accounts')" [title]="row.label + ' · ' + money.transform(row.balance)">
+          <span class="position-label">{{ row.label }}</span>
+          <span class="position-bars">
+            @if (row.balance.amount < 0) { <i class="position-bar liability" [style.width]="row.width"></i> }
+            @if (row.balance.amount > 0) { <i class="position-bar asset" [style.width]="row.width"></i> }
+          </span>
+          <strong class="mono" [class.neg]="row.balance.amount < 0" [class.pos]="row.balance.amount > 0">{{ row.balance | money: 'bare' }}</strong>
+        </button>
+      }
+    </div>
+  </section>
+}
+
+<section class="card breakdown">
+  <div class="section-head">
+    <h2>Flow</h2>
+    <finto-select class="dimension-select" ariaLabel="Group flow" [options]="dimensions"
+                  [ngModel]="groupBy()" (ngModelChange)="setGroupBy($event)" />
   </div>
 
   @if (loading()) {
-    <div class="spinner">loading </div>
+    <div class="spinner">loading</div>
   } @else {
     @if (trend().length > 1) {
       <div class="trend-head">
-        <span class="peak mono">{{ trendPeak() | money: 'bare' }}</span>
-        <span class="legend">
-          <span class="key out"></span>out
-          <span class="key in"></span>in
-        </span>
+        <span class="peak mono">peak {{ trendPeak() | money: 'bare' }}</span>
+        <span class="legend"><i class="key out"></i>out <i class="key in"></i>in</span>
       </div>
-      <div class="trend">
-        @for (b of trend(); track b.bucket) {
-          <div class="col" (click)="drill(b.bucket)" [title]="barTitle(b.row, b.bucket)">
-            <div class="stem">
-              <span class="fill out" [style.height]="b.out"></span>
-              <span class="fill in" [style.height]="b.in"></span>
-            </div>
-            <span class="tick mono">{{ b.label }}</span>
-          </div>
+      <div class="trend" role="img" aria-label="USD-normalised cash flow trend">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <defs><linearGradient id="out-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--neg)" stop-opacity=".23"/><stop offset="1" stop-color="var(--neg)" stop-opacity="0"/></linearGradient></defs>
+          <line class="gridline" x1="0" y1="14" x2="100" y2="14"/><line class="gridline" x1="0" y1="53" x2="100" y2="53"/><line class="gridline" x1="0" y1="92" x2="100" y2="92"/>
+          <polygon class="area" [attr.points]="trendChart().outArea"/>
+          <polyline class="series out" [attr.points]="trendChart().out"/><polyline class="series in" [attr.points]="trendChart().inn"/>
+        </svg>
+        <div class="chart-hits">
+          @for (b of trendChart().labels; track b.bucket) {
+            <button class="chart-hit" (click)="drill(b.bucket)" [title]="barTitle(b.row, b.bucket)">@if (b.show) { <span class="tick mono">{{ b.label }}</span> }</button>
+          }
+        </div>
+      </div>
+    }
+
+    @if (rankedTop().length) {
+      <div class="rank-list">
+        @for (b of rankedTop(); track b.bucket) {
+          <button (click)="drill(b.bucket)">
+            <span class="rank mono">{{ ($index + 1).toString().padStart(2, '0') }}</span>
+            <span class="name">{{ b.bucket }}</span>
+            <span class="bar-track"><span class="bar-fill" [style.width]="b.width"></span></span>
+            <span class="amount mono neg">{{ b.spend | money: 'bare' }}</span>
+            <span class="share mono">{{ (b.share * 100).toFixed(1) }}%</span>
+          </button>
         }
       </div>
     }
-
-    @if (ranked().length) {
-      <div class="table-wrap ranked">
-        <table>
-          <thead>
-            <tr>
-              <th class="rank">#</th>
-              <th>{{ groupBy() }}</th>
-              <th class="num">Spend</th>
-              <th class="num">Share</th>
-              <th class="num">In</th>
-              <th class="num">Net</th>
-              <th class="num">Rows</th>
-              <th class="bar-col"></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (b of ranked(); track b.bucket) {
-              <tr class="clickable" (click)="drill(b.bucket)">
-                <td class="rank mono">{{ $index + 1 }}</td>
-                <td>{{ b.bucket }}</td>
-                <td class="num amount neg">{{ b.spend | money: 'bare' }}</td>
-                <td class="num share mono">{{ (b.share * 100).toFixed(1) }}%</td>
-                <td class="num amount pos">{{ b.income | money: 'bare' }}</td>
-                <td class="num" [class.neg]="b.net.amount < 0" [class.pos]="b.net.amount > 0">
-                  {{ b.net | money: 'bare' }}
-                </td>
-                <td class="num">{{ b.rows }}</td>
-                <td class="bar-col">
-                  <span class="bar-track"><span class="bar-fill" [style.width]="b.width"></span></span>
-                </td>
-              </tr>
-            }
-          </tbody>
-          <tfoot>
-            <tr>
-              <td></td>
-              <td>{{ ranked().length }} {{ groupBy() }}</td>
-              <td class="num amount neg">{{ rankedTotal() | money: 'bare' }}</td>
-              <td colspan="5"></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      @if (unranked().length) {
-        <p class="small muted">
-          {{ unranked().join(', ') }} excluded — no {{ convertTo() }} rate.
-        </p>
-      }
-      <h3 class="native-head">By native currency</h3>
-    }
-
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>{{ groupBy() }}</th>
-            <th>Currency</th>
-            <th class="num">Out</th>
-            <th class="num">In</th>
-            <th class="num">Net</th>
-            <th class="num">Rows</th>
-            <th class="bar-col"></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (b of buckets(); track b.bucket) {
-            @for (r of b.rows; track r.currency) {
-              <tr class="clickable" (click)="drill(b.bucket)">
-                <td>{{ $first ? b.bucket : '' }}</td>
-                <td><span class="tag">{{ r.currency }}</span></td>
-                <td class="num amount neg">{{ r.spend | money: 'bare' }}</td>
-                <td class="num amount pos">{{ r.income | money: 'bare' }}</td>
-                <td class="num" [class.neg]="r.net.amount < 0" [class.pos]="r.net.amount > 0">
-                  {{ r.net | money: 'bare' }}
-                </td>
-                <td class="num">{{ r.txn_count }}</td>
-                <td class="bar-col">
-                  <span class="bar-track"><span class="bar-fill" [style.width]="barWidth(r)"></span></span>
-                </td>
-              </tr>
-            }
-          } @empty {
-            <tr><td colspan="7" class="empty">Nothing matches this filter</td></tr>
-          }
-        </tbody>
-      </table>
-    </div>
   }
 </section>

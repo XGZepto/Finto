@@ -1,24 +1,52 @@
 -- ============================================================================
--- Personal finance ledger — canonical schema
--- SQLite 3.35+ (uses STRICT tables and generated columns)
+-- Personal finance ledger — canonical PostgreSQL schema
 -- Scope: 2025-01-01 onward. Multi-currency: native + booked.
 -- ============================================================================
 
-PRAGMA foreign_keys = ON;
+-- ---------------------------------------------------------------------------
+-- 1. Users, institutions & accounts
+-- ---------------------------------------------------------------------------
 
--- ---------------------------------------------------------------------------
--- 1. Institutions & accounts
--- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS app_user (
+    id             TEXT PRIMARY KEY,
+    username       TEXT NOT NULL,
+    email          TEXT NOT NULL,
+    password_hash  TEXT NOT NULL,
+    password_salt  TEXT NOT NULL,
+    preferences    JSONB NOT NULL DEFAULT '{}'::jsonb,
+    is_active      BIGINT NOT NULL DEFAULT 1,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
+    last_login_at  TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_app_user_username
+    ON app_user (lower(username));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_app_user_email
+    ON app_user (lower(email));
+
+-- The bootstrap row makes account ownership non-null during first-run schema
+-- creation and upgrades. `finto users bootstrap` replaces its unusable
+-- credential before the application can authenticate it.
+INSERT INTO app_user
+    (id, username, email, password_hash, password_salt, preferences,
+     is_active, created_at, updated_at)
+VALUES
+    ('owner', 'owner', 'owner@localhost', '!', '!', '{}'::jsonb,
+     1, CURRENT_TIMESTAMP::text, CURRENT_TIMESTAMP::text)
+ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS institution (
     id           TEXT PRIMARY KEY,          -- 'amex_us', 'amex_hk', 'hsbc_hk', 'wise', 'mox'
     display_name TEXT NOT NULL,
     country      TEXT NOT NULL,             -- ISO-3166 alpha-2: 'US', 'HK'
     timezone     TEXT NOT NULL DEFAULT 'Asia/Hong_Kong'
-) STRICT;
+);
 
 CREATE TABLE IF NOT EXISTS account (
     id                TEXT PRIMARY KEY,     -- stable slug, e.g. 'hsbc_hk_savings_hkd'
+    user_id           TEXT NOT NULL DEFAULT 'owner'
+                      CONSTRAINT account_user_fk REFERENCES app_user(id),
     institution_id    TEXT NOT NULL REFERENCES institution(id),
     display_name      TEXT NOT NULL,
     account_type      TEXT NOT NULL CHECK (account_type IN
@@ -29,11 +57,22 @@ CREATE TABLE IF NOT EXISTS account (
     -- balance as its own account row and group them via balance_group.
     balance_group     TEXT,
     masked_number     TEXT,                 -- '****1007' — never store the full PAN
-    is_own_account    INTEGER NOT NULL DEFAULT 1,   -- drives transfer matching
+    is_own_account    BIGINT NOT NULL DEFAULT 1,   -- drives transfer matching
     opened_on         TEXT,
     closed_on         TEXT,
     notes             TEXT
-) STRICT;
+);
+
+CREATE TABLE IF NOT EXISTS account_acl (
+    account_id  TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+    user_id     TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    access_role TEXT NOT NULL CHECK (access_role IN ('viewer','editor','owner')),
+    granted_at  TEXT NOT NULL,
+    granted_by  TEXT REFERENCES app_user(id),
+    PRIMARY KEY (account_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_acl_user ON account_acl(user_id, account_id);
 
 -- Supplementary cards. Charges post to the parent account's statement but
 -- must stay attributable to the cardholder.
@@ -49,14 +88,25 @@ CREATE TABLE IF NOT EXISTS card (
     account_id       TEXT NOT NULL REFERENCES account(id),
     cardholder_name  TEXT NOT NULL,
     last4            TEXT,
-    is_supplementary INTEGER NOT NULL DEFAULT 0,
+    is_supplementary BIGINT NOT NULL DEFAULT 0,
     issued_on        TEXT,
     closed_on        TEXT,
     replaces_card_id TEXT REFERENCES card(id)
-) STRICT;
+);
 
 CREATE INDEX IF NOT EXISTS idx_card_account ON card(account_id);
 CREATE INDEX IF NOT EXISTS idx_card_replaces ON card(replaces_card_id);
+CREATE TABLE IF NOT EXISTS auth_session (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    token_hash  TEXT NOT NULL UNIQUE,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    revoked_at  TEXT,
+    user_agent  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_session_user ON auth_session(user_id, expires_at);
 
 -- Which currencies an account actually settles in.
 --
@@ -73,9 +123,9 @@ CREATE INDEX IF NOT EXISTS idx_card_replaces ON card(replaces_card_id);
 CREATE TABLE IF NOT EXISTS account_currency (
     account_id TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
     currency   TEXT NOT NULL,              -- ISO-4217
-    is_primary INTEGER NOT NULL DEFAULT 0,
+    is_primary BIGINT NOT NULL DEFAULT 0,
     PRIMARY KEY (account_id, currency)
-) STRICT;
+);
 
 -- ---------------------------------------------------------------------------
 -- 2. Provenance — every canonical row traces back to a file and a raw line
@@ -83,6 +133,9 @@ CREATE TABLE IF NOT EXISTS account_currency (
 
 CREATE TABLE IF NOT EXISTS statement_file (
     id             TEXT PRIMARY KEY,
+    user_id        TEXT NOT NULL DEFAULT
+                   COALESCE(NULLIF(current_setting('finto.user_id', true), ''), 'owner')
+                   CONSTRAINT statement_file_user_fk REFERENCES app_user(id),
     source_path    TEXT NOT NULL,
     file_sha256    TEXT NOT NULL UNIQUE,    -- re-importing the same file is a no-op
     institution_id TEXT NOT NULL REFERENCES institution(id),
@@ -95,19 +148,19 @@ CREATE TABLE IF NOT EXISTS statement_file (
     period_end     TEXT,
     statement_date TEXT,
     imported_at    TEXT NOT NULL,
-    row_count      INTEGER NOT NULL DEFAULT 0
-) STRICT;
+    row_count      BIGINT NOT NULL DEFAULT 0
+);
 
 -- Verbatim source rows. Never edited. Lets you re-derive transactions when a
 -- parser improves, without going back to the original download.
 CREATE TABLE IF NOT EXISTS raw_record (
     id                TEXT PRIMARY KEY,
     statement_file_id TEXT NOT NULL REFERENCES statement_file(id) ON DELETE CASCADE,
-    line_no           INTEGER NOT NULL,
+    line_no           BIGINT NOT NULL,
     payload           TEXT NOT NULL,        -- JSON of the source row, keys as-issued
     row_sha256        TEXT NOT NULL,
     UNIQUE (statement_file_id, line_no)
-) STRICT;
+);
 
 -- ---------------------------------------------------------------------------
 -- 3. Canonical transaction
@@ -129,12 +182,12 @@ CREATE TABLE IF NOT EXISTS txn (
                         CHECK (status IN ('pending','posted','void')),
 
     -- Money. Two pairs: what the merchant charged, and what the account moved.
-    amount_booked     INTEGER NOT NULL,              -- minor units, signed
+    amount_booked     BIGINT NOT NULL,              -- minor units, signed
     currency_booked   TEXT NOT NULL,
-    amount_native     INTEGER,                       -- NULL when same as booked
+    amount_native     BIGINT,                       -- NULL when same as booked
     currency_native   TEXT,
     fx_rate           TEXT,                          -- decimal string, native->booked
-    fx_fee_booked     INTEGER,                       -- FX/markup fee if itemised
+    fx_fee_booked     BIGINT,                       -- FX/markup fee if itemised
 
     description_raw   TEXT NOT NULL,
     description_norm  TEXT NOT NULL,                 -- uppercased, noise stripped
@@ -151,10 +204,10 @@ CREATE TABLE IF NOT EXISTS txn (
     subcategory       TEXT,
 
     -- Links & lineage
-    transfer_group_id TEXT REFERENCES transfer_group(id),
+    transfer_group_id TEXT,
     -- Instalment plan membership: which plan, and which of its N charges.
-    installment_plan_id TEXT REFERENCES installment_plan(id),
-    installment_seq   INTEGER,
+    installment_plan_id TEXT,
+    installment_seq   BIGINT,
     -- A refund points at the purchase it reverses, when we can identify it.
     refund_of_id      TEXT REFERENCES txn(id),
     duplicate_of_id   TEXT REFERENCES txn(id),       -- non-NULL = suppressed dupe
@@ -167,7 +220,7 @@ CREATE TABLE IF NOT EXISTS txn (
     notes             TEXT,
     created_at        TEXT NOT NULL,
     updated_at        TEXT NOT NULL
-) STRICT;
+);
 
 CREATE INDEX IF NOT EXISTS idx_txn_account_date ON txn(account_id, txn_date);
 CREATE INDEX IF NOT EXISTS idx_txn_dedup        ON txn(dedup_key);
@@ -184,7 +237,7 @@ CREATE INDEX IF NOT EXISTS idx_txn_date         ON txn(txn_date);
 CREATE INDEX IF NOT EXISTS idx_txn_category     ON txn(category, subcategory);
 
 -- The ledger you actually query: duplicates filtered out.
-CREATE VIEW IF NOT EXISTS v_ledger AS
+CREATE OR REPLACE VIEW v_ledger AS
 SELECT t.*, a.display_name AS account_name, a.institution_id
 FROM txn t JOIN account a ON a.id = t.account_id
 WHERE t.duplicate_of_id IS NULL AND t.status <> 'void';
@@ -193,7 +246,7 @@ WHERE t.duplicate_of_id IS NULL AND t.status <> 'void';
 -- actually transacted in — never a cross-currency total, which would be
 -- meaningless. This is movement, not balance: a true balance also needs an
 -- opening figure, which comes from balance_assertion (see reporting.positions).
-CREATE VIEW IF NOT EXISTS v_position AS
+CREATE OR REPLACE VIEW v_position AS
 SELECT t.account_id,
        a.display_name    AS account_name,
        a.institution_id,
@@ -207,7 +260,8 @@ SELECT t.account_id,
        MAX(t.txn_date)   AS last_txn_date
 FROM txn t JOIN account a ON a.id = t.account_id
 WHERE t.duplicate_of_id IS NULL AND t.status <> 'void'
-GROUP BY t.account_id, t.currency_booked;
+GROUP BY t.account_id, t.currency_booked,
+         a.display_name, a.institution_id, a.account_type;
 
 -- ---------------------------------------------------------------------------
 -- 3b. Structured transaction detail
@@ -237,9 +291,83 @@ CREATE TABLE IF NOT EXISTS txn_tag (
                  CHECK (source IN ('manual','rule','llm')),
     created_at TEXT NOT NULL,
     PRIMARY KEY (txn_id, tag)
-) STRICT;
+);
 
 CREATE INDEX IF NOT EXISTS idx_txn_tag_tag ON txn_tag(tag);
+
+-- Canonical pools. Transaction columns remain denormalised for reporting, but
+-- every value written by the application is resolved through these tables.
+CREATE TABLE IF NOT EXISTS category_definition (
+    category          TEXT NOT NULL,
+    subcategory       TEXT NOT NULL,
+    category_label    TEXT NOT NULL,
+    subcategory_label TEXT NOT NULL,
+    source            TEXT NOT NULL CHECK (source IN ('builtin','manual')),
+    active            BIGINT NOT NULL DEFAULT 1,
+    created_at        TEXT NOT NULL,
+    PRIMARY KEY (category, subcategory)
+);
+
+CREATE TABLE IF NOT EXISTS tag_definition (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    slug         TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    source       TEXT NOT NULL CHECK (source IN ('observed','manual','rule','llm')),
+    active       BIGINT NOT NULL DEFAULT 1,
+    created_at   TEXT NOT NULL,
+    UNIQUE (user_id, slug)
+);
+
+CREATE TABLE IF NOT EXISTS tag_alias (
+    user_id   TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    alias_key TEXT NOT NULL,
+    tag_id    TEXT NOT NULL REFERENCES tag_definition(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, alias_key)
+);
+
+CREATE TABLE IF NOT EXISTS merchant_definition (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    name_key     TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    category     TEXT,
+    subcategory  TEXT,
+    source       TEXT NOT NULL CHECK (source IN ('observed','manual','rule','llm')),
+    active       BIGINT NOT NULL DEFAULT 1,
+    created_at   TEXT NOT NULL,
+    UNIQUE (user_id, name_key)
+);
+
+CREATE TABLE IF NOT EXISTS merchant_alias (
+    user_id     TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    alias_key   TEXT NOT NULL,
+    merchant_id TEXT NOT NULL REFERENCES merchant_definition(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, alias_key)
+);
+
+CREATE TABLE IF NOT EXISTS agent_operation (
+    id          TEXT PRIMARY KEY,
+    subject     TEXT NOT NULL,
+    action      TEXT NOT NULL,
+    user_id     TEXT,
+    applied     BIGINT NOT NULL DEFAULT 0 CHECK (applied IN (0,1)),
+    result      JSONB NOT NULL,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_api_key (
+    id            TEXT PRIMARY KEY,
+    user_id       TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    key_prefix    TEXT NOT NULL,
+    key_hash      TEXT NOT NULL UNIQUE,
+    scopes        JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at    TEXT NOT NULL,
+    last_used_at  TEXT,
+    revoked_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_user_api_key_owner ON user_api_key(user_id, revoked_at);
 
 CREATE TABLE IF NOT EXISTS txn_detail (
     txn_id  TEXT NOT NULL REFERENCES txn(id) ON DELETE CASCADE,
@@ -248,7 +376,7 @@ CREATE TABLE IF NOT EXISTS txn_detail (
     source  TEXT NOT NULL DEFAULT 'parser'
               CHECK (source IN ('parser','rule','llm','manual')),
     PRIMARY KEY (txn_id, key)
-) STRICT;
+);
 
 CREATE INDEX IF NOT EXISTS idx_detail_key   ON txn_detail(key, value);
 CREATE INDEX IF NOT EXISTS idx_detail_value ON txn_detail(value);
@@ -267,13 +395,13 @@ CREATE TABLE IF NOT EXISTS transfer_group (
                     ('internal_transfer','cc_payment','fx_conversion','atm_withdrawal',
                      'installment_origination')),
     match_method  TEXT NOT NULL CHECK (match_method IN ('auto','manual','rule')),
-    confidence    REAL NOT NULL DEFAULT 1.0,
-    fee_booked    INTEGER,                  -- leakage: outflow + inflow != 0
+    confidence    DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    fee_booked    BIGINT,                  -- leakage: outflow + inflow != 0
     fee_currency  TEXT,
-    is_confirmed  INTEGER NOT NULL DEFAULT 0,
+    is_confirmed  BIGINT NOT NULL DEFAULT 0,
     notes         TEXT,
     created_at    TEXT NOT NULL
-) STRICT;
+);
 
 -- Explicit membership: which txn plays which role in the group.
 CREATE TABLE IF NOT EXISTS transfer_leg (
@@ -281,7 +409,7 @@ CREATE TABLE IF NOT EXISTS transfer_leg (
     txn_id            TEXT NOT NULL REFERENCES txn(id),
     role              TEXT NOT NULL CHECK (role IN ('out','in','fee')),
     PRIMARY KEY (transfer_group_id, txn_id)
-) STRICT;
+);
 
 -- Candidate matches awaiting your review. Populated by the matcher, drained by
 -- the confirm/reject CLI. Keeps low-confidence guesses out of the ledger.
@@ -289,28 +417,28 @@ CREATE TABLE IF NOT EXISTS transfer_candidate (
     id            TEXT PRIMARY KEY,
     out_txn_id    TEXT NOT NULL REFERENCES txn(id),
     in_txn_id     TEXT NOT NULL REFERENCES txn(id),
-    score         REAL NOT NULL,
-    date_delta    INTEGER NOT NULL,         -- days between legs
-    amount_delta  INTEGER NOT NULL,         -- minor units, after FX normalisation
+    score         DOUBLE PRECISION NOT NULL,
+    date_delta    BIGINT NOT NULL,         -- days between legs
+    amount_delta  BIGINT NOT NULL,         -- minor units, after FX normalisation
     reasons       TEXT NOT NULL,            -- JSON array of scoring signals
     resolution    TEXT NOT NULL DEFAULT 'open'
                     CHECK (resolution IN ('open','accepted','rejected')),
     created_at    TEXT NOT NULL,
     UNIQUE (out_txn_id, in_txn_id)
-) STRICT;
+);
 
 -- Near-duplicate pairs the dedup engine wasn't confident enough to auto-merge.
 CREATE TABLE IF NOT EXISTS duplicate_candidate (
     id           TEXT PRIMARY KEY,
     keep_txn_id  TEXT NOT NULL REFERENCES txn(id),
     dupe_txn_id  TEXT NOT NULL REFERENCES txn(id),
-    score        REAL NOT NULL,
+    score        DOUBLE PRECISION NOT NULL,
     reasons      TEXT NOT NULL,
     resolution   TEXT NOT NULL DEFAULT 'open'
                    CHECK (resolution IN ('open','accepted','rejected')),
     created_at   TEXT NOT NULL,
     UNIQUE (keep_txn_id, dupe_txn_id)
-) STRICT;
+);
 
 -- ---------------------------------------------------------------------------
 -- 4b. Installment plans
@@ -339,22 +467,22 @@ CREATE TABLE IF NOT EXISTS installment_plan (
     card_id       TEXT REFERENCES card(id),
     merchant      TEXT,
     description   TEXT NOT NULL,
-    principal     INTEGER NOT NULL,        -- minor units, signed (negative = owed)
+    principal     BIGINT NOT NULL,        -- minor units, signed (negative = owed)
     currency      TEXT NOT NULL,
-    term_months   INTEGER NOT NULL,
+    term_months   BIGINT NOT NULL,
     start_date    TEXT NOT NULL,
-    fee_total     INTEGER,                 -- handling fee, when itemised
+    fee_total     BIGINT,                 -- handling fee, when itemised
     apr           TEXT,                    -- decimal string; NULL = interest free
     external_ref  TEXT,                    -- issuer's plan id, when supplied
     status        TEXT NOT NULL DEFAULT 'active'
                     CHECK (status IN ('active','completed','cancelled')),
     match_method  TEXT NOT NULL DEFAULT 'auto'
                     CHECK (match_method IN ('auto','manual','rule')),
-    confidence    REAL NOT NULL DEFAULT 1.0,
-    is_confirmed  INTEGER NOT NULL DEFAULT 0,
+    confidence    DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    is_confirmed  BIGINT NOT NULL DEFAULT 0,
     notes         TEXT,
     created_at    TEXT NOT NULL
-) STRICT;
+);
 
 CREATE INDEX IF NOT EXISTS idx_plan_account ON installment_plan(account_id, status);
 
@@ -364,14 +492,14 @@ CREATE TABLE IF NOT EXISTS installment_candidate (
     account_id   TEXT NOT NULL REFERENCES account(id),
     description  TEXT NOT NULL,
     txn_ids      TEXT NOT NULL,            -- JSON array
-    term_months  INTEGER NOT NULL,
-    score        REAL NOT NULL,
+    term_months  BIGINT NOT NULL,
+    score        DOUBLE PRECISION NOT NULL,
     reasons      TEXT NOT NULL,            -- JSON array
     resolution   TEXT NOT NULL DEFAULT 'open'
                    CHECK (resolution IN ('open','accepted','rejected')),
     created_at   TEXT NOT NULL,
     UNIQUE (account_id, description, term_months)
-) STRICT;
+);
 
 -- ---------------------------------------------------------------------------
 -- 5. FX rates — convert on demand, never destructively
@@ -384,7 +512,7 @@ CREATE TABLE IF NOT EXISTS fx_rate (
     rate       TEXT NOT NULL,               -- decimal string; 1 base = rate quote
     source     TEXT NOT NULL,               -- 'statement','ecb','manual'
     PRIMARY KEY (rate_date, base, quote, source)
-) STRICT;
+);
 
 -- ---------------------------------------------------------------------------
 -- 6. Categorisation rules
@@ -392,7 +520,7 @@ CREATE TABLE IF NOT EXISTS fx_rate (
 
 CREATE TABLE IF NOT EXISTS category_rule (
     id          TEXT PRIMARY KEY,
-    priority    INTEGER NOT NULL DEFAULT 100,   -- lower runs first
+    priority    BIGINT NOT NULL DEFAULT 100,   -- lower runs first
     -- 'merchant_category' matches what the issuer itself called the merchant
     -- (AMEX prints "TAXICAB & LIMOUSINE" under the charge). That is a fact
     -- from the statement, so mapping it to a ledger category is a rename, not
@@ -406,8 +534,8 @@ CREATE TABLE IF NOT EXISTS category_rule (
     set_kind    TEXT,
     set_category    TEXT,
     set_subcategory TEXT,
-    enabled     INTEGER NOT NULL DEFAULT 1
-) STRICT;
+    enabled     BIGINT NOT NULL DEFAULT 1
+);
 
 -- ---------------------------------------------------------------------------
 -- 7. Balance assertions — the integrity check that catches dropped rows
@@ -432,13 +560,13 @@ CREATE TABLE IF NOT EXISTS balance_assertion (
     id                TEXT PRIMARY KEY,
     account_id        TEXT NOT NULL REFERENCES account(id),
     as_of_date        TEXT NOT NULL,
-    balance           INTEGER NOT NULL,     -- minor units, signed
+    balance           BIGINT NOT NULL,     -- minor units, signed
     currency          TEXT NOT NULL,
     kind              TEXT NOT NULL CHECK (kind IN
                         ('opening','closing','running','manual')),
     statement_file_id TEXT REFERENCES statement_file(id),
     UNIQUE (account_id, as_of_date, kind, currency)
-) STRICT;
+);
 
 CREATE INDEX IF NOT EXISTS idx_balance_account ON balance_assertion(account_id, as_of_date);
 
@@ -448,13 +576,13 @@ CREATE TABLE IF NOT EXISTS reconciliation_check (
     account_id    TEXT NOT NULL REFERENCES account(id),
     period_start  TEXT NOT NULL,
     period_end    TEXT NOT NULL,
-    expected_delta INTEGER NOT NULL,   -- from balance assertions
-    actual_delta   INTEGER NOT NULL,   -- from summed transactions
-    discrepancy    INTEGER NOT NULL,
+    expected_delta BIGINT NOT NULL,   -- from balance assertions
+    actual_delta   BIGINT NOT NULL,   -- from summed transactions
+    discrepancy    BIGINT NOT NULL,
     currency       TEXT NOT NULL,
     status         TEXT NOT NULL CHECK (status IN ('ok','discrepancy','insufficient_data')),
     checked_at     TEXT NOT NULL
-) STRICT;
+);
 
 -- ---------------------------------------------------------------------------
 -- 8. LLM decisions — cache and audit trail
@@ -477,13 +605,13 @@ CREATE TABLE IF NOT EXISTS llm_decision (
     input_hash     TEXT NOT NULL,        -- sha256 of the canonical input
     input_summary  TEXT NOT NULL,        -- human-readable, for auditing
     output         TEXT NOT NULL,        -- JSON
-    confidence     REAL,
+    confidence     DOUBLE PRECISION,
     model          TEXT NOT NULL,
     prompt_version TEXT NOT NULL,
-    applied        INTEGER NOT NULL DEFAULT 0,
+    applied        BIGINT NOT NULL DEFAULT 0,
     created_at     TEXT NOT NULL,
     UNIQUE (task, input_hash, prompt_version)
-) STRICT;
+);
 
 CREATE INDEX IF NOT EXISTS idx_llm_lookup ON llm_decision(task, input_hash);
 
@@ -494,25 +622,25 @@ CREATE TABLE IF NOT EXISTS txn_annotation (
     field       TEXT NOT NULL,          -- 'category', 'merchant', 'kind'
     value       TEXT,
     source      TEXT NOT NULL CHECK (source IN ('parser','rule','llm','manual')),
-    confidence  REAL,
+    confidence  DOUBLE PRECISION,
     decision_id TEXT REFERENCES llm_decision(id),
     created_at  TEXT NOT NULL,
     PRIMARY KEY (txn_id, field)
-) STRICT;
+);
 
 -- ---------------------------------------------------------------------------
 -- 9. Parties & aliases — who money moves between
 -- ---------------------------------------------------------------------------
 -- Transfers between *your* accounts are netted out of spend/income. That only
 -- works when the matcher can recognise both legs as yours. Institutions write
--- your name differently (YIXIANG ZHOU vs ZEPTO ZHOU YIXIANG vs FPS aliases), and
+-- your name differently (ALEX EXAMPLE vs EXAMPLE ALEX vs FPS aliases), and
 -- they write the counterparty on one leg only. party + party_alias is the
 -- shared dictionary:
 --
 --   kind='self'     every name you go by — used to boost self-transfer scores
 --                   and to stop a payment to yourself being treated as income
 --   kind='person'   people you send money to / receive from (P2P). Their
---                   transfers are REAL spend/income; we label them, we do not
+--                   transfers are spend/income; we label them, we do not
 --                   net them against another of your accounts.
 --
 -- account_alias maps description tokens ("MOX", "AMEX PLATINUM") onto the
@@ -524,13 +652,13 @@ CREATE TABLE IF NOT EXISTS party (
     display_name TEXT NOT NULL,
     kind         TEXT NOT NULL CHECK (kind IN ('self','person','merchant','institution')),
     notes        TEXT
-) STRICT;
+);
 
 CREATE TABLE IF NOT EXISTS party_alias (
     party_id TEXT NOT NULL REFERENCES party(id) ON DELETE CASCADE,
     alias    TEXT NOT NULL,               -- already normalised (upper, alnum)
     PRIMARY KEY (party_id, alias)
-) STRICT;
+);
 
 CREATE INDEX IF NOT EXISTS idx_party_alias ON party_alias(alias);
 
@@ -538,7 +666,7 @@ CREATE TABLE IF NOT EXISTS account_alias (
     account_id TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
     alias      TEXT NOT NULL,
     PRIMARY KEY (account_id, alias)
-) STRICT;
+);
 
 CREATE INDEX IF NOT EXISTS idx_account_alias ON account_alias(alias);
 
@@ -561,23 +689,23 @@ CREATE TABLE IF NOT EXISTS investment_snapshot (
     as_of_date        TEXT NOT NULL,
     scheme            TEXT NOT NULL,          -- 'hsbc_mpf'
     currency          TEXT NOT NULL,
-    total_value       INTEGER NOT NULL,       -- minor units
+    total_value       BIGINT NOT NULL,       -- minor units
     source            TEXT NOT NULL,          -- 'xlsx','manual','statement'
     statement_file_id TEXT REFERENCES statement_file(id),
     notes             TEXT,
     created_at        TEXT NOT NULL,
     UNIQUE (scheme, as_of_date, source)
-) STRICT;
+);
 
 CREATE TABLE IF NOT EXISTS investment_subaccount_balance (
     snapshot_id  TEXT NOT NULL REFERENCES investment_snapshot(id) ON DELETE CASCADE,
     account_id   TEXT NOT NULL REFERENCES account(id),
     member_no    TEXT,                        -- issuer member account number
-    balance      INTEGER NOT NULL,            -- minor units
+    balance      BIGINT NOT NULL,            -- minor units
     currency     TEXT NOT NULL,
     allocation   TEXT,                        -- decimal string fraction of total
     PRIMARY KEY (snapshot_id, account_id)
-) STRICT;
+);
 
 CREATE TABLE IF NOT EXISTS investment_holding (
     id            TEXT PRIMARY KEY,
@@ -585,14 +713,25 @@ CREATE TABLE IF NOT EXISTS investment_holding (
     instrument    TEXT NOT NULL,              -- constituent fund name
     units         TEXT,                       -- decimal string
     unit_price    TEXT,                       -- decimal string, in currency
-    market_value  INTEGER NOT NULL,           -- minor units
+    market_value  BIGINT NOT NULL,           -- minor units
     currency      TEXT NOT NULL,
     allocation    TEXT,                       -- decimal string fraction of total
     UNIQUE (snapshot_id, instrument)
-) STRICT;
+);
 
 CREATE INDEX IF NOT EXISTS idx_holding_snapshot ON investment_holding(snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_inv_sub_account ON investment_subaccount_balance(account_id);
+
+CREATE TABLE IF NOT EXISTS pdf_template (
+    template_id   TEXT PRIMARY KEY,
+    institution_id TEXT NOT NULL,
+    version       TEXT NOT NULL,
+    source        TEXT NOT NULL,
+    note          TEXT,
+    body          TEXT NOT NULL,
+    active        BIGINT NOT NULL DEFAULT 1,
+    created_at    TEXT NOT NULL
+);
 
 -- ---------------------------------------------------------------------------
 -- 11. Settings
@@ -601,13 +740,7 @@ CREATE INDEX IF NOT EXISTS idx_inv_sub_account ON investment_subaccount_balance(
 CREATE TABLE IF NOT EXISTS setting (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
-) STRICT;
-
-INSERT OR IGNORE INTO setting (key, value) VALUES
-    ('base_currency', 'HKD'),
-    ('period_start',  '2025-01-01'),
-    ('llm_enabled',   '0'),
-    ('llm_model',     'claude-haiku-4-5-20251001');
+);
 
 -- ---------------------------------------------------------------------------
 -- 12. Import audit log
@@ -617,10 +750,309 @@ CREATE TABLE IF NOT EXISTS import_run (
     id              TEXT PRIMARY KEY,
     started_at      TEXT NOT NULL,
     finished_at     TEXT,
-    files_seen      INTEGER NOT NULL DEFAULT 0,
-    files_imported  INTEGER NOT NULL DEFAULT 0,
-    files_skipped   INTEGER NOT NULL DEFAULT 0,
-    txns_inserted   INTEGER NOT NULL DEFAULT 0,
-    txns_deduped    INTEGER NOT NULL DEFAULT 0,
+    files_seen      BIGINT NOT NULL DEFAULT 0,
+    files_imported  BIGINT NOT NULL DEFAULT 0,
+    files_skipped   BIGINT NOT NULL DEFAULT 0,
+    txns_inserted   BIGINT NOT NULL DEFAULT 0,
+    txns_deduped    BIGINT NOT NULL DEFAULT 0,
     errors          TEXT
-) STRICT;
+);
+
+-- These two references point to tables declared after txn, so add them once
+-- all relations exist. The guards keep schema initialization idempotent.
+DO $$
+BEGIN
+    ALTER TABLE account ADD COLUMN IF NOT EXISTS user_id TEXT;
+    UPDATE account SET user_id = 'owner' WHERE user_id IS NULL;
+    ALTER TABLE account ALTER COLUMN user_id SET DEFAULT 'owner';
+    ALTER TABLE account ALTER COLUMN user_id SET NOT NULL;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'account_user_fk') THEN
+        ALTER TABLE account ADD CONSTRAINT account_user_fk
+            FOREIGN KEY (user_id) REFERENCES app_user(id);
+    END IF;
+    ALTER TABLE statement_file ADD COLUMN IF NOT EXISTS user_id TEXT;
+    UPDATE statement_file SET user_id='owner' WHERE user_id IS NULL;
+    ALTER TABLE statement_file ALTER COLUMN user_id SET DEFAULT
+        COALESCE(NULLIF(current_setting('finto.user_id', true), ''), 'owner');
+    ALTER TABLE statement_file ALTER COLUMN user_id SET NOT NULL;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'statement_file_user_fk') THEN
+        ALTER TABLE statement_file ADD CONSTRAINT statement_file_user_fk
+            FOREIGN KEY (user_id) REFERENCES app_user(id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'txn_transfer_group_fk') THEN
+        ALTER TABLE txn ADD CONSTRAINT txn_transfer_group_fk
+            FOREIGN KEY (transfer_group_id) REFERENCES transfer_group(id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'txn_installment_plan_fk') THEN
+        ALTER TABLE txn ADD CONSTRAINT txn_installment_plan_fk
+            FOREIGN KEY (installment_plan_id) REFERENCES installment_plan(id);
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_account_user ON account(user_id);
+
+-- Account ACLs are enforced in PostgreSQL, including for queries that access a
+-- child table directly. CLI/admin connections explicitly enable the bypass;
+-- API connections clear it and set finto.user_id from the signed session.
+INSERT INTO account_acl (account_id, user_id, access_role, granted_at, granted_by)
+SELECT id, user_id, 'owner', CURRENT_TIMESTAMP::text, user_id FROM account
+ON CONFLICT (account_id, user_id) DO UPDATE SET access_role='owner';
+
+CREATE OR REPLACE FUNCTION finto_account_access(target_account TEXT, required_role TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+    SELECT current_setting('finto.bypass_acl', true) = '1'
+       OR EXISTS (
+            SELECT 1 FROM account_acl acl
+             WHERE acl.account_id = target_account
+               AND acl.user_id = current_setting('finto.user_id', true)
+               AND CASE acl.access_role WHEN 'owner' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END
+                   >= CASE required_role WHEN 'owner' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END
+       )
+$$;
+
+CREATE OR REPLACE FUNCTION finto_txn_access(target_txn TEXT, required_role TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+    SELECT current_setting('finto.bypass_acl', true) = '1'
+       OR EXISTS (SELECT 1 FROM txn WHERE id=target_txn
+                  AND finto_account_access(account_id, required_role))
+$$;
+
+CREATE OR REPLACE FUNCTION finto_statement_access(target_statement TEXT, required_role TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+    SELECT current_setting('finto.bypass_acl', true) = '1'
+       OR EXISTS (
+            SELECT 1 FROM statement_file sf
+             WHERE sf.id=target_statement
+               AND (finto_account_access(sf.account_id, required_role)
+                    OR EXISTS (SELECT 1 FROM txn t WHERE t.statement_file_id=sf.id
+                               AND finto_account_access(t.account_id, required_role))
+                    OR EXISTS (SELECT 1 FROM balance_assertion b WHERE b.statement_file_id=sf.id
+                               AND finto_account_access(b.account_id, required_role)))
+       )
+$$;
+
+ALTER TABLE account ENABLE ROW LEVEL SECURITY;
+ALTER TABLE account FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON account;
+CREATE POLICY finto_acl ON account
+    USING (finto_account_access(id, 'viewer'))
+    WITH CHECK (finto_account_access(id, 'owner'));
+
+ALTER TABLE txn ENABLE ROW LEVEL SECURITY;
+ALTER TABLE txn FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON txn;
+CREATE POLICY finto_acl ON txn
+    USING (finto_account_access(account_id, 'viewer'))
+    WITH CHECK (finto_account_access(account_id, 'editor'));
+
+ALTER TABLE card ENABLE ROW LEVEL SECURITY;
+ALTER TABLE card FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON card;
+CREATE POLICY finto_acl ON card
+    USING (finto_account_access(account_id, 'viewer'))
+    WITH CHECK (finto_account_access(account_id, 'editor'));
+
+ALTER TABLE account_currency ENABLE ROW LEVEL SECURITY;
+ALTER TABLE account_currency FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON account_currency;
+CREATE POLICY finto_acl ON account_currency
+    USING (finto_account_access(account_id, 'viewer'))
+    WITH CHECK (finto_account_access(account_id, 'editor'));
+
+ALTER TABLE statement_file ENABLE ROW LEVEL SECURITY;
+ALTER TABLE statement_file FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON statement_file;
+CREATE POLICY finto_acl ON statement_file
+    USING (current_setting('finto.bypass_acl', true) = '1'
+           OR user_id=current_setting('finto.user_id', true)
+           OR finto_account_access(account_id, 'viewer'))
+    WITH CHECK (current_setting('finto.bypass_acl', true) = '1'
+                OR (user_id=current_setting('finto.user_id', true)
+                    AND (account_id IS NULL OR finto_account_access(account_id, 'editor'))));
+
+ALTER TABLE raw_record ENABLE ROW LEVEL SECURITY;
+ALTER TABLE raw_record FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON raw_record;
+CREATE POLICY finto_acl ON raw_record
+    USING (finto_statement_access(statement_file_id, 'viewer'))
+    WITH CHECK (finto_statement_access(statement_file_id, 'editor'));
+
+ALTER TABLE txn_tag ENABLE ROW LEVEL SECURITY;
+ALTER TABLE txn_tag FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON txn_tag;
+CREATE POLICY finto_acl ON txn_tag
+    USING (finto_txn_access(txn_id, 'viewer'))
+    WITH CHECK (finto_txn_access(txn_id, 'editor'));
+
+ALTER TABLE tag_definition ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tag_definition FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON tag_definition;
+CREATE POLICY finto_acl ON tag_definition
+    USING (current_setting('finto.bypass_acl', true)='1'
+           OR user_id=current_setting('finto.user_id', true))
+    WITH CHECK (current_setting('finto.bypass_acl', true)='1'
+                OR user_id=current_setting('finto.user_id', true));
+
+ALTER TABLE tag_alias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tag_alias FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON tag_alias;
+CREATE POLICY finto_acl ON tag_alias
+    USING (current_setting('finto.bypass_acl', true)='1'
+           OR user_id=current_setting('finto.user_id', true))
+    WITH CHECK (current_setting('finto.bypass_acl', true)='1'
+                OR user_id=current_setting('finto.user_id', true));
+
+ALTER TABLE merchant_definition ENABLE ROW LEVEL SECURITY;
+ALTER TABLE merchant_definition FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON merchant_definition;
+CREATE POLICY finto_acl ON merchant_definition
+    USING (current_setting('finto.bypass_acl', true)='1'
+           OR user_id=current_setting('finto.user_id', true))
+    WITH CHECK (current_setting('finto.bypass_acl', true)='1'
+                OR user_id=current_setting('finto.user_id', true));
+
+ALTER TABLE merchant_alias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE merchant_alias FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON merchant_alias;
+CREATE POLICY finto_acl ON merchant_alias
+    USING (current_setting('finto.bypass_acl', true)='1'
+           OR user_id=current_setting('finto.user_id', true))
+    WITH CHECK (current_setting('finto.bypass_acl', true)='1'
+                OR user_id=current_setting('finto.user_id', true));
+
+ALTER TABLE txn_detail ENABLE ROW LEVEL SECURITY;
+ALTER TABLE txn_detail FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON txn_detail;
+CREATE POLICY finto_acl ON txn_detail
+    USING (finto_txn_access(txn_id, 'viewer'))
+    WITH CHECK (finto_txn_access(txn_id, 'editor'));
+
+ALTER TABLE txn_annotation ENABLE ROW LEVEL SECURITY;
+ALTER TABLE txn_annotation FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON txn_annotation;
+CREATE POLICY finto_acl ON txn_annotation
+    USING (finto_txn_access(txn_id, 'viewer'))
+    WITH CHECK (finto_txn_access(txn_id, 'editor'));
+
+ALTER TABLE installment_plan ENABLE ROW LEVEL SECURITY;
+ALTER TABLE installment_plan FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON installment_plan;
+CREATE POLICY finto_acl ON installment_plan
+    USING (finto_account_access(account_id, 'viewer'))
+    WITH CHECK (finto_account_access(account_id, 'editor'));
+
+ALTER TABLE installment_candidate ENABLE ROW LEVEL SECURITY;
+ALTER TABLE installment_candidate FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON installment_candidate;
+CREATE POLICY finto_acl ON installment_candidate
+    USING (finto_account_access(account_id, 'viewer'))
+    WITH CHECK (finto_account_access(account_id, 'editor'));
+
+ALTER TABLE balance_assertion ENABLE ROW LEVEL SECURITY;
+ALTER TABLE balance_assertion FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON balance_assertion;
+CREATE POLICY finto_acl ON balance_assertion
+    USING (finto_account_access(account_id, 'viewer'))
+    WITH CHECK (finto_account_access(account_id, 'editor'));
+
+ALTER TABLE reconciliation_check ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reconciliation_check FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON reconciliation_check;
+CREATE POLICY finto_acl ON reconciliation_check
+    USING (finto_account_access(account_id, 'viewer'))
+    WITH CHECK (finto_account_access(account_id, 'editor'));
+
+ALTER TABLE account_alias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE account_alias FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON account_alias;
+CREATE POLICY finto_acl ON account_alias
+    USING (finto_account_access(account_id, 'viewer'))
+    WITH CHECK (finto_account_access(account_id, 'editor'));
+
+ALTER TABLE investment_subaccount_balance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE investment_subaccount_balance FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON investment_subaccount_balance;
+CREATE POLICY finto_acl ON investment_subaccount_balance
+    USING (finto_account_access(account_id, 'viewer'))
+    WITH CHECK (finto_account_access(account_id, 'editor'));
+
+ALTER TABLE transfer_leg ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transfer_leg FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON transfer_leg;
+CREATE POLICY finto_acl ON transfer_leg
+    USING (finto_txn_access(txn_id, 'viewer'))
+    WITH CHECK (finto_txn_access(txn_id, 'editor'));
+
+ALTER TABLE transfer_candidate ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transfer_candidate FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON transfer_candidate;
+CREATE POLICY finto_acl ON transfer_candidate
+    USING (finto_txn_access(out_txn_id, 'viewer')
+           AND finto_txn_access(in_txn_id, 'viewer'))
+    WITH CHECK (finto_txn_access(out_txn_id, 'editor')
+                AND finto_txn_access(in_txn_id, 'editor'));
+
+ALTER TABLE duplicate_candidate ENABLE ROW LEVEL SECURITY;
+ALTER TABLE duplicate_candidate FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON duplicate_candidate;
+CREATE POLICY finto_acl ON duplicate_candidate
+    USING (finto_txn_access(keep_txn_id, 'viewer')
+           AND finto_txn_access(dupe_txn_id, 'viewer'))
+    WITH CHECK (finto_txn_access(keep_txn_id, 'editor')
+                AND finto_txn_access(dupe_txn_id, 'editor'));
+
+ALTER TABLE investment_snapshot ENABLE ROW LEVEL SECURITY;
+ALTER TABLE investment_snapshot FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl_select ON investment_snapshot;
+CREATE POLICY finto_acl_select ON investment_snapshot FOR SELECT
+    USING (current_setting('finto.bypass_acl', true) = '1' OR EXISTS (
+        SELECT 1 FROM investment_subaccount_balance b
+         WHERE b.snapshot_id=investment_snapshot.id
+           AND finto_account_access(b.account_id, 'viewer')
+    ));
+
+ALTER TABLE investment_holding ENABLE ROW LEVEL SECURITY;
+ALTER TABLE investment_holding FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl_select ON investment_holding;
+CREATE POLICY finto_acl_select ON investment_holding FOR SELECT
+    USING (current_setting('finto.bypass_acl', true) = '1' OR EXISTS (
+        SELECT 1 FROM investment_subaccount_balance b
+         WHERE b.snapshot_id=investment_holding.snapshot_id
+           AND finto_account_access(b.account_id, 'viewer')
+    ));
+
+-- The database owner (and test superusers) can bypass RLS. Web requests switch
+-- to this non-login role so the policies remain authoritative in every hosting
+-- environment. The provisioning role retains direct maintenance access.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='finto_api_rls') THEN
+        CREATE ROLE finto_api_rls NOLOGIN NOBYPASSRLS;
+    END IF;
+    EXECUTE format('GRANT finto_api_rls TO %I', current_user);
+    EXECUTE format('GRANT USAGE ON SCHEMA %I TO finto_api_rls', current_schema());
+    EXECUTE format(
+        'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO finto_api_rls',
+        current_schema()
+    );
+    EXECUTE format(
+        'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA %I TO finto_api_rls',
+        current_schema()
+    );
+    EXECUTE format(
+        'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA %I TO finto_api_rls',
+        current_schema()
+    );
+END $$;

@@ -20,10 +20,11 @@ def _add(conn, account, amount, ccy, when="2025-01-15", desc="THING"):
     from fin.db import insert_txns
     from fin.models import Txn
     conn.execute(
-        "INSERT OR IGNORE INTO statement_file (id, source_path, file_sha256, "
+        "INSERT INTO statement_file (id, source_path, file_sha256, "
         "institution_id, account_id, file_format, parser_id, parser_version, "
         "imported_at, row_count) VALUES "
-        "('sf','x','x','amex_us','amex_us_main','csv','t','1','2025-01-01',0)")
+        "('sf','x','x','amex_us','amex_us_main','csv','t','1','2025-01-01',0) "
+        "ON CONFLICT (id) DO NOTHING")
     insert_txns(conn, [Txn(
         account_id=account, txn_date=date.fromisoformat(when),
         booked=Money(amount=amount, currency=ccy), description_raw=desc,
@@ -144,7 +145,8 @@ def test_rates_are_harvested_from_transactions(conn):
     conn.execute(
         "INSERT INTO statement_file (id, source_path, file_sha256, institution_id, "
         "account_id, file_format, parser_id, parser_version, imported_at, row_count) "
-        "VALUES ('sf','x','x','amex_us','amex_us_main','csv','t','1','2025-01-01',0)")
+        "VALUES ('sf','x','x','amex_us','amex_us_main','csv','t','1','2025-01-01',0) "
+        "ON CONFLICT (id) DO NOTHING")
     insert_txns(conn, [Txn(
         account_id="amex_us_main", txn_date=date(2025, 1, 15),
         booked=Money(amount=-7820, currency="USD"),
@@ -190,7 +192,7 @@ def test_missing_rate_never_guesses(conn):
 def test_conversion_handles_zero_decimal_currencies(conn):
     """JPY has no minor units; a naive conversion is out by 100x."""
     dbm.upsert_fx_rate(conn, FxRate(rate_date=date(2025, 1, 1), base="USD",
-                                    quote="JPY", rate=Decimal("150")))
+                                    quote="JPY", rate=Decimal(150)))
     conn.commit()
     got = fxm.convert(conn, Money(amount=10000, currency="USD"), "JPY",
                       on=date(2025, 1, 15))

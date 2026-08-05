@@ -1,11 +1,11 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
-import { FilterState } from '../../core/filter-state';
 import { MoneyPipe } from '../../core/money.pipe';
-import { Money, Position, SummaryRow, TotalRow } from '../../core/models';
-import { FilterBar } from '../../shared/filter-bar';
+import { Money, StatementFreshness, SummaryRow, TotalRow } from '../../core/models';
+import { FintoSelect } from '../../shared/finto-select';
+import { Preferences } from '../../core/preferences.service';
 
 /**
  * Summary.
@@ -21,48 +21,41 @@ import { FilterBar } from '../../shared/filter-bar';
  */
 @Component({
   selector: 'app-summary',
-  imports: [FormsModule, MoneyPipe, FilterBar],
+  imports: [FormsModule, MoneyPipe, FintoSelect],
   templateUrl: './summary.html',
   styleUrl: './summary.css',
 })
 export class SummaryPage {
   private api = inject(Api);
-  private route = inject(ActivatedRoute);
   private router = inject(Router);
-  private money = new MoneyPipe();
-  filters = inject(FilterState);
+  private preferences = inject(Preferences);
+  readonly money = new MoneyPipe();
 
   readonly dimensions = [
     'month', 'quarter', 'year', 'category', 'subcategory', 'merchant',
     'account', 'institution', 'card', 'cardholder', 'kind', 'currency',
   ];
 
-  groupBy = signal('month');
-  convertTo = signal('');
-  /** Positions as they stood on a chosen day, rather than now. */
-  asOf = signal('');
+  groupBy = signal(this.savedGroupBy());
+  convertTo = this.preferences.baseCurrency;
   loading = signal(true);
   rows = signal<SummaryRow[]>([]);
   totals = signal<TotalRow[]>([]);
-  positions = signal<Position[]>([]);
-  conversion = signal<{ to: string; unconvertible_currencies: string[] } | null>(null);
   netWorth = signal<Money | null>(null);
+  positionTypes = signal<Array<{ account_type: string; balance: Money }>>([]);
   headline = signal<{ net: Money; spend: Money; income: Money } | null>(null);
-  outstanding = signal<Array<{ currency: string; amount: number }>>([]);
+  freshness = signal<StatementFreshness | null>(null);
+  readonly reportingCurrencies = ['USD', 'HKD', 'GBP', 'EUR', 'JPY', 'CNY', 'SGD', 'AUD', 'CAD'];
 
-  /** Currencies present, so the conversion picker offers real options. */
-  currencies = computed(() => [...new Set(this.positions().map((p) => p.currency))]);
-
-  /** Buckets in display order, each with its per-currency rows. */
-  buckets = computed(() => {
-    const map = new Map<string, SummaryRow[]>();
-    for (const r of this.rows()) {
-      const list = map.get(r.bucket) ?? [];
-      list.push(r);
-      map.set(r.bucket, list);
-    }
-    return [...map.entries()].map(([bucket, rows]) => ({ bucket, rows }));
+  positionChart = computed(() => {
+    const rows = this.positionTypes().filter((row) => row.balance.amount !== 0);
+    const peak = Math.max(1, ...rows.map((row) => Math.abs(row.balance.amount)));
+    return rows
+      .map((row) => ({ ...row, label: this.humanize(row.account_type),
+        width: `${Math.max(1.5, Math.abs(row.balance.amount) / peak * 50)}%` }))
+      .sort((a, b) => Math.abs(b.balance.amount) - Math.abs(a.balance.amount));
   });
+
 
   /**
    * The same buckets collapsed into one currency and ranked by spend.
@@ -99,6 +92,7 @@ export class SummaryPage {
       }))
       .sort((a, b) => Math.abs(b.spend.amount) - Math.abs(a.spend.amount));
   });
+  rankedTop = computed(() => this.ranked().slice(0, 10));
 
   /** Rows a missing rate kept out of the ranking. */
   unranked = computed(() =>
@@ -112,40 +106,6 @@ export class SummaryPage {
     currency: this.convertTo(),
   }));
 
-  maxSpend = computed(() =>
-    Math.max(1, ...this.rows().map((r) => Math.abs(r.spend.amount))),
-  );
-
-  /**
-   * In and out per account, normalised so the bars are comparable. Diverging
-   * from a centre line — out to the left, in to the right — so you see at a
-   * glance where money entered and left.
-   */
-  flow = computed(() => {
-    const conv = !!this.convertTo();
-    const agg = new Map<string, { name: string; inn: number; out: number }>();
-    for (const p of this.positions()) {
-      const inn = conv ? (p.inflow_converted?.ok ? p.inflow_converted.amount : null)
-                       : p.inflow.amount;
-      const out = conv ? (p.outflow_converted?.ok ? p.outflow_converted.amount : null)
-                       : p.outflow.amount;
-      if (inn === null || out === null) continue;   // no rate: excluded
-      const a = agg.get(p.account_id) ?? { name: p.account_name, inn: 0, out: 0 };
-      a.inn += inn;
-      a.out += Math.abs(out);
-      agg.set(p.account_id, a);
-    }
-    const peak = Math.max(1, ...[...agg.values()].map((a) => Math.max(a.inn, a.out)));
-    return [...agg.entries()]
-      .map(([id, a]) => ({
-        account_id: id, name: a.name,
-        inn: { amount: a.inn, currency: this.convertTo() },
-        out: { amount: -a.out, currency: this.convertTo() },
-        inW: `${(a.inn / peak) * 100}%`,
-        outW: `${(a.out / peak) * 100}%`,
-      }))
-      .sort((x, y) => (Math.abs(y.out.amount) + y.inn.amount) - (Math.abs(x.out.amount) + x.inn.amount));
-  });
 
   readonly timeDimensions = ['day', 'month', 'quarter', 'year'];
   isTimeDimension = computed(() => this.timeDimensions.includes(this.groupBy()));
@@ -173,6 +133,29 @@ export class SummaryPage {
    */
   trend = computed(() => {
     if (!this.isTimeDimension()) return [];
+    if (this.convertTo()) {
+      const grouped = new Map<string, SummaryRow>();
+      for (const row of this.rows()) {
+        if (!row.spend_converted?.ok || !row.income_converted?.ok || !row.net_converted?.ok) continue;
+        const current = grouped.get(row.bucket) ?? {
+          bucket: row.bucket, currency: this.convertTo(), txn_count: 0,
+          spend: {amount: 0, currency: this.convertTo()},
+          income: {amount: 0, currency: this.convertTo()},
+          net: {amount: 0, currency: this.convertTo()},
+        };
+        current.txn_count += row.txn_count;
+        current.spend.amount += row.spend_converted.amount;
+        current.income.amount += row.income_converted.amount;
+        current.net.amount += row.net_converted.amount;
+        grouped.set(row.bucket, current);
+      }
+      const normalised = [...grouped.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
+      const peak = Math.max(1, ...normalised.map((r) => Math.max(Math.abs(r.spend.amount), r.income.amount)));
+      return normalised.map((row) => ({ bucket: row.bucket, row,
+        label: row.bucket.replace(/^\d{2}(\d{2})-/, '$1-'),
+        out: `${Math.max(1, Math.abs(row.spend.amount) / peak * 100)}%`,
+        in: `${Math.max(1, row.income.amount / peak * 100)}%` }));
+    }
     const ccy = this.shownCurrency();
     const rows = this.rows()
       .filter((r) => r.currency === ccy)
@@ -190,6 +173,11 @@ export class SummaryPage {
 
   /** The scale the bars are drawn against. */
   trendPeak = computed(() => {
+    if (this.convertTo()) {
+      return { amount: Math.max(0, ...this.trend().map(
+        (item) => Math.max(Math.abs(item.row.spend.amount), item.row.income.amount))),
+        currency: this.convertTo() };
+    }
     const ccy = this.shownCurrency();
     const rows = this.rows().filter((r) => r.currency === ccy);
     return {
@@ -199,9 +187,32 @@ export class SummaryPage {
     };
   });
 
+  /** Smooth, scale-honest chart geometry in a 100×100 view box. */
+  trendChart = computed(() => {
+    const items = this.trend();
+    const peak = Math.max(1, this.trendPeak().amount);
+    const point = (value: number, index: number) => {
+      const x = items.length === 1 ? 50 : (index / (items.length - 1)) * 100;
+      const y = 92 - (Math.abs(value) / peak) * 78;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    };
+    const out = items.map((item, i) => point(item.row.spend.amount, i)).join(' ');
+    const inn = items.map((item, i) => point(item.row.income.amount, i)).join(' ');
+    return {
+      out,
+      inn,
+      outArea: items.length ? `0,94 ${out} 100,94` : '',
+      labels: items.map((item, i) => ({
+        ...item,
+        show: items.length <= 8 || i === 0 || i === items.length - 1 || i % Math.ceil(items.length / 6) === 0,
+      })),
+    };
+  });
+
   constructor() {
-    this.route.queryParams.subscribe((params) => {
-      this.filters.hydrate(params);
+    this.api.statementFreshness().subscribe({ next: (r) => this.freshness.set(r) });
+    effect(() => {
+      this.convertTo();
       this.load();
     });
   }
@@ -210,26 +221,21 @@ export class SummaryPage {
     this.loading.set(true);
     const convert = this.convertTo() || undefined;
 
-    this.api.summary(this.groupBy(), this.filters.filter(), convert).subscribe({
+    this.api.summary(this.groupBy(), {}, convert).subscribe({
       next: (res) => {
         this.rows.set(res.rows);
         this.totals.set(res.totals);
         this.headline.set(res.normalised?.total ?? null);
-        this.conversion.set(res.conversion ?? null);
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
     });
 
-    this.api.positions(convert, this.asOf() || undefined).subscribe({
+    this.api.positions(convert).subscribe({
       next: (res) => {
-        this.positions.set(res.positions);
         this.netWorth.set(res.normalised?.net_worth ?? null);
+        this.positionTypes.set(res.normalised?.by_type ?? []);
       },
-    });
-
-    this.api.installments(true).subscribe({
-      next: (res) => this.outstanding.set(res.outstanding_by_currency),
     });
   }
 
@@ -239,26 +245,52 @@ export class SummaryPage {
 
   setGroupBy(value: string): void {
     this.groupBy.set(value);
+    sessionStorage.setItem('finto.summary.groupBy', value);
     this.load();
   }
 
-  setAsOf(value: string): void {
-    this.asOf.set(value);
-    this.load();
+  setConvertTo(currency: string): void {
+    this.preferences.setBaseCurrency(currency);
   }
 
-  setConvert(value: string): void {
-    this.convertTo.set(value);
-    this.load();
+  private savedGroupBy(): string {
+    const saved = sessionStorage.getItem('finto.summary.groupBy');
+    return saved && this.dimensions.includes(saved) ? saved : 'month';
+  }
+
+  go(path: string): void { this.router.navigate([path]); }
+
+  humanize(value: string): string {
+    return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   /** Drill into the blotter, filtered to the clicked dimension value. */
   drill(bucket: string): void {
-    this.filters.drillInto(this.groupBy(), bucket);
-  }
-
-  barWidth(row: SummaryRow): string {
-    return `${(Math.abs(row.spend.amount) / this.maxSpend()) * 100}%`;
+    const dimension = this.groupBy();
+    const queryParams: Record<string, string> = {};
+    if (dimension === 'day') queryParams['from'] = queryParams['to'] = bucket;
+    else if (dimension === 'month') {
+      queryParams['from'] = `${bucket}-01`;
+      const [year, month] = bucket.split('-').map(Number);
+      queryParams['to'] = `${bucket}-${new Date(year, month, 0).getDate()}`;
+    } else if (dimension === 'quarter') {
+      const [year, q] = bucket.split('-Q').map(Number);
+      const first = (q - 1) * 3 + 1;
+      const last = first + 2;
+      queryParams['from'] = `${year}-${String(first).padStart(2, '0')}-01`;
+      queryParams['to'] = `${year}-${String(last).padStart(2, '0')}-${new Date(year, last, 0).getDate()}`;
+    } else if (dimension === 'year') {
+      queryParams['from'] = `${bucket}-01-01`; queryParams['to'] = `${bucket}-12-31`;
+    } else {
+      const map: Record<string, string> = {
+        account: 'accounts', institution: 'institutions', category: 'categories',
+        card: 'cards', cardholder: 'cardholders', kind: 'kinds', currency: 'currency',
+      };
+      const key = map[dimension];
+      if (key) queryParams[key] = bucket;
+      else if (dimension === 'merchant' || dimension === 'subcategory') queryParams['q'] = bucket;
+    }
+    this.router.navigate(['/blotter'], { queryParams });
   }
 
   /** Tooltip for a trend column. Goes through MoneyPipe like every other figure. */

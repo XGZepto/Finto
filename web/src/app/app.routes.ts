@@ -1,6 +1,11 @@
 import { Routes } from '@angular/router';
 
 export const routes: Routes = [
+  {
+    path: 'login',
+    loadComponent: () => import('./features/auth/login').then((m) => m.LoginPage),
+    title: 'Sign in · Finto',
+  },
   { path: '', redirectTo: 'summary', pathMatch: 'full' },
   {
     path: 'summary',
@@ -16,6 +21,11 @@ export const routes: Routes = [
     path: 'timeline',
     loadComponent: () => import('./features/timeline/timeline').then((m) => m.TimelinePage),
     title: 'Timeline · Finto',
+  },
+  {
+    path: 'accounts/:id',
+    loadComponent: () => import('./features/accounts/accounts').then((m) => m.AccountsPage),
+    title: 'Account · Finto',
   },
   {
     path: 'accounts',
@@ -53,6 +63,11 @@ export const routes: Routes = [
     path: 'ask',
     loadComponent: () => import('./features/ask/ask').then((m) => m.AskPage),
     title: 'Ask · Finto',
+  },
+  {
+    path: 'profile',
+    loadComponent: () => import('./features/profile/profile').then((m) => m.ProfilePage),
+    title: 'Profile & settings · Finto',
   },
   { path: '**', redirectTo: 'summary' },
 ];

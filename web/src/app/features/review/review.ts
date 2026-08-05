@@ -5,17 +5,7 @@ import { Money } from '../../core/models';
 
 type Queue = 'duplicates' | 'transfers' | 'installments';
 
-/**
- * Review queues.
- *
- * Exact matches merge on their own; everything the matchers were unsure about
- * lands here, because a wrongly-merged transaction is far harder to notice six
- * months later than a wrongly-kept one. That asymmetry is the whole reason this
- * page exists, and it is why rejecting is the safe default.
- *
- * Queues get worked in batches, so it is keyboard-first: J/K to move, A to
- * accept, R to reject.
- */
+/** Review queues with J/K navigation and A/R decisions. */
 @Component({
   selector: 'app-review',
   imports: [MoneyPipe, ShortDatePipe],

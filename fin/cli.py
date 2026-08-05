@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import getpass
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -26,8 +28,6 @@ from .parsers import institutions as _reg  # noqa: F401
 from .parsers import pdf as _pdf_reg  # noqa: F401
 from .parsers.base import ParseContext, read_csv_rows, select_parser
 
-DEFAULT_DB = "finto.db"
-
 
 def fmt_money(m: dict, width: int = 0) -> str:
     """Render a {amount, currency} pair. Not every currency has two decimals."""
@@ -37,21 +37,57 @@ def fmt_money(m: dict, width: int = 0) -> str:
 
 
 def cmd_init(args):
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     dbm.init_db(conn)
-    print(f"initialised {args.db}")
+    print("initialised PostgreSQL schema")
+
+
+def cmd_users(args):
+    """Provision the owner outside HTTP; there is deliberately no register route."""
+    from .auth import bootstrap_owner, create_user, grant_account, public_user
+
+    conn = dbm.connect(args.database_url)
+    dbm.init_db(conn)
+    if args.action in {"bootstrap", "add"}:
+        if not args.username or not args.email:
+            raise SystemExit("--username and --email are required")
+        password = os.environ.get(args.password_env) or getpass.getpass("Password: ")
+        if not password:
+            raise SystemExit("password cannot be empty")
+        user = (bootstrap_owner(
+            conn, username=args.username, email=args.email, password=password,
+        ) if args.action == "bootstrap" else create_user(
+            conn, username=args.username, email=args.email, password=password,
+        ))
+        conn.commit()
+        print(json.dumps(public_user(user), indent=2))
+        return
+    if args.action == "grant":
+        if not args.user or not args.account or not args.role:
+            raise SystemExit("--user, --account, and --role are required")
+        grant_account(conn, account_id=args.account, user_id=args.user, role=args.role)
+        conn.commit()
+        print(f"{args.user} -> {args.account}: {args.role}")
+        return
+    rows = conn.execute(
+        "SELECT u.id,u.username,u.email,COUNT(acl.account_id) AS accounts "
+        "FROM app_user u LEFT JOIN account_acl acl ON acl.user_id=u.id "
+        "GROUP BY u.id ORDER BY u.username"
+    ).fetchall()
+    conn.commit()
+    print(json.dumps([dict(row) for row in rows], indent=2))
 
 
 def cmd_accounts(args):
     import yaml  # lazy: only needed for this command
 
     from .models import CategoryRule, Party
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     data = yaml.safe_load(Path(args.file).read_text())
     for i in data.get("institutions", []):
         dbm.upsert_institution(conn, Institution(**i))
     for a in data.get("accounts", []):
-        dbm.upsert_account(conn, Account(**a))
+        dbm.upsert_account(conn, Account(**a), user_id=args.owner)
     for c in data.get("cards", []):
         dbm.upsert_card(conn, Card(**c))
     for p in data.get("parties", []):
@@ -74,7 +110,7 @@ def cmd_investments(args):
         save_snapshot,
         snapshot_detail,
     )
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     if args.investments_cmd == "import":
         snap = parse_hsbc_mpf_position_xlsx(args.file)
         snap_id = save_snapshot(conn, snap)
@@ -123,13 +159,13 @@ def cmd_sniff(args):
         res = parser.parse(ctx)
         print(f"\nparsed {len(res.txns)} transactions")
         for t in res.txns[:5]:
-            print(f"  {t.txn_date}  {str(t.booked):>18}  {t.description_raw[:50]}")
+            print(f"  {t.txn_date}  {t.booked!s:>18}  {t.description_raw[:50]}")
         if res.warnings:
             print(f"warnings: {res.warnings[:5]}")
 
 
 def cmd_import(args):
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     target = Path(args.path)
     files = sorted(p for p in (target.rglob("*") if target.is_dir() else [target])
                    if p.is_file() and p.suffix.lower() in
@@ -146,22 +182,23 @@ def cmd_import(args):
 
 
 def cmd_reconcile(args):
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     print(json.dumps(reconcile(conn, use_llm=args.llm), indent=2, default=str))
 
 
 def cmd_config(args):
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     if args.action == "list":
         for r in conn.execute("SELECT key, value FROM setting ORDER BY key"):
             print(f"  {r['key']:<16} {r['value']}")
         return
     if args.value is None:
-        row = conn.execute("SELECT value FROM setting WHERE key=?", (args.key,)).fetchone()
+        row = conn.execute("SELECT value FROM setting WHERE key=%s", (args.key,)).fetchone()
         print(row["value"] if row else "(unset)")
         return
-    conn.execute("INSERT OR REPLACE INTO setting (key, value) VALUES (?,?)",
-                 (args.key, args.value))
+    conn.execute(
+        "INSERT INTO setting (key, value) VALUES (%s,%s) "
+        "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value", (args.key, args.value))
     conn.commit()
     print(f"{args.key} = {args.value}")
 
@@ -170,7 +207,7 @@ def cmd_categorize(args):
     """Categorise uncategorised transactions using the LLM layer."""
     from .llm.categorize import apply_to_ledger, promote_to_rules
     from .llm.provider import build_provider
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     provider = build_provider(conn)
     if provider.name == "null" and not args.dry_run:
         print("LLM disabled or unconfigured.")
@@ -183,9 +220,33 @@ def cmd_categorize(args):
         print(f"promoted {n} confident categorisations to deterministic rules")
 
 
+def cmd_taxonomy(args):
+    from .taxonomy import add_category, audit_backfill, register_tag
+
+    conn = dbm.connect(args.database_url)
+    dbm.init_db(conn)
+    if args.taxonomy_cmd == "audit":
+        print(json.dumps(audit_backfill(
+            conn, apply=args.apply, user_id=args.user,
+        ), indent=2, default=str))
+        return
+    if args.taxonomy_cmd == "add-category":
+        add_category(
+            conn, args.category, args.subcategory,
+            category_label=args.category_label,
+            subcategory_label=args.subcategory_label,
+        )
+        conn.commit()
+        print(f"{args.category}/{args.subcategory}")
+        return
+    tag = register_tag(conn, args.user, args.name, source="manual")
+    conn.commit()
+    print(tag["display_name"])
+
+
 def cmd_llm(args):
     from .llm import cache as llm_cache
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     if args.action == "stats":
         print(json.dumps(llm_cache.stats(conn), indent=2))
     elif args.action == "clear":
@@ -195,7 +256,7 @@ def cmd_llm(args):
     elif args.action == "audit":
         for r in conn.execute(
                 "SELECT task, input_summary, output, confidence, model, created_at "
-                "FROM llm_decision ORDER BY created_at DESC LIMIT ?", (args.limit,)):
+                "FROM llm_decision ORDER BY created_at DESC LIMIT %s", (args.limit,)):
             print(f"[{r['task']}] conf={r['confidence']} {r['model']}")
             print(f"  in:  {r['input_summary'][:100]}")
             print(f"  out: {r['output'][:140]}")
@@ -203,7 +264,7 @@ def cmd_llm(args):
 
 def cmd_check(args):
     from .integrity import check_all, find_violations, resolve_duplicate_chains
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     fixed = resolve_duplicate_chains(conn)
     if fixed:
         print(f"collapsed {fixed} duplicate chains")
@@ -228,7 +289,7 @@ def cmd_check(args):
 
 
 def cmd_installments(args):
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     plans = dbm.load_installment_plans(conn, active_only=args.active)
     if not plans:
         print("no instalment plans detected")
@@ -261,7 +322,7 @@ def cmd_positions(args):
     can be labelled as converted and dated.
     """
     from .reporting import positions
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     rows = positions(conn)
     if not rows:
         print("no transactions")
@@ -289,7 +350,7 @@ def cmd_reattribute(args):
     retroactively fix rows imported before it existed. This closes that gap.
     """
     from .ingest import reattribute_cards
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     n = reattribute_cards(conn)
     conn.commit()
     print(f"re-attributed {n} transactions")
@@ -297,7 +358,7 @@ def cmd_reattribute(args):
 
 def cmd_fx(args):
     from . import fx as fxm
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     if args.action == "harvest":
         n = fxm.harvest_rates(conn)
         print(f"derived {n} rate observations from transactions carrying both "
@@ -317,7 +378,7 @@ def cmd_fx(args):
 
 
 def cmd_review(args):
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     if args.queue == "duplicates":
         sql = """SELECT dc.*, a.description_raw AS keep_desc, a.txn_date AS keep_date,
                         a.amount_booked AS keep_amt, a.currency_booked AS keep_ccy,
@@ -350,16 +411,16 @@ def cmd_review(args):
 
 
 def cmd_resolve(args):
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     table = "duplicate_candidate" if args.queue == "duplicates" else "transfer_candidate"
     res = "accepted" if args.action == "accept" else "rejected"
-    row = conn.execute(f"SELECT * FROM {table} WHERE id=?", (args.id,)).fetchone()
+    row = conn.execute(f"SELECT * FROM {table} WHERE id=%s", (args.id,)).fetchone()
     if not row:
         sys.exit(f"no candidate {args.id}")
-    conn.execute(f"UPDATE {table} SET resolution=? WHERE id=?", (res, args.id))
+    conn.execute(f"UPDATE {table} SET resolution=%s WHERE id=%s", (res, args.id))
     if res == "accepted":
         if args.queue == "duplicates":
-            conn.execute("UPDATE txn SET duplicate_of_id=? WHERE id=?",
+            conn.execute("UPDATE txn SET duplicate_of_id=%s WHERE id=%s",
                          (row["keep_txn_id"], row["dupe_txn_id"]))
         else:
             from datetime import datetime as _dt
@@ -371,30 +432,33 @@ def cmd_resolve(args):
             gid = transfer_group_id([row["out_txn_id"], row["in_txn_id"]])
             conn.execute(
                 "INSERT INTO transfer_group (id, kind, match_method, confidence, "
-                "is_confirmed, created_at) VALUES (?,?,?,?,?,?) "
+                "is_confirmed, created_at) VALUES (%s,%s,%s,%s,%s,%s) "
                 "ON CONFLICT(id) DO UPDATE SET match_method='manual', "
                 "confidence=1.0, is_confirmed=1",
                 (gid, "internal_transfer", "manual", 1.0, 1, _dt.now().isoformat()))
             for txn_id, role in ((row["out_txn_id"], "out"), (row["in_txn_id"], "in")):
                 conn.execute(
-                    "INSERT OR REPLACE INTO transfer_leg (transfer_group_id, "
-                    "txn_id, role) VALUES (?,?,?)", (gid, txn_id, role))
-                conn.execute("UPDATE txn SET transfer_group_id=?, kind='transfer' "
-                             "WHERE id=?", (gid, txn_id))
+                    "INSERT INTO transfer_leg (transfer_group_id, txn_id, role) "
+                    "VALUES (%s,%s,%s) ON CONFLICT (transfer_group_id, txn_id) "
+                    "DO UPDATE SET role=EXCLUDED.role", (gid, txn_id, role))
+                conn.execute("UPDATE txn SET transfer_group_id=%s, kind='transfer' "
+                             "WHERE id=%s", (gid, txn_id))
     conn.commit()
     print(f"{args.id} -> {res}")
 
 
 def cmd_stats(args):
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     def q(s):
-        return conn.execute(s).fetchone()[0]
+        return conn.execute(s).fetchone()["count_value"]
 
-    live = q("SELECT COUNT(*) FROM v_ledger")
-    dupes = q("SELECT COUNT(*) FROM txn WHERE duplicate_of_id IS NOT NULL")
-    groups = q("SELECT COUNT(*) FROM transfer_group")
-    open_dupe = q("SELECT COUNT(*) FROM duplicate_candidate WHERE resolution='open'")
-    open_xfer = q("SELECT COUNT(*) FROM transfer_candidate WHERE resolution='open'")
+    live = q("SELECT COUNT(*) AS count_value FROM v_ledger")
+    dupes = q("SELECT COUNT(*) AS count_value FROM txn WHERE duplicate_of_id IS NOT NULL")
+    groups = q("SELECT COUNT(*) AS count_value FROM transfer_group")
+    open_dupe = q("SELECT COUNT(*) AS count_value FROM duplicate_candidate "
+                  "WHERE resolution='open'")
+    open_xfer = q("SELECT COUNT(*) AS count_value FROM transfer_candidate "
+                  "WHERE resolution='open'")
     print(f"transactions (live):   {live}")
     print(f"suppressed duplicates: {dupes}")
     print(f"transfer groups:       {groups}")
@@ -436,7 +500,7 @@ def cmd_stats(args):
 
 
 def cmd_export(args):
-    conn = dbm.connect(args.db)
+    conn = dbm.connect(args.database_url)
     rows = list(conn.execute(
         "SELECT txn_date, account_name, institution_id, description_raw, merchant, "
         "amount_booked, currency_booked, amount_native, currency_native, kind, "
@@ -451,14 +515,25 @@ def cmd_export(args):
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="finto")
-    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--database-url")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("init").set_defaults(func=cmd_init)
 
+    users = sub.add_parser("users")
+    users.add_argument("action", choices=["bootstrap", "add", "grant", "list"])
+    users.add_argument("--username")
+    users.add_argument("--email")
+    users.add_argument("--password-env", default="FINTO_AUTH_PASSWORD")
+    users.add_argument("--user")
+    users.add_argument("--account")
+    users.add_argument("--role", choices=["viewer", "editor", "owner"])
+    users.set_defaults(func=cmd_users)
+
     a = sub.add_parser("accounts")
     a.add_argument("action", choices=["load"])
     a.add_argument("file")
+    a.add_argument("--owner", default="owner", help="user id owning newly created accounts")
     a.set_defaults(func=cmd_accounts)
 
     s = sub.add_parser("sniff")
@@ -492,6 +567,21 @@ def main(argv=None):
     cg.add_argument("--promote", action="store_true",
                     help="convert confident results into deterministic rules")
     cg.set_defaults(func=cmd_categorize)
+
+    tx = sub.add_parser("taxonomy")
+    tx_sub = tx.add_subparsers(dest="taxonomy_cmd", required=True)
+    tx_audit = tx_sub.add_parser("audit")
+    tx_audit.add_argument("--apply", action="store_true")
+    tx_audit.add_argument("--user")
+    tx_category = tx_sub.add_parser("add-category")
+    tx_category.add_argument("category")
+    tx_category.add_argument("subcategory")
+    tx_category.add_argument("--category-label")
+    tx_category.add_argument("--subcategory-label")
+    tx_tag = tx_sub.add_parser("add-tag")
+    tx_tag.add_argument("name")
+    tx_tag.add_argument("--user", default="owner")
+    tx.set_defaults(func=cmd_taxonomy)
 
     lm = sub.add_parser("llm")
     lm.add_argument("action", choices=["stats", "clear", "audit"])

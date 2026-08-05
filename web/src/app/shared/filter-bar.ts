@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Api } from '../core/api.service';
 import { FilterState } from '../core/filter-state';
 import { Facets } from '../core/models';
+import { FintoSelect } from './finto-select';
 
 /**
  * Shared filter controls.
@@ -14,11 +15,11 @@ import { Facets } from '../core/models';
  */
 @Component({
   selector: 'app-filter-bar',
-  imports: [FormsModule],
+  imports: [FormsModule, FintoSelect],
   template: `
     <div class="filter-bar card">
-      <div class="controls">
-        <div class="field">
+      <div class="filter-primary">
+        <div class="field search">
           <label for="q">Search</label>
           <input
             id="q"
@@ -28,6 +29,15 @@ import { Facets } from '../core/models';
             (ngModelChange)="onSearch($event)"
           />
         </div>
+
+        <button type="button" class="filter-toggle ghost" [class.on]="expanded()"
+                (click)="expanded.set(!expanded())" [attr.aria-expanded]="expanded()">
+          Filters @if (filters.chips().length) { <span>{{ filters.chips().length }}</span> }
+        </button>
+      </div>
+
+      <div class="advanced" [class.open]="expanded()">
+        <div class="controls">
 
         <div class="field narrow">
           <label for="from">From</label>
@@ -43,39 +53,29 @@ import { Facets } from '../core/models';
 
         <div class="field">
           <label for="account">Account</label>
-          <select id="account" [ngModel]="single('accounts')"
-                  (ngModelChange)="patchArray('accounts', $event)">
-            <option value="">All accounts</option>
-            @for (a of facets()?.accounts ?? []; track a.id) {
-              <option [value]="a.id">{{ a.display_name }}</option>
-            }
-          </select>
+          <finto-select id="account" ariaLabel="Account" placeholder="All accounts"
+                        [options]="accountOptions()" valueKey="id" labelKey="display_name"
+                        [ngModel]="single('accounts')" (ngModelChange)="patchArray('accounts', $event)" />
         </div>
 
         <div class="field">
           <label for="category">Category</label>
-          <select id="category" [ngModel]="single('categories')"
-                  (ngModelChange)="patchArray('categories', $event)">
-            <option value="">All categories</option>
-            @for (c of facets()?.categories ?? []; track c) {
-              <option [value]="c">{{ c }}</option>
-            }
-          </select>
+          <finto-select id="category" ariaLabel="Category" placeholder="All categories"
+                        [options]="categoryOptions()" valueKey="value" labelKey="label"
+                        [ngModel]="single('categories')"
+                        (ngModelChange)="patchArray('categories', $event)" />
         </div>
 
         <div class="field narrow">
           <label for="ccy">Currency</label>
-          <select id="ccy" [ngModel]="filters.filter().currency ?? ''"
-                  (ngModelChange)="patch({ currency: $event || undefined })">
-            <option value="">Any</option>
-            @for (c of facets()?.currencies ?? []; track c) {
-              <option [value]="c">{{ c }}</option>
-            }
-          </select>
+          <finto-select id="ccy" ariaLabel="Currency" placeholder="Any"
+                        [options]="currencyOptions()" valueKey="value" labelKey="label"
+                        [ngModel]="filters.filter().currency ?? ''"
+                        (ngModelChange)="patch({ currency: $event || undefined })" />
         </div>
-      </div>
+        </div>
 
-      <div class="toggles">
+        <div class="toggles">
         <label class="check">
           <input type="checkbox" [ngModel]="filters.filter().includeTransfers ?? false"
                  (ngModelChange)="patch({ includeTransfers: $event || undefined })" />
@@ -91,6 +91,7 @@ import { Facets } from '../core/models';
                  (ngModelChange)="patch({ installmentsOnly: $event || undefined })" />
           <span>Instalments only</span>
         </label>
+        </div>
       </div>
 
       @if (filters.isActive()) {
@@ -108,9 +109,18 @@ import { Facets } from '../core/models';
   `,
   styles: [`
     .filter-bar { margin-bottom: 14px; padding: 12px 14px; }
+    .filter-primary { display: flex; align-items: end; gap: 10px; }
+    .filter-primary .search { flex: 1; }
+    .filter-primary input { width: 100%; }
+    .filter-toggle { display: none; min-width: 92px; height: 31px; }
+    .filter-toggle span {
+      display: inline-grid; place-items: center; min-width: 16px; height: 16px;
+      margin-left: 4px; background: var(--fg); color: var(--bg); font-size: 9px;
+    }
+    .advanced { margin-top: 10px; }
     .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; }
     .field.narrow { max-width: 150px; }
-    .field input, .field select { width: 100%; }
+    .field input, .field finto-select { width: 100%; }
     .toggles {
       display: flex; gap: 16px; flex-wrap: wrap;
       margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
@@ -126,12 +136,23 @@ import { Facets } from '../core/models';
       display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
       margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
     }
+    @media (max-width: 700px) {
+      .filter-bar { padding: 10px; }
+      .filter-toggle { display: block; }
+      .advanced { display: none; }
+      .advanced.open { display: block; }
+      .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .field.narrow { max-width: none; }
+      .toggles { display: grid; grid-template-columns: 1fr; gap: 9px; }
+      .chips { margin-top: 8px; padding-top: 8px; }
+    }
   `],
 })
 export class FilterBar {
   private api = inject(Api);
   filters = inject(FilterState);
   facets = signal<Facets | null>(null);
+  expanded = signal(false);
 
   @Output() changed = new EventEmitter<void>();
 
@@ -139,6 +160,18 @@ export class FilterBar {
 
   constructor() {
     this.api.facets().subscribe({ next: (f) => this.facets.set(f) });
+  }
+
+  accountOptions() {
+    return [{ id: '', display_name: 'All accounts' }, ...(this.facets()?.accounts ?? [])];
+  }
+  categoryOptions() {
+    return [{ value: '', label: 'All categories' },
+      ...(this.facets()?.categories ?? []).map((value) => ({ value, label: value }))];
+  }
+  currencyOptions() {
+    return [{ value: '', label: 'Any' },
+      ...(this.facets()?.currencies ?? []).map((value) => ({ value, label: value }))];
   }
 
   single(key: 'accounts' | 'categories'): string {

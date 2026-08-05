@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from fin import db as dbm
 from fin.dedup import run_dedup, supersede_with_statements
-from fin.models import Account, Institution, Money, Txn
+from fin.models import Account, FxRate, Institution, Money, Txn
 
 
 def _txn(**kw) -> Txn:
@@ -36,7 +36,7 @@ def _txn(**kw) -> Txn:
 
 def test_statement_supersedes_an_export_that_reworded_the_same_payment():
     """The real HSBC case: same payment, payee and reference swapped round."""
-    statement = _txn(description_raw="HC12552952988759 29MAY ZHOU YIXIANG",
+    statement = _txn(description_raw="HC12552952988759 29MAY EXAMPLE ALEX",
                      statement_file_id="stmt")
     export = _txn(description_raw="ZHOU Y****** HC12552952988759",
                   statement_file_id="export")
@@ -92,14 +92,14 @@ def test_run_dedup_leaves_statements_out_of_fuzzy_matching():
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def client(database_url, monkeypatch):
     """An API over a ledger carrying an FX charge and its structured detail."""
-    db = tmp_path / "authority.db"
-    monkeypatch.setenv("FINTO_DB", str(db))
-    import fin.api.deps as deps
-    monkeypatch.setattr(deps, "DEFAULT_DB", str(db))
-
-    conn = dbm.connect(db)
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("FINTO_AUTH_USERNAME", "test-owner")
+    monkeypatch.setenv("FINTO_AUTH_EMAIL", "owner@example.test")
+    monkeypatch.setenv("FINTO_AUTH_PASSWORD", "correct horse battery staple")
+    monkeypatch.setenv("FINTO_SESSION_SECRET", "test-session-secret-not-for-production")
+    conn = dbm.connect(database_url)
     dbm.init_db(conn)
     dbm.upsert_institution(conn, Institution(
         id="amex_hk", display_name="AMEX HK", country="HK"))
@@ -120,7 +120,7 @@ def client(tmp_path, monkeypatch):
         description_raw="UBER TRIP HTTPS://HELP.UB",
         external_ref="AT251290004000010012713",
         statement_file_id="stmt",
-        details={"travel.passenger_name": "YIXIANG ZHOU",
+        details={"travel.passenger_name": "ALEX EXAMPLE",
                  "payment.wallet": "GOOGLE PAY"},
     )
     dbm.insert_txns(conn, [charge])
@@ -128,7 +128,12 @@ def client(tmp_path, monkeypatch):
     conn.close()
 
     from fin.api.app import app
-    with TestClient(app) as c:
+    with TestClient(app, base_url="https://testserver") as c:
+        login = c.post("/api/auth/login", json={
+            "identifier": "test-owner",
+            "password": "correct horse battery staple",
+        })
+        assert login.status_code == 200
         c.txn_id = charge.id
         yield c
 
@@ -143,7 +148,7 @@ def test_api_returns_the_foreign_charge_and_the_issuers_rate(client):
 
 def test_api_exposes_structured_detail_and_the_issuer_reference(client):
     item = client.get(f"/api/transactions/{client.txn_id}").json()
-    assert item["details"]["travel.passenger_name"] == "YIXIANG ZHOU"
+    assert item["details"]["travel.passenger_name"] == "ALEX EXAMPLE"
     assert item["details"]["payment.wallet"] == "GOOGLE PAY"
     assert item["external_ref"] == "AT251290004000010012713"
 
@@ -156,7 +161,7 @@ def test_detail_keys_are_listed_with_counts(client):
 def test_transactions_filter_on_an_exact_detail_value(client):
     """The question txn_detail exists to answer: every trip for one passenger."""
     hit = client.get(
-        "/api/transactions?detail=travel.passenger_name=YIXIANG ZHOU").json()
+        "/api/transactions?detail=travel.passenger_name=ALEX EXAMPLE").json()
     assert hit["total"] == 1
     miss = client.get(
         "/api/transactions?detail=travel.passenger_name=SOMEONE ELSE").json()
@@ -182,11 +187,11 @@ def test_investments_endpoint_is_empty_but_present(client):
 # One product, several currencies
 # ---------------------------------------------------------------------------
 
-def test_a_charge_lands_on_the_account_that_settles_its_currency(tmp_path):
+def test_a_charge_lands_on_the_account_that_settles_its_currency(database_url):
     """HSBC bills the Pulse card's CNY and HKD spending in one document."""
     from fin.ingest import _settle_in_currency
 
-    conn = dbm.connect(tmp_path / "route.db")
+    conn = dbm.connect(database_url)
     dbm.init_db(conn)
     dbm.upsert_institution(conn, Institution(
         id="hsbc_hk", display_name="HSBC HK", country="HK"))
@@ -257,12 +262,12 @@ def test_income_is_never_detected_on_a_credit_card():
     assert detect_regular_income(rebates, income_accounts=set()) == []
 
 
-def test_issuer_stated_category_drives_a_rule(tmp_path):
+def test_issuer_stated_category_drives_a_rule(database_url):
     """AMEX states the merchant's category; mapping its vocabulary is a rename."""
     from fin.ingest import apply_category_rules
     from fin.models import CategoryRule
 
-    conn = dbm.connect(tmp_path / "rules.db")
+    conn = dbm.connect(database_url)
     dbm.init_db(conn)
     dbm.upsert_category_rule(conn, CategoryRule(
         id="cat_transport", match_field="merchant_category", match_type="regex",
@@ -339,8 +344,8 @@ def test_an_existing_category_is_never_overwritten_by_the_gateway_label():
 # Querying
 # ---------------------------------------------------------------------------
 
-def _seeded(tmp_path):
-    conn = dbm.connect(tmp_path / "q.db")
+def _seeded(database_url):
+    conn = dbm.connect(database_url)
     dbm.init_db(conn)
     dbm.upsert_institution(conn, Institution(
         id="amex_hk", display_name="AMEX HK", country="HK"))
@@ -354,10 +359,10 @@ def _seeded(tmp_path):
     return conn
 
 
-def test_search_narrows_on_every_term(tmp_path):
+def test_search_narrows_on_every_term(database_url):
     from fin.reporting import transactions
 
-    conn = _seeded(tmp_path)
+    conn = _seeded(database_url)
     dbm.insert_txns(conn, [
         _txn(account_id="card", description_raw="UBER TRIP SHANGHAI"),
         _txn(account_id="card", description_raw="UBER TRIP LONDON"),
@@ -370,11 +375,11 @@ def test_search_narrows_on_every_term(tmp_path):
     conn.close()
 
 
-def test_a_filtered_page_reports_what_the_whole_match_comes_to(tmp_path):
+def test_a_filtered_page_reports_what_the_whole_match_comes_to(database_url):
     """The page shows 100 rows; the question is what all of them add up to."""
     from fin.reporting import transactions
 
-    conn = _seeded(tmp_path)
+    conn = _seeded(database_url)
     dbm.insert_txns(conn, [
         _txn(account_id="card", booked=Money(amount=-1000, currency="HKD"),
              description_raw="UBER ONE"),
@@ -393,12 +398,12 @@ def test_a_filtered_page_reports_what_the_whole_match_comes_to(tmp_path):
     conn.close()
 
 
-def test_flows_separate_your_own_accounts_from_the_boundary(tmp_path):
+def test_flows_separate_your_own_accounts_from_the_boundary(database_url):
     """Moving your own money is not income, however it looks in one account."""
     from fin.models import TransferGroup, TransferKind, TransferLeg
     from fin.reporting import flows
 
-    conn = _seeded(tmp_path)
+    conn = _seeded(database_url)
     dbm.upsert_account(conn, Account(
         id="bank", institution_id="amex_hk", display_name="Bank",
         account_type="savings", primary_currency="HKD"))
@@ -414,6 +419,8 @@ def test_flows_separate_your_own_accounts_from_the_boundary(tmp_path):
     dbm.insert_transfer_groups(conn, [group])
     out.transfer_group_id = inc.transfer_group_id = group.id
     dbm.update_txn_links(conn, [out, inc, salary])
+    dbm.upsert_fx_rate(conn, FxRate(
+        rate_date=date(2026, 3, 1), base="USD", quote="HKD", rate=Decimal("7.8")))
     conn.commit()
 
     f = flows(conn)
@@ -425,15 +432,48 @@ def test_flows_separate_your_own_accounts_from_the_boundary(tmp_path):
     hkd = next(e for e in f["external"] if e["currency"] == "HKD")
     assert hkd["in"]["amount"] == 9000
     assert hkd["out"]["amount"] == 0
+    assert f["normalised"]["internal"] == [{
+        "from_account": "bank", "to_account": "card", "moves": 1,
+        "amount": {"amount": 641, "currency": "USD"},
+    }]
+
+    from fin.reporting import totals
+    bank = totals(conn, filters={"accounts": ["bank"]})[0]
+    assert bank["income"]["amount"] == 9000
+    assert bank["spend"]["amount"] == 5000
+    whole_scope = totals(conn, filters={"accounts": ["bank", "card"]})[0]
+    assert whole_scope["income"]["amount"] == 9000
+    assert whole_scope["spend"]["amount"] == 0
     conn.close()
 
 
-def test_composition_normalises_and_folds_the_tail(tmp_path):
+def test_refunds_reduce_spend_instead_of_becoming_income(database_url):
+    from fin.models import TxnKind
+    from fin.reporting import totals
+
+    conn = _seeded(database_url)
+    purchase = _txn(account_id="card", booked=Money(amount=-5000, currency="HKD"),
+                    description_raw="STORE")
+    dbm.insert_txns(conn, [purchase])
+    refund = _txn(account_id="card", booked=Money(amount=5000, currency="HKD"),
+                  description_raw="STORE REFUND", kind=TxnKind.REFUND,
+                  refund_of_id=purchase.id)
+    dbm.insert_txns(conn, [refund])
+    conn.commit()
+
+    hkd = totals(conn)[0]
+    assert hkd["net"]["amount"] == 0
+    assert hkd["spend"]["amount"] == 0
+    assert hkd["income"]["amount"] == 0
+    conn.close()
+
+
+def test_composition_normalises_and_folds_the_tail(database_url):
     from fin import db as dbm
     from fin.models import FxRate
     from fin.reporting import composition
 
-    conn = _seeded(tmp_path)
+    conn = _seeded(database_url)
     dbm.upsert_fx_rate(conn, FxRate(rate_date=date(2026, 3, 1), base="USD",
                                     quote="HKD", rate=Decimal("7.8")))
     rows = [
@@ -457,11 +497,11 @@ def test_composition_normalises_and_folds_the_tail(tmp_path):
     conn.close()
 
 
-def test_coverage_marks_pre_life_apart_from_a_gap(tmp_path):
+def test_coverage_marks_pre_life_apart_from_a_gap(database_url):
     from fin import db as dbm
     from fin.reporting import coverage
 
-    conn = _seeded(tmp_path)
+    conn = _seeded(database_url)
     # A card that only ever transacted in one month.
     dbm.insert_txns(conn, [
         _txn(account_id="card", txn_date=date(2026, 3, 10),
@@ -477,11 +517,11 @@ def test_coverage_marks_pre_life_apart_from_a_gap(tmp_path):
     conn.close()
 
 
-def test_tags_filter_and_aggregate(tmp_path):
+def test_tags_filter_and_aggregate(database_url):
     from fin import db as dbm
     from fin.reporting import summary, transactions
 
-    conn = _seeded(tmp_path)
+    conn = _seeded(database_url)
     a = _txn(account_id="card", description_raw="MARRIOTT HK",
              booked=Money(amount=-30000, currency="HKD"), category="travel")
     b = _txn(account_id="card", description_raw="TAXI",

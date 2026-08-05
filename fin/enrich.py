@@ -84,7 +84,7 @@ _LABELS: dict[str, str] = {
 
 def _label_pattern(labels, separator: str) -> re.Pattern:
     names = "|".join(re.escape(k) for k in sorted(labels, key=len, reverse=True))
-    return re.compile(rf"^\s*({names})\b(?:{separator})(.+?)\s*$", re.I)
+    return re.compile(rf"^\s*({names})\b(?:{separator})(.+?)\s*$", re.IGNORECASE)
 
 
 # How much punctuation a label needs before its value is believed.
@@ -120,7 +120,7 @@ _SPLIT_LABELS = [
 _SPLIT_RE = re.compile(
     r"(?=\b(?:" + "|".join(re.escape(k) for k in
                            sorted(_SPLIT_LABELS, key=len, reverse=True)) + r")\b)",
-    re.I)
+    re.IGNORECASE)
 
 _LABEL_RES = (
     _label_pattern(_SPLIT_LABELS, _SEP + r"|\s+"),
@@ -147,7 +147,7 @@ _VALUE_SHAPES: dict[str, re.Pattern] = {
 }
 
 # Lines that are pure card-number masking carry no information.
-_MASK_ONLY = re.compile(r"^[X*\s\-]{6,}\d{0,4}$", re.I)
+_MASK_ONLY = re.compile(r"^[X*\s\-]{6,}\d{0,4}$", re.IGNORECASE)
 
 
 def extract_details(
@@ -257,20 +257,20 @@ def is_travel(details: dict[str, str]) -> bool:
 
 #: Longest legal name first, so "AlipayHK" is not read as "Alipay".
 _GATEWAYS: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"^(?:SALES:\s*)?ALIPAYHK\b", re.I), "AlipayHK"),
-    (re.compile(r"^(?:SALES:\s*)?ALIPAY(?:\s+NETWORK\s+TECH)?\b", re.I), "Alipay"),
-    (re.compile(r"^(?:SALES:\s*)?TENPAY(?:\s+TECHNOLOGY(?:\s+COMPANY)?)?\b", re.I),
+    (re.compile(r"^(?:SALES:\s*)?ALIPAYHK\b", re.IGNORECASE), "AlipayHK"),
+    (re.compile(r"^(?:SALES:\s*)?ALIPAY(?:\s+NETWORK\s+TECH)?\b", re.IGNORECASE), "Alipay"),
+    (re.compile(r"^(?:SALES:\s*)?TENPAY(?:\s+TECHNOLOGY(?:\s+COMPANY)?)?\b", re.IGNORECASE),
      "Tenpay"),
-    (re.compile(r"^(?:SALES:\s*)?TENCENT\b", re.I), "Tenpay"),
+    (re.compile(r"^(?:SALES:\s*)?TENCENT\b", re.IGNORECASE), "Tenpay"),
     (re.compile(r"^(?:SALES:\s*)?WECHAT\s*PAY"
-                r"(?:\s+(?:HONG\s*KONG|HK))?(?:\s+(?:LIMITED|LIMI))?\b", re.I),
+                r"(?:\s+(?:HONG\s*KONG|HK))?(?:\s+(?:LIMITED|LIMI))?\b", re.IGNORECASE),
      "WeChat Pay"),
-    (re.compile(r"^(?:SALES:\s*)?UNIONPAY(?:\s+MERCHANT)?\b", re.I), "UnionPay"),
-    (re.compile(r"^(?:SALES:\s*)?TAOBAO(?:\s+MERCHANT)?\b", re.I), "Taobao"),
-    (re.compile(r"^(?:SALES:\s*)?E-?WALLET\b", re.I), "E-wallet"),
-    (re.compile(r"^(?:SALES:\s*)?APLPAY\b", re.I), "Apple Pay"),
-    (re.compile(r"^(?:SALES:\s*)?GGLPAY\b", re.I), "Google Pay"),
-    (re.compile(r"^(?:SALES:\s*)?KPAY\b", re.I), "KPay"),
+    (re.compile(r"^(?:SALES:\s*)?UNIONPAY(?:\s+MERCHANT)?\b", re.IGNORECASE), "UnionPay"),
+    (re.compile(r"^(?:SALES:\s*)?TAOBAO(?:\s+MERCHANT)?\b", re.IGNORECASE), "Taobao"),
+    (re.compile(r"^(?:SALES:\s*)?E-?WALLET\b", re.IGNORECASE), "E-wallet"),
+    (re.compile(r"^(?:SALES:\s*)?APLPAY\b", re.IGNORECASE), "Apple Pay"),
+    (re.compile(r"^(?:SALES:\s*)?GGLPAY\b", re.IGNORECASE), "Google Pay"),
+    (re.compile(r"^(?:SALES:\s*)?KPAY\b", re.IGNORECASE), "KPay"),
 ]
 
 #: Place, legal form, or the gateway naming itself. NUCC is China's clearing
@@ -278,7 +278,7 @@ _GATEWAYS: list[tuple[re.Pattern, str]] = [
 _NOT_A_MERCHANT = re.compile(
     r"^(?:\*+|CHN|CN|HK|HKG|HONGKONG|HONG|KONG|SHANGHAI|SHENZHEN|BEIJING|CHINA|"
     r"MACAU|MO|TW|SG|LIMITED|LIMI|LTD|CO|INC|NUCC|ALIPAY|WECHAT|PAY|MERCHANT)$",
-    re.I)
+    re.IGNORECASE)
 
 
 def payment_gateway(description_raw: str) -> tuple[str, str] | None:

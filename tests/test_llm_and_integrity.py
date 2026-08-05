@@ -26,8 +26,8 @@ from fin.models import Account, AccountType, Institution, Money, Txn
 
 
 @pytest.fixture
-def conn(tmp_path):
-    c = dbm.connect(tmp_path / "t.db")
+def conn(database_url):
+    c = dbm.connect(database_url)
     dbm.init_db(c)
     dbm.upsert_institution(c, Institution(id="hsbc_hk", display_name="HSBC", country="HK"))
     dbm.upsert_account(c, Account(id="acct1", institution_id="hsbc_hk",
@@ -35,7 +35,8 @@ def conn(tmp_path):
                                   account_type=AccountType.CHECKING,
                                   primary_currency="HKD"))
     c.commit()
-    return c
+    yield c
+    c.close()
 
 
 def _txn(**kw) -> Txn:
@@ -48,10 +49,10 @@ def _txn(**kw) -> Txn:
 
 def _seed_file(conn):
     conn.execute(
-        "INSERT OR IGNORE INTO statement_file (id, source_path, file_sha256, "
+        "INSERT INTO statement_file (id, source_path, file_sha256, "
         "institution_id, account_id, file_format, parser_id, parser_version, "
         "imported_at, row_count) VALUES ('sf1','x','x','hsbc_hk','acct1','csv',"
-        "'test','1',datetime('now'),0)")
+        "'test','1',CURRENT_TIMESTAMP::text,0) ON CONFLICT (id) DO NOTHING")
     conn.commit()
 
 
@@ -206,8 +207,8 @@ def test_adjudication_only_adjusts_score_never_merges(conn):
     dbm.insert_txns(conn, [a, b])
     conn.execute(
         "INSERT INTO duplicate_candidate (id, keep_txn_id, dupe_txn_id, score, "
-        "reasons, resolution, created_at) VALUES ('dc1',?,?,0.80,'[]','open',"
-        "datetime('now'))", (a.id, b.id))
+        "reasons, resolution, created_at) VALUES ('dc1',%s,%s,0.80,'[]','open',"
+        "CURRENT_TIMESTAMP::text)", (a.id, b.id))
     conn.commit()
 
     provider = EchoProvider({"duplicate": [
@@ -230,8 +231,8 @@ def test_adjudication_skips_pairs_with_different_amounts(conn):
     dbm.insert_txns(conn, [a, b])
     conn.execute(
         "INSERT INTO duplicate_candidate (id, keep_txn_id, dupe_txn_id, score, "
-        "reasons, resolution, created_at) VALUES ('dc1',?,?,0.80,'[]','open',"
-        "datetime('now'))", (a.id, b.id))
+        "reasons, resolution, created_at) VALUES ('dc1',%s,%s,0.80,'[]','open',"
+        "CURRENT_TIMESTAMP::text)", (a.id, b.id))
     conn.commit()
     provider = EchoProvider({"duplicate": [
         {"i": 0, "verdict": "duplicate", "confidence": 1.0, "reason": "looks same"},
@@ -249,8 +250,8 @@ def test_adjudication_respects_the_confidence_band(conn):
     # 0.99 is above the band ceiling — deterministic layer already decided.
     conn.execute(
         "INSERT INTO duplicate_candidate (id, keep_txn_id, dupe_txn_id, score, "
-        "reasons, resolution, created_at) VALUES ('dc1',?,?,0.99,'[]','open',"
-        "datetime('now'))", (a.id, b.id))
+        "reasons, resolution, created_at) VALUES ('dc1',%s,%s,0.99,'[]','open',"
+        "CURRENT_TIMESTAMP::text)", (a.id, b.id))
     conn.commit()
     provider = EchoProvider({})
     res = adjudicate_duplicates(conn, provider)
@@ -264,8 +265,8 @@ def test_unsure_verdict_leaves_score_untouched(conn):
     dbm.insert_txns(conn, [a, b])
     conn.execute(
         "INSERT INTO duplicate_candidate (id, keep_txn_id, dupe_txn_id, score, "
-        "reasons, resolution, created_at) VALUES ('dc1',?,?,0.80,'[]','open',"
-        "datetime('now'))", (a.id, b.id))
+        "reasons, resolution, created_at) VALUES ('dc1',%s,%s,0.80,'[]','open',"
+        "CURRENT_TIMESTAMP::text)", (a.id, b.id))
     conn.commit()
     provider = EchoProvider({"duplicate": [
         {"i": 0, "verdict": "unsure", "confidence": 0.5, "reason": "ambiguous"},
@@ -354,11 +355,11 @@ def test_duplicate_chains_are_collapsed(conn):
     b = _txn(description_raw="B")
     c = _txn(description_raw="C")
     dbm.insert_txns(conn, [a, b, c])
-    conn.execute("UPDATE txn SET duplicate_of_id=? WHERE id=?", (b.id, a.id))
-    conn.execute("UPDATE txn SET duplicate_of_id=? WHERE id=?", (c.id, b.id))
+    conn.execute("UPDATE txn SET duplicate_of_id=%s WHERE id=%s", (b.id, a.id))
+    conn.execute("UPDATE txn SET duplicate_of_id=%s WHERE id=%s", (c.id, b.id))
     conn.commit()
     assert resolve_duplicate_chains(conn) == 1
-    root = conn.execute("SELECT duplicate_of_id FROM txn WHERE id=?", (a.id,)).fetchone()
+    root = conn.execute("SELECT duplicate_of_id FROM txn WHERE id=%s", (a.id,)).fetchone()
     assert root["duplicate_of_id"] == c.id     # A now points straight at the root
 
 
@@ -366,7 +367,7 @@ def test_violation_detector_catches_self_duplicate(conn):
     _seed_file(conn)
     a = _txn()
     dbm.insert_txns(conn, [a])
-    conn.execute("UPDATE txn SET duplicate_of_id=id WHERE id=?", (a.id,))
+    conn.execute("UPDATE txn SET duplicate_of_id=id WHERE id=%s", (a.id,))
     conn.commit()
     names = {v["check"] for v in find_violations(conn)}
     assert "self_duplicate" in names

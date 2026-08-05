@@ -79,6 +79,10 @@ def transfer_group_id(leg_txn_ids: Iterable[str]) -> str:
     return hashlib.sha256("|".join(sorted(leg_txn_ids)).encode()).hexdigest()[:32]
 
 
+def transfer_candidate_id(out_txn_id: str, in_txn_id: str) -> str:
+    return hashlib.sha256(f"{out_txn_id}|{in_txn_id}".encode()).hexdigest()[:32]
+
+
 def find_transfers(
     txns: Sequence[Txn],
     accounts: Mapping[str, Account],
@@ -114,7 +118,7 @@ def find_transfers(
         # Widen the search window when any candidate inflow is on a card —
         # we don't know yet, so search the larger window and let scoring decide.
         max_gap = MAX_CC_PAYMENT_GAP_DAYS
-        for offset in range(0, max_gap + 1):
+        for offset in range(max_gap + 1):
             for sign in ((0,) if offset == 0 else (1, -1)):
                 day = out.txn_date + timedelta(days=offset * sign)
                 for inc in by_date.get(day, ()):
@@ -129,6 +133,7 @@ def find_transfers(
                     if score < REVIEW_THRESHOLD:
                         continue
                     candidates.append(TransferCandidate(
+                        id=transfer_candidate_id(out.id, inc.id),
                         out_txn_id=out.id,
                         in_txn_id=inc.id,
                         score=round(score, 4),
@@ -234,25 +239,55 @@ def _score_pair(
         score += 0.12
         reasons.append("card payment")
 
-    same_group = bool(out_acct and in_acct and out_acct.balance_group
-                      and out_acct.balance_group == in_acct.balance_group)
+    exchange_debit = any(w in out.description_norm for w in (
+        "GOLD/EXCHANGE DEBIT", "FOREIGN EXCHANGE DEBIT", "FX DEBIT"))
+    if is_cc_in and not same_ccy and exchange_debit and has_payment_wording:
+        score += 0.20
+        evidence += 1
+        reasons.append("exchange debit funds a cross-currency card payment")
+
+    same_group = bool(
+        out_acct and in_acct and out_acct.balance_group
+        and out_acct.balance_group == in_acct.balance_group
+        and (out_acct.account_type is AccountType.MULTI_CURRENCY
+             or in_acct.account_type is AccountType.MULTI_CURRENCY)
+    )
     if same_group:
         score += 0.12
         evidence += 1
         reasons.append("same balance group (in-provider conversion)")
 
-    if out.kind == TxnKind.FX_CONVERSION or inc.kind == TxnKind.FX_CONVERSION:
+    parser_flagged_fx = (
+        out.kind == TxnKind.FX_CONVERSION or inc.kind == TxnKind.FX_CONVERSION
+    )
+    if parser_flagged_fx:
         score += 0.08
-        evidence += 1
         reasons.append("parser flagged FX conversion")
 
-    # A cross-currency pair that reconciles through the day's rate is itself
-    # evidence — an exact FX match is not a coincidence the way a round number is.
-    if not same_ccy:
+    if (out.external_ref and inc.external_ref
+            and out.external_ref == inc.external_ref):
+        score += 0.25
         evidence += 1
+        reasons.append("issuer reference matches")
 
     out_blob = _norm_blob(out.description_raw, out.counterparty, out.description_norm)
     inc_blob = _norm_blob(inc.description_raw, inc.counterparty, inc.description_norm)
+
+    # Cross-provider movements usually name the provider on the opposite leg:
+    # "WISE PAYMENTS" on Mox, "Americanexpress Transfer" on Chase. Account
+    # aliases can be ambiguous across several cards, but the institution name
+    # is still strong destination evidence.
+    out_family = out_acct.institution_id.split("_", 1)[0] if out_acct else ""
+    in_family = in_acct.institution_id.split("_", 1)[0] if in_acct else ""
+    if out_acct and in_acct and out_family != in_family:
+        if _names_institution(out_blob, in_acct.institution_id):
+            score += 0.30
+            evidence += 1
+            reasons.append("outflow names destination institution")
+        elif _names_institution(inc_blob, out_acct.institution_id):
+            score += 0.30
+            evidence += 1
+            reasons.append("inflow names source institution")
 
     for alias, aid in ctx.account_aliases.items():
         if not alias or len(alias) < 3:
@@ -279,6 +314,13 @@ def _score_pair(
             evidence += 1
             reasons.append("outflow counterparty is self")
 
+            if same_ccy and delta == 0 and date_delta <= 2:
+                score += 0.10
+                reasons.append("exact near-date self movement")
+            elif not same_ccy and parser_flagged_fx and date_delta == 0:
+                score += 0.21
+                reasons.append("same-day self movement reconciles through FX")
+
     if ctx.person_aliases and any(a in out_blob for a in ctx.person_aliases if len(a) >= 4):
         score -= 0.25
         reasons.append("outflow names a known external person (P2P, not self-transfer)")
@@ -287,6 +329,20 @@ def _score_pair(
         return 0.0, [], delta
 
     return min(max(score, 0.0), 1.0), reasons, delta
+
+
+_INSTITUTION_TOKENS = {
+    "amex": ("AMEX", "AMERICANEXPRESS", "AMERICAN EXPRESS"),
+    "chase": ("CHASE", "JPMORGAN"),
+    "hsbc": ("HSBC",),
+    "mox": ("MOX",),
+    "wise": ("WISE", "TRANSFERWISE"),
+}
+
+
+def _names_institution(blob: str, institution_id: str) -> bool:
+    family = institution_id.split("_", 1)[0].lower()
+    return any(_norm_blob(token) in blob for token in _INSTITUTION_TOKENS.get(family, ()))
 
 
 def _fx_reconcile(out: Txn, inc: Txn, fx_lookup) -> tuple[int, bool]:

@@ -17,7 +17,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from ...ingest import ingest_file, reconcile
 from ...jobs import runner
@@ -29,6 +29,7 @@ router = APIRouter(tags=["imports"])
 # Staged uploads live here until confirmed or discarded.
 STAGING = Path(tempfile.gettempdir()) / "finto-staging"
 STAGING.mkdir(exist_ok=True)
+STAGED_OWNERS: dict[str, str] = {}
 
 ALLOWED_SUFFIXES = {".csv", ".tsv", ".txt", ".ofx", ".qfx", ".pdf", ".xlsx"}
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
@@ -36,6 +37,7 @@ MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 
 @router.post("/imports/stage")
 async def stage_upload(
+    request: Request,
     file: UploadFile = File(...),
     institution_id: str | None = Form(None),
     account_id: str | None = Form(None),
@@ -49,6 +51,7 @@ async def stage_upload(
                  f"{sorted(ALLOWED_SUFFIXES)}")
 
     staged_id = str(uuid.uuid4())
+    STAGED_OWNERS[staged_id] = request.state.user_id
     target = STAGING / f"{staged_id}__{name}"
     size = 0
     with target.open("wb") as out:
@@ -118,17 +121,20 @@ async def stage_upload(
 
 
 @router.post("/imports/{staged_id}/confirm")
-def confirm_import(staged_id: str, institution_id: str | None = Form(None),
+def confirm_import(staged_id: str, request: Request,
+                   institution_id: str | None = Form(None),
                    account_id: str | None = Form(None),
                    currency: str | None = Form(None)) -> dict:
     """Commit a staged file, then reconcile the whole ledger."""
+    if STAGED_OWNERS.get(staged_id) != request.state.user_id:
+        raise HTTPException(404, "staged file not found — re-upload it")
     matches = list(STAGING.glob(f"{staged_id}__*"))
     if not matches:
         raise HTTPException(404, "staged file not found — re-upload it")
     path = matches[0]
 
     def work(job):
-        with write_conn() as conn:
+        with write_conn(request.state.user_id) as conn:
             job.progress = "importing"
             result = ingest_file(conn, path, institution_id=institution_id,
                                  account_id=account_id, default_currency=currency)
@@ -138,47 +144,51 @@ def confirm_import(staged_id: str, institution_id: str | None = Form(None),
             job.progress = "reconciling"
             summary = reconcile(conn)
         path.unlink(missing_ok=True)
+        STAGED_OWNERS.pop(staged_id, None)
         return {"import": result, "reconcile": summary}
 
-    return runner.submit("import", work).as_dict()
+    return runner.submit("import", work, user_id=request.state.user_id).as_dict()
 
 
 @router.delete("/imports/{staged_id}")
-def discard_staged(staged_id: str) -> dict:
+def discard_staged(staged_id: str, request: Request) -> dict:
+    if STAGED_OWNERS.get(staged_id) != request.state.user_id:
+        raise HTTPException(404, "staged file not found")
     for p in STAGING.glob(f"{staged_id}__*"):
         p.unlink(missing_ok=True)
+    STAGED_OWNERS.pop(staged_id, None)
     return {"discarded": staged_id}
 
 
 @router.post("/reconcile")
-def run_reconcile() -> dict:
+def run_reconcile(request: Request) -> dict:
     def work(job):
-        with write_conn() as conn:
+        with write_conn(request.state.user_id) as conn:
             job.progress = "reconciling"
             return reconcile(conn)
 
-    return runner.submit("reconcile", work).as_dict()
+    return runner.submit("reconcile", work, user_id=request.state.user_id).as_dict()
 
 
 @router.post("/reattribute")
-def run_reattribute() -> dict:
+def run_reattribute(request: Request) -> dict:
     """Re-run card resolution over existing rows, e.g. after adding a reissue."""
     def work(job):
         from ...ingest import reattribute_cards
-        with write_conn() as conn:
+        with write_conn(request.state.user_id) as conn:
             return {"updated": reattribute_cards(conn)}
 
-    return runner.submit("reattribute", work).as_dict()
+    return runner.submit("reattribute", work, user_id=request.state.user_id).as_dict()
 
 
 @router.post("/fx/harvest")
-def run_fx_harvest() -> dict:
+def run_fx_harvest(request: Request) -> dict:
     def work(job):
         from ...fx import harvest_rates
-        with write_conn() as conn:
+        with write_conn(request.state.user_id) as conn:
             return {"rates": harvest_rates(conn)}
 
-    return runner.submit("fx-harvest", work).as_dict()
+    return runner.submit("fx-harvest", work, user_id=request.state.user_id).as_dict()
 
 
 @router.get("/imports/history")
@@ -188,5 +198,5 @@ def import_history(limit: int = 50, conn=Depends(get_conn)) -> dict:
         "       sf.file_format, sf.parser_id, sf.imported_at, sf.row_count, "
         "       sf.period_start, sf.period_end, "
         "       (SELECT COUNT(*) FROM txn WHERE statement_file_id = sf.id) AS txn_count "
-        "FROM statement_file sf ORDER BY sf.imported_at DESC LIMIT ?", (limit,))]
+        "FROM statement_file sf ORDER BY sf.imported_at DESC LIMIT %s", (limit,))]
     return {"files": rows}

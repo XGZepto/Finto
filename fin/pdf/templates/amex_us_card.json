@@ -76,7 +76,6 @@
         "^New Charges$",
         "^(Payments|Credits|Total Payments and Credits|Fees|Interest Charged)\\b",
         "Pay Over Time and/or Cash Advance activity",
-        "^YIXIANG ZHOU$",
         "^Total (Fees|Interest Charged) for this Period",
         "^TRANSACTION PROCESSED BY AMERICAN EXPRESS"
       ],

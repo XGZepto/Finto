@@ -78,9 +78,12 @@ def save_template(conn, tpl: StatementTemplate, *, note: str = "") -> None:
     from datetime import datetime
 
     conn.execute(
-        "INSERT OR REPLACE INTO pdf_template "
+        "INSERT INTO pdf_template "
         "(template_id, institution_id, version, source, note, body, active, created_at) "
-        "VALUES (?,?,?,?,?,?,1,?)",
+        "VALUES (%s,%s,%s,%s,%s,%s,1,%s) ON CONFLICT (template_id) DO UPDATE SET "
+        "institution_id=EXCLUDED.institution_id, version=EXCLUDED.version, "
+        "source=EXCLUDED.source, note=EXCLUDED.note, body=EXCLUDED.body, "
+        "active=EXCLUDED.active, created_at=EXCLUDED.created_at",
         (
             tpl.template_id,
             tpl.institution_id,

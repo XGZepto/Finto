@@ -177,7 +177,8 @@ def test_pdf_imports_end_to_end(conn, statement_pdf):
     assert r["balances"] == 2
 
     rows = conn.execute(
-        "SELECT COUNT(*) FROM txn WHERE account_id='mox_main'").fetchone()[0]
+        "SELECT COUNT(*) AS count_value FROM txn WHERE account_id='mox_main'"
+    ).fetchone()["count_value"]
     assert rows == 5
 
 
@@ -201,4 +202,5 @@ def test_dropped_pdf_row_is_caught_at_ingest(conn, tmp_path):
     assert r["status"] == "error"
     assert any("845.20" in w for w in r["warnings"])
     # Nothing is recorded: the statement stays re-importable once fixed.
-    assert conn.execute("SELECT COUNT(*) FROM txn").fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) AS count_value FROM txn").fetchone()["count_value"] == 0

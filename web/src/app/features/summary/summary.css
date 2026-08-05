@@ -1,9 +1,14 @@
 .totals {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 12px;
 }
+.kpi { min-height: 112px; text-align: left; color: inherit; }
+button.kpi { cursor: pointer; }
+.kpi label { display: block; margin-bottom: auto; }
+.kpi strong { display: block; margin-top: 22px; font: 500 23px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+.kpi > span { display: block; margin-top: 8px; color: var(--fg-4); font: 9.5px/1 var(--mono); text-transform: uppercase; letter-spacing: .1em; }
 
 .kpi-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
 .kpi-head h3 { margin: 0; }
@@ -34,6 +39,21 @@
 .kpi.liability { border-color: var(--line-2); border-left: 2px solid var(--warn); }
 
 section.card { margin-bottom: 12px; }
+.positions-card { min-height: 180px; }
+.position-scale { display: grid; grid-template-columns: 1fr 1px 1fr; margin: 0 116px 7px 154px; color: var(--fg-4); font: 8.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.position-scale span:first-child { text-align: right; padding-right: 8px; }
+.position-scale span:last-child { padding-left: 8px; }
+.position-scale i { height: 12px; background: var(--line-2); }
+.position-row { display: grid; grid-template-columns: 140px minmax(120px, 1fr) 104px; align-items: center; gap: 14px; width: 100%; min-height: 34px; padding: 4px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; }
+.position-row:last-child { border-bottom: 0; }
+.position-row:hover { background: var(--panel-2); }
+.position-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.position-bars { position: relative; display: flex; height: 13px; background: linear-gradient(90deg, transparent calc(50% - .5px), var(--line-2) calc(50% - .5px), var(--line-2) calc(50% + .5px), transparent calc(50% + .5px)); }
+.position-bar { position: absolute; top: 2px; height: 9px; }
+.position-bar.liability { right: 50%; background: var(--neg); opacity: .7; }
+.position-bar.asset { left: 50%; background: var(--pos); opacity: .62; }
+.position-row strong { text-align: right; font-size: 10.5px; }
+.breakdown { min-height: 320px; }
 tr.clickable { cursor: pointer; }
 .hint { margin: 10px 0 0; }
 .banner { margin-bottom: 12px; }
@@ -45,28 +65,36 @@ tr:hover .bar-col .bar-fill { background: var(--fg-3); }
 /* Trend ------------------------------------------------------------------- */
 
 .trend {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 132px;
-  padding: 0 2px 0;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--line);
+  position: relative;
+  height: 190px;
+  margin: 4px 0 18px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  overflow: hidden;
 }
-.trend .col {
+.trend svg { position: absolute; inset: 8px 8px 27px; width: calc(100% - 16px); height: calc(100% - 35px); overflow: visible; }
+.trend .gridline { stroke: var(--line); stroke-width: .45; vector-effect: non-scaling-stroke; }
+.trend .area { fill: url(#out-area); }
+.trend .series {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.trend .series.out { stroke: var(--neg); }
+.trend .series.in { stroke: var(--pos); opacity: .88; }
+.chart-hits { position: absolute; inset: 0 8px; display: flex; }
+.chart-hit {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  height: 100%;
   min-width: 0;
-  cursor: pointer;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid transparent;
+  background: transparent;
 }
-.trend .stem { flex: 1; display: flex; align-items: flex-end; gap: 1px; }
-.trend .fill { display: block; flex: 1; min-width: 0; }
-.trend .fill.out { background: var(--neg); opacity: 0.7; }
-.trend .fill.in { background: var(--pos); opacity: 0.55; }
-.trend .col:hover .fill { opacity: 1; }
+.chart-hit:hover { background: color-mix(in srgb, var(--fg) 4%, transparent); border-color: var(--line); }
 
 .trend-head {
   display: flex;
@@ -80,7 +108,9 @@ tr:hover .bar-col .bar-fill { background: var(--fg-3); }
 .trend-head .key.out { background: var(--neg); opacity: 0.7; }
 .trend-head .key.in { background: var(--pos); opacity: 0.55; margin-left: 6px; }
 .trend .tick {
-  padding-top: 5px;
+  position: absolute;
+  bottom: 6px;
+  transform: translateX(-50%);
   font-size: 9px;
   color: var(--fg-4);
   text-align: center;
@@ -88,6 +118,13 @@ tr:hover .bar-col .bar-fill { background: var(--fg-3); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.rank-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 22px; margin-top: 10px; }
+.rank-list button { display: grid; grid-template-columns: 24px minmax(90px, 1fr) minmax(50px, 1fr) 78px 42px; align-items: center; gap: 8px; min-width: 0; padding: 9px 4px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.rank-list button:hover { background: var(--panel-2); }
+.rank-list .rank, .rank-list .share { color: var(--fg-4); font-size: 9.5px; }
+.rank-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+.rank-list .amount { text-align: right; font-size: 10.5px; }
 
 .head-controls { display: flex; align-items: baseline; gap: 8px; }
 .head-controls label {
@@ -166,9 +203,25 @@ tr:hover .bar-col .bar-fill { background: var(--fg-3); }
 .flow-row .fnum.in { color: var(--pos); }
 
 @media (max-width: 700px) {
+  .totals { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpi { padding: 12px; }
+  .kpi-net { font-size: 18px; overflow-wrap: anywhere; }
+  .kpi-split { gap: 10px; }
+  .kpi-split > span { min-width: 0; }
+  .kpi-split span span { font-size: 10px; overflow-wrap: anywhere; }
+  section.card { padding: 12px; }
+  .trend { height: 160px; }
   .flow-head { padding-left: 0; }
   .flow-row .fname { width: 72px; }
-  .flow-row .fnum { width: 60px; }
+  .flow-row .fnum { display: none; }
+  .bar-col { display: none; }
+  .page-head { margin-bottom: 12px; }
+  .rank-list { grid-template-columns: 1fr; }
+  .rank-list button { grid-template-columns: 22px minmax(90px, 1fr) 60px 40px; }
+  .rank-list .bar-track { display: none; }
+  .position-scale { margin-left: 86px; margin-right: 0; }
+  .position-row { grid-template-columns: 76px minmax(80px, 1fr) 86px; gap: 8px; min-height: 39px; }
+  .position-row strong { font-size: 9.5px; }
 }
 
 /* When a normalise currency is chosen the single figure leads; the native
@@ -177,3 +230,11 @@ tr:hover .bar-col .bar-fill { background: var(--fg-3); }
 .kpi.headline .kpi-net { font-size: 30px; }
 .totals .kpi.dim { opacity: 0.72; }
 .totals .kpi.dim .kpi-net { font-size: 18px; }
+.freshness-banner { display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: center; margin: -5px 0 16px; padding: 12px 14px; border: 1px solid var(--warn); background: var(--warn-wash); }
+.freshness-icon { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--warn); color: var(--warn); font: 600 14px/1 var(--mono); }
+.freshness-copy { display: flex; flex-direction: column; min-width: 0; }
+.freshness-copy strong { font-size: 12px; }
+.freshness-copy span { display: flex; gap: 12px; overflow-x: auto; color: var(--fg-3); font-size: 10.5px; }
+.freshness-copy b { flex: none; color: var(--fg-2); font-weight: 500; }
+.freshness-copy small { margin-left: 5px; color: var(--fg-4); }
+@media (max-width: 700px) { .freshness-banner { grid-template-columns: 28px 1fr; } .freshness-banner .btn { grid-column: 1 / -1; text-align: center; } .freshness-copy span { flex-direction: column; gap: 2px; } }

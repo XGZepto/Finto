@@ -252,17 +252,24 @@ def run_dedup(
     *,
     cross_account_pairs: set[tuple[str, str]] | None = None,
     statement_txn_ids: set[str] | None = None,
+    fuzzy: bool = False,
 ) -> DedupReport:
     statement_txn_ids = statement_txn_ids or set()
     superseded = supersede_with_statements(txns, statement_txn_ids)
     survivors, exact = dedup_exact(
         [t for t in txns if t.duplicate_of_id is None])
 
-    # A statement is never merged into anything on a similarity score.
-    remaining = [t for t in survivors
-                 if t.duplicate_of_id is None and t.id not in statement_txn_ids]
-    cands = find_fuzzy_duplicates(remaining, cross_account_pairs=cross_account_pairs)
-    auto, pending = apply_candidates(remaining, cands)
+    # Issuer statements are authoritative. Normal reconciliation only removes
+    # exact copies and rows superseded by statements; fuzzy similarity is an
+    # explicit review tool, never an automatic import side effect.
+    auto = 0
+    pending: list[DuplicateCandidate] = []
+    if fuzzy:
+        remaining = [t for t in survivors
+                     if t.duplicate_of_id is None and t.id not in statement_txn_ids]
+        cands = find_fuzzy_duplicates(
+            remaining, cross_account_pairs=cross_account_pairs)
+        auto, pending = apply_candidates(remaining, cands)
     kept = sum(1 for t in txns if t.duplicate_of_id is None)
     return DedupReport(exact_merged=exact + auto, superseded=superseded,
                        candidates=pending, kept=kept)

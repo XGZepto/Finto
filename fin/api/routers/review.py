@@ -1,10 +1,4 @@
-"""Review queues: duplicates, transfers, instalment plans.
-
-Nothing ambiguous is ever auto-merged, so these queues are where the judgement
-calls land. A wrongly-merged transaction is far harder to notice six months
-later than a wrongly-kept one, which is why the bar for automatic action is high
-and this list exists at all.
-"""
+"""Duplicate, transfer, and instalment review endpoints."""
 
 from __future__ import annotations
 
@@ -33,7 +27,7 @@ def duplicates(limit: int = 100, conn=Depends(get_conn)) -> dict:
            JOIN txn a ON a.id = dc.keep_txn_id
            JOIN txn b ON b.id = dc.dupe_txn_id
            WHERE dc.resolution = 'open'
-           ORDER BY dc.score DESC LIMIT ?""", (limit,))]
+           ORDER BY dc.score DESC LIMIT %s""", (limit,))]
     for r in rows:
         r["reasons"] = json.loads(r["reasons"])
     return {"items": rows, "total": len(rows)}
@@ -53,7 +47,7 @@ def transfers(limit: int = 100, conn=Depends(get_conn)) -> dict:
            JOIN txn o ON o.id = tc.out_txn_id
            JOIN txn i ON i.id = tc.in_txn_id
            WHERE tc.resolution = 'open'
-           ORDER BY tc.score DESC LIMIT ?""", (limit,))]
+           ORDER BY tc.score DESC LIMIT %s""", (limit,))]
     for r in rows:
         r["reasons"] = json.loads(r["reasons"])
     return {"items": rows, "total": len(rows)}
@@ -64,12 +58,12 @@ def installment_candidates(limit: int = 100, conn=Depends(get_conn)) -> dict:
     rows = []
     for r in conn.execute(
             "SELECT * FROM installment_candidate WHERE resolution='open' "
-            "ORDER BY score DESC LIMIT ?", (limit,)):
+            "ORDER BY score DESC LIMIT %s", (limit,)):
         item = dict(r)
         item["reasons"] = json.loads(r["reasons"])
         item["txn_ids"] = json.loads(r["txn_ids"])
         ids = item["txn_ids"]
-        placeholders = ",".join("?" * len(ids))
+        placeholders = ",".join(["%s"] * len(ids))
         item["transactions"] = [dict(t) for t in conn.execute(
             f"SELECT id, txn_date, description_raw, amount_booked, currency_booked "
             f"FROM txn WHERE id IN ({placeholders})", ids)]
@@ -80,16 +74,16 @@ def installment_candidates(limit: int = 100, conn=Depends(get_conn)) -> dict:
 @router.post("/review/duplicates/{candidate_id}")
 def resolve_duplicate(candidate_id: str, req: ResolveRequest,
                       conn=Depends(get_conn)) -> dict:
-    row = conn.execute("SELECT * FROM duplicate_candidate WHERE id=?",
+    row = conn.execute("SELECT * FROM duplicate_candidate WHERE id=%s",
                        (candidate_id,)).fetchone()
     if row is None:
         raise HTTPException(404, "no such candidate")
 
     resolution = "accepted" if req.action == "accept" else "rejected"
-    conn.execute("UPDATE duplicate_candidate SET resolution=? WHERE id=?",
+    conn.execute("UPDATE duplicate_candidate SET resolution=%s WHERE id=%s",
                  (resolution, candidate_id))
     if resolution == "accepted":
-        conn.execute("UPDATE txn SET duplicate_of_id=? WHERE id=?",
+        conn.execute("UPDATE txn SET duplicate_of_id=%s WHERE id=%s",
                      (row["keep_txn_id"], row["dupe_txn_id"]))
     conn.commit()
     return {"id": candidate_id, "resolution": resolution}
@@ -100,13 +94,13 @@ def resolve_transfer(candidate_id: str, req: ResolveRequest,
                      conn=Depends(get_conn)) -> dict:
     from ...transfers import transfer_group_id
 
-    row = conn.execute("SELECT * FROM transfer_candidate WHERE id=?",
+    row = conn.execute("SELECT * FROM transfer_candidate WHERE id=%s",
                        (candidate_id,)).fetchone()
     if row is None:
         raise HTTPException(404, "no such candidate")
 
     resolution = "accepted" if req.action == "accept" else "rejected"
-    conn.execute("UPDATE transfer_candidate SET resolution=? WHERE id=?",
+    conn.execute("UPDATE transfer_candidate SET resolution=%s WHERE id=%s",
                  (resolution, candidate_id))
 
     if resolution == "accepted":
@@ -115,16 +109,17 @@ def resolve_transfer(candidate_id: str, req: ResolveRequest,
         gid = transfer_group_id([row["out_txn_id"], row["in_txn_id"]])
         conn.execute(
             "INSERT INTO transfer_group (id, kind, match_method, confidence, "
-            "is_confirmed, created_at) VALUES (?,?,?,?,?,?) "
+            "is_confirmed, created_at) VALUES (%s,%s,%s,%s,%s,%s) "
             "ON CONFLICT(id) DO UPDATE SET match_method='manual', confidence=1.0, "
             "is_confirmed=1",
             (gid, "internal_transfer", "manual", 1.0, 1, datetime.now().isoformat()))
         for txn_id, role in ((row["out_txn_id"], "out"), (row["in_txn_id"], "in")):
             conn.execute(
-                "INSERT OR REPLACE INTO transfer_leg (transfer_group_id, txn_id, "
-                "role) VALUES (?,?,?)", (gid, txn_id, role))
-            conn.execute("UPDATE txn SET transfer_group_id=?, kind='transfer' "
-                         "WHERE id=?", (gid, txn_id))
+                "INSERT INTO transfer_leg (transfer_group_id, txn_id, role) "
+                "VALUES (%s,%s,%s) ON CONFLICT (transfer_group_id, txn_id) "
+                "DO UPDATE SET role=EXCLUDED.role", (gid, txn_id, role))
+            conn.execute("UPDATE txn SET transfer_group_id=%s, kind='transfer' "
+                         "WHERE id=%s", (gid, txn_id))
     conn.commit()
     return {"id": candidate_id, "resolution": resolution}
 
@@ -132,25 +127,25 @@ def resolve_transfer(candidate_id: str, req: ResolveRequest,
 @router.post("/review/installments/{candidate_id}")
 def resolve_installment(candidate_id: str, req: ResolveRequest,
                         conn=Depends(get_conn)) -> dict:
-    row = conn.execute("SELECT * FROM installment_candidate WHERE id=?",
+    row = conn.execute("SELECT * FROM installment_candidate WHERE id=%s",
                        (candidate_id,)).fetchone()
     if row is None:
         raise HTTPException(404, "no such candidate")
 
     resolution = "accepted" if req.action == "accept" else "rejected"
-    conn.execute("UPDATE installment_candidate SET resolution=? WHERE id=?",
+    conn.execute("UPDATE installment_candidate SET resolution=%s WHERE id=%s",
                  (resolution, candidate_id))
 
     if resolution == "accepted":
         txn_ids = json.loads(row["txn_ids"])
         first = conn.execute(
-            "SELECT * FROM txn WHERE id=? ", (txn_ids[0],)).fetchone()
+            "SELECT * FROM txn WHERE id=%s ", (txn_ids[0],)).fetchone()
         per = abs(first["amount_booked"])
         conn.execute(
             "INSERT INTO installment_plan (id, account_id, card_id, merchant, "
             "description, principal, currency, term_months, start_date, status, "
             "match_method, confidence, is_confirmed, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
             "ON CONFLICT(id) DO UPDATE SET is_confirmed=1, match_method='manual'",
             (row["id"], row["account_id"], first["card_id"], first["merchant"],
              row["description"], -(per * row["term_months"]),
@@ -158,12 +153,12 @@ def resolve_installment(candidate_id: str, req: ResolveRequest,
              "active", "manual", 1.0, 1, datetime.now().isoformat()))
         from ...installments import parse_installment_marker
         for txn_id in txn_ids:
-            t = conn.execute("SELECT description_raw FROM txn WHERE id=?",
+            t = conn.execute("SELECT description_raw FROM txn WHERE id=%s",
                              (txn_id,)).fetchone()
             marker = parse_installment_marker(t["description_raw"]) if t else None
             conn.execute(
-                "UPDATE txn SET installment_plan_id=?, installment_seq=?, "
-                "kind='installment' WHERE id=?",
+                "UPDATE txn SET installment_plan_id=%s, installment_seq=%s, "
+                "kind='installment' WHERE id=%s",
                 (row["id"], marker[0] if marker else None, txn_id))
     conn.commit()
     return {"id": candidate_id, "resolution": resolution}

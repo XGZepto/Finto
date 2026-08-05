@@ -89,16 +89,30 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
     if not fields:
         raise HTTPException(400, "nothing to update")
 
-    row = conn.execute("SELECT id FROM txn WHERE id=?", (txn_id,)).fetchone()
+    row = conn.execute(
+        "SELECT t.id,t.category,t.subcategory,a.user_id FROM txn t "
+        "JOIN account a ON a.id=t.account_id WHERE t.id=%s", (txn_id,)
+    ).fetchone()
     if row is None:
         raise HTTPException(404, "no such transaction")
 
+    if "category" in fields or "subcategory" in fields:
+        from ...taxonomy import category_exists
+
+        category = fields.get("category", row["category"])
+        subcategory = fields.get("subcategory", row["subcategory"])
+        valid = category_exists(conn, category, subcategory) if subcategory else (
+            category_exists(conn, category) if category else False
+        )
+        if not valid:
+            raise HTTPException(422, "category/subcategory is not in the taxonomy")
+
     allowed = {"category", "subcategory", "notes", "review_state", "merchant"}
-    sets = [f"{k}=?" for k in fields if k in allowed]
+    sets = [f"{k}=%s" for k in fields if k in allowed]
     params = [v for k, v in fields.items() if k in allowed]
     if sets:
         conn.execute(
-            f"UPDATE txn SET {', '.join(sets)}, updated_at=? WHERE id=?",
+            f"UPDATE txn SET {', '.join(sets)}, updated_at=%s WHERE id=%s",
             [*params, datetime.now().isoformat(), txn_id])
 
     now = datetime.now().isoformat()
@@ -106,10 +120,18 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
         if key in ("category", "merchant", "subcategory"):
             conn.execute(
                 "INSERT INTO txn_annotation (txn_id, field, value, source, "
-                "confidence, created_at) VALUES (?,?,?,'manual',1.0,?) "
+                "confidence, created_at) VALUES (%s,%s,%s,'manual',1.0,%s) "
                 "ON CONFLICT(txn_id, field) DO UPDATE SET value=excluded.value, "
                 "source='manual', confidence=1.0, created_at=excluded.created_at",
                 (txn_id, key, str(value), now))
+    if fields.get("merchant"):
+        from ...taxonomy import register_merchant
+
+        register_merchant(
+            conn, row["user_id"], fields["merchant"], source="manual",
+            category=fields.get("category", row["category"]),
+            subcategory=fields.get("subcategory", row["subcategory"]),
+        )
     conn.commit()
     return reporting.transaction_detail(conn, txn_id)
 
@@ -123,7 +145,7 @@ def list_tags(conn=Depends(get_conn)) -> dict:
 @router.post("/transactions/{txn_id}/tags")
 def add_txn_tag(txn_id: str, body: TagBody, conn=Depends(get_conn)) -> dict:
     from ... import db as dbm
-    if conn.execute("SELECT 1 FROM txn WHERE id=?", (txn_id,)).fetchone() is None:
+    if conn.execute("SELECT 1 FROM txn WHERE id=%s", (txn_id,)).fetchone() is None:
         raise HTTPException(404, "no such transaction")
     if not body.tag.strip():
         raise HTTPException(400, "empty tag")

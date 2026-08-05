@@ -19,15 +19,14 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def client(database_url, monkeypatch):
     """An API bound to a throwaway database seeded with the sample statements."""
-    db = tmp_path / "api.db"
-    monkeypatch.setenv("FINTO_DB", str(db))
-
-    import fin.api.deps as deps
-    monkeypatch.setattr(deps, "DEFAULT_DB", str(db))
-
-    conn = dbm.connect(db)
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("FINTO_AUTH_USERNAME", "test-owner")
+    monkeypatch.setenv("FINTO_AUTH_EMAIL", "owner@example.test")
+    monkeypatch.setenv("FINTO_AUTH_PASSWORD", "correct horse battery staple")
+    monkeypatch.setenv("FINTO_SESSION_SECRET", "test-session-secret-not-for-production")
+    conn = dbm.connect(database_url)
     dbm.init_db(conn)
     from fin.models import Account, Card, Institution
     for inst in (Institution(id="hsbc_hk", display_name="HSBC HK", country="HK"),
@@ -49,7 +48,7 @@ def client(tmp_path, monkeypatch):
     ):
         dbm.upsert_account(conn, acct)
     dbm.upsert_card(conn, Card(id="amex_us_main_primary", account_id="amex_us_main",
-                               cardholder_name="ZEPTO X", last4="1001"))
+                               cardholder_name="ALEX E", last4="1001"))
     conn.commit()
 
     for name, inst, acct, ccy in (
@@ -63,7 +62,12 @@ def client(tmp_path, monkeypatch):
     conn.close()
 
     from fin.api.app import app
-    with TestClient(app) as c:
+    with TestClient(app, base_url="https://testserver") as c:
+        signed_in = c.post("/api/auth/login", json={
+            "identifier": "test-owner",
+            "password": "correct horse battery staple",
+        })
+        assert signed_in.status_code == 200
         yield c
 
 
@@ -75,10 +79,101 @@ def test_health(client):
     assert client.get("/api/health").json()["status"] == "ok"
 
 
+def test_database_authentication_and_user_preferences(client, database_url):
+    bad = client.post("/api/auth/login", json={
+        "identifier": "test-owner", "password": "wrong",
+    })
+    assert bad.status_code == 401
+
+    login = client.post("/api/auth/login", json={
+        "identifier": "owner@example.test",
+        "password": "correct horse battery staple",
+    })
+    assert login.status_code == 200
+    assert login.json()["user"]["username"] == "test-owner"
+    assert "finto_session=" in login.headers["set-cookie"]
+    assert "HttpOnly" in login.headers["set-cookie"]
+
+    me = client.get("/api/auth/me")
+    assert me.status_code == 200
+    assert me.json()["email"] == "owner@example.test"
+    changed = client.patch("/api/auth/preferences", json={
+        "theme": "light", "language": "zh-Hant",
+    })
+    assert changed.json()["preferences"] == {
+        "theme": "light", "language": "zh-Hant",
+    }
+
+    conn = dbm.connect(database_url)
+    assert conn.execute("SELECT count(*) AS n FROM app_user").fetchone()["n"] == 1
+    assert conn.execute(
+        "SELECT count(*) AS n FROM account WHERE user_id='owner'"
+    ).fetchone()["n"] == 4
+    assert conn.execute(
+        "SELECT password_hash <> %s AS salted FROM app_user WHERE id='owner'",
+        ("correct horse battery staple",),
+    ).fetchone()["salted"]
+    conn.close()
+
+    assert client.post("/api/auth/register", json={}).status_code == 404
+    assert client.post("/api/auth/logout").status_code == 200
+    assert client.get("/api/auth/me").status_code == 401
+
+
+def test_agent_taxonomy_api_requires_confirmation_and_audits(
+    client, database_url,
+):
+    created = client.post("/api/auth/api-keys", json={"name": "Backfill agent"})
+    assert created.status_code == 200
+    token = created.json()["key"]
+    key_id = created.json()["id"]
+    assert token.startswith("finto_")
+    listed = client.get("/api/auth/api-keys").json()["keys"]
+    assert listed[0]["prefix"] in token
+    assert "key" not in listed[0]
+    auth = {"Authorization": f"Bearer {token}"}
+
+    audit = client.get("/api/agent/taxonomy/audit", headers=auth)
+    assert audit.status_code == 200
+    assert audit.json()["applied"] is False
+    assert client.post("/api/agent/taxonomy/apply", headers=auth).status_code == 409
+    applied = client.post(
+        "/api/agent/taxonomy/apply",
+        headers={**auth, "X-Finto-Confirm": "apply-taxonomy"},
+    )
+    assert applied.status_code == 200
+    assert applied.json()["applied"] is True
+
+    conn = dbm.connect(database_url)
+    rows = conn.execute(
+        "SELECT subject,applied FROM agent_operation ORDER BY created_at"
+    ).fetchall()
+    assert rows == [
+        {"subject": f"api-key:{key_id}", "applied": 0},
+        {"subject": f"api-key:{key_id}", "applied": 1},
+    ]
+    conn.close()
+
+    assert client.delete(f"/api/auth/api-keys/{key_id}").status_code == 200
+    assert client.get("/api/agent/taxonomy/audit", headers=auth).status_code == 401
+
+
 def test_transactions_list(client):
     body = client.get("/api/transactions").json()
     assert body["total"] > 0
     assert len(body["items"]) == body["total"]
+
+
+def test_transaction_totals_can_be_normalised(client):
+    body = client.get("/api/transactions?convert_to=USD").json()
+    assert body["normalised"]["net"]["currency"] == "USD"
+
+
+def test_flow_report_includes_external_nodes_for_account_sankey(client):
+    body = client.get("/api/flows").json()
+    assert "external_nodes" in body["normalised"]
+    assert all(node["in"]["currency"] == "USD" and node["out"]["currency"] == "USD"
+               for node in body["normalised"]["external_nodes"])
 
 
 def test_money_is_integer_minor_units(client):
@@ -87,6 +182,46 @@ def test_money_is_integer_minor_units(client):
     assert isinstance(item["booked"]["amount"], int)
     assert isinstance(item["booked"]["currency"], str)
     assert len(item["booked"]["currency"]) == 3
+
+
+def test_empty_statement_advances_freshness_for_every_covered_account(
+    client, database_url,
+):
+    """An idle month is coverage, including on a consolidated statement."""
+    conn = dbm.connect(database_url)
+    conn.execute(
+        "INSERT INTO statement_file "
+        "(id,source_path,file_sha256,institution_id,account_id,file_format,parser_id,"
+        " parser_version,imported_at,row_count) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        ("empty-aug", "Mox_2026-08.pdf", "empty-aug-hash", "mox", "mox_main",
+         "pdf", "pdf_statement", "2.0", "2026-08-04", 0),
+    )
+    conn.execute(
+        "INSERT INTO statement_file "
+        "(id,source_path,file_sha256,institution_id,account_id,file_format,parser_id,"
+        " parser_version,imported_at,row_count) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        ("export-aug", "AMEX_transactions_2025-01-01_to_2026-08-03.csv",
+         "export-aug-hash", "amex_us", "amex_us_main", "csv", "amex_csv",
+         "1.0", "2026-08-04", 2),
+    )
+    conn.execute(
+        "INSERT INTO balance_assertion "
+        "(id,account_id,as_of_date,balance,currency,kind,statement_file_id) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+        ("empty-aug-wise", "wise_hkd", "2026-08-03", 0, "HKD", "closing", "empty-aug"),
+    )
+    conn.commit()
+    conn.close()
+
+    rows = {r["account_id"]: r for r in client.get("/api/statement-freshness").json()["accounts"]}
+    assert rows["mox_main"]["status"] == "current"
+    assert rows["mox_main"]["statement_empty"] is True
+    assert rows["wise_hkd"]["status"] == "current"
+    assert rows["amex_us_main"]["status"] == "current"
+    assert rows["amex_us_main"]["statement_date"] == "2026-08-03"
+    assert rows["amex_us_main"]["statement_empty"] is False
 
 
 def test_transfers_are_excluded_by_default(client):
@@ -128,6 +263,33 @@ def test_transaction_detail_includes_provenance(client):
     assert "provenance" in body
     assert "raw_row" in body["provenance"]
     assert body["provenance"]["parser_id"]
+
+
+def test_refund_links_are_bidirectional(client, database_url):
+    original = client.get("/api/transactions").json()["items"][0]
+    conn = dbm.connect(database_url)
+    from datetime import date
+
+    from fin.models import Money, Txn
+    source = conn.execute(
+        "SELECT statement_file_id FROM txn WHERE id=%s", (original["id"],)
+    ).fetchone()["statement_file_id"]
+    refund = Txn(
+        account_id=original["account_id"], txn_date=date.fromisoformat(original["date"]),
+        booked=Money(amount=100, currency=original["booked"]["currency"]),
+        description_raw="REFUND TEST", kind="refund", refund_of_id=original["id"],
+        statement_file_id=source,
+    )
+    dbm.insert_txns(conn, [refund])
+    conn.commit()
+    conn.close()
+
+    purchase_detail = client.get(f"/api/transactions/{original['id']}").json()
+    refund_detail = client.get(f"/api/transactions/{refund.id}").json()
+    assert any(link["id"] == refund.id and link["relation"] == "refund"
+               for link in purchase_detail["related_transactions"])
+    assert any(link["id"] == original["id"] and link["relation"] == "purchase"
+               for link in refund_detail["related_transactions"])
 
 
 def test_unknown_transaction_is_404(client):
@@ -350,7 +512,7 @@ def test_concurrent_requests_all_succeed(client):
     threadpool submissions, so the connection is opened on one worker thread and
     used on another. Serialised, AnyIO hands back the same idle worker and the
     mismatch never shows. Load one page that fetches four endpoints at once and
-    SQLite's same-thread check rejects most of them.
+    This checks that request-scoped database connections stay independent.
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -368,8 +530,7 @@ def test_reading_integrity_does_not_write(client, conn):
 
     It used to append an audit row per account per request. That grew the table
     on every page refresh, and — because two readers each tried to upgrade the
-    same deferred transaction to a write — deadlocked outright under load, which
-    SQLite reports immediately rather than waiting out.
+    same deferred transaction to a write — deadlocked outright under load.
     """
     def audit_rows() -> int:
         return conn.execute("SELECT COUNT(*) AS n FROM reconciliation_check").fetchone()["n"]

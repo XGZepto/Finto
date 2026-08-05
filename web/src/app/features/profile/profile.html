@@ -1,0 +1,42 @@
+<div class="page-head"><h1>{{ t('Profile & settings', '個人及設定') }}</h1></div>
+<div class="settings-grid">
+  <section class="card identity"><div class="avatar">{{ preferences.user()?.username?.charAt(0)?.toUpperCase() || 'F' }}</div><div><h2>{{ preferences.user()?.username || t('Private workspace', '私人工作區') }}</h2>@if (preferences.user()?.email; as email) { <span>{{ email }}</span> }</div></section>
+  <section class="card">
+    <h2>{{ t('Display', '顯示') }}</h2>
+    <div class="preference-row">
+      <label for="theme">{{ t('Appearance', '外觀') }}</label>
+      <finto-select id="theme" [options]="themeOptions()" valueKey="value" labelKey="label"
+                    [ariaLabel]="t('Appearance', '外觀')" [ngModel]="preferences.theme()"
+                    (ngModelChange)="setTheme($event)" />
+    </div>
+    <div class="preference-row">
+      <label for="language">{{ t('Language', '語言') }}</label>
+      <finto-select id="language" [options]="languages" valueKey="value" labelKey="label"
+                    [ariaLabel]="t('Language', '語言')" [ngModel]="preferences.language()"
+                    (ngModelChange)="setLanguage($event)" />
+    </div>
+    <div class="preference-row">
+      <label for="base-currency">{{ t('Reporting currency', '報表貨幣') }}</label>
+      <finto-select id="base-currency" [options]="currencies"
+                    [ariaLabel]="t('Reporting currency', '報表貨幣')"
+                    [ngModel]="preferences.baseCurrency()"
+                    (ngModelChange)="setBaseCurrency($event)" />
+    </div>
+  </section>
+  <section class="card api-access">
+    <div class="section-head"><h2>API access</h2><button (click)="generateApiKey()">Generate key</button></div>
+    @if (newApiKey()) {
+      <div class="key-reveal"><code>{{ newApiKey() }}</code><button class="primary" (click)="copyApiKey()">{{ copied() ? 'Copied' : 'Copy' }}</button></div>
+    }
+    @for (key of apiKeys(); track key.id) {
+      <div class="api-key-row">
+        <span><strong>{{ key.name }}</strong><small class="mono">{{ key.prefix }}…</small></span>
+        <span class="mono small muted">{{ key.last_used_at ? 'used ' + key.last_used_at.slice(0, 10) : 'unused' }}</span>
+        <button class="danger" (click)="revokeApiKey(key.id)">Revoke</button>
+      </div>
+    } @empty { <div class="empty compact">No API keys</div> }
+  </section>
+  <section class="card"><h2>{{ t('Security', '安全') }}</h2><div class="setting-row"><strong>{{ t('Protected session', '已保護工作階段') }}</strong><span class="tag good">{{ t('active', '使用中') }}</span></div><button class="danger" (click)="logout()">{{ t('Sign out', '登出') }}</button></section>
+  <section class="card"><h2>{{ t('Storage', '儲存') }}</h2><div class="setting-row"><strong>PostgreSQL</strong><span class="dot ok"></span></div></section>
+  <section class="card"><h2>{{ t('Data maintenance', '資料維護') }}</h2><a routerLink="/import" class="btn">{{ t('Import statements', '匯入月結單') }} →</a></section>
+</div>

@@ -1,24 +1,7 @@
-"""Refund → purchase linking.
+"""Refund-to-purchase detection and linkage.
 
-A refund is not income. Counted naively, returning a HKD 3,000 jacket looks
-exactly like being paid HKD 3,000, and the month it lands in shows inflated
-income while the month of the purchase shows inflated spending. Neither number
-is real: the economic event is that the purchase partly or wholly did not
-happen.
-
-Linking the refund to its purchase lets reporting net them against the *original*
-category and, optionally, the original period — so "clothing" reflects what you
-actually kept.
-
-This is a different problem from deduplication despite looking similar. A
-duplicate is the same transaction seen twice and one copy must be suppressed. A
-refund is a second, genuine transaction with the opposite sign, and both rows
-stay in the ledger — the balance assertions depend on it, because both really
-did move money.
-
-Matching is conservative in the same way as everywhere else here: a refund with
-no confident purchase is simply left unlinked, which is honest. A refund linked
-to the wrong purchase silently misattributes both categories.
+Both transaction rows remain in the ledger. The link lets reporting assign the
+refund to the purchase category and expose the relationship in either direction.
 """
 
 from __future__ import annotations

@@ -1,9 +1,4 @@
-"""Integrity: did we capture every transaction?
-
-The most important question the system answers is not "are there duplicates?"
-but "is anything missing?". Dedup and transfer linking can both be perfect while
-the ledger is wrong, because a parser silently skipped rows.
-"""
+"""Balance reconciliation and structural integrity endpoints."""
 
 from __future__ import annotations
 

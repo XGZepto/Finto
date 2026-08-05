@@ -1,10 +1,8 @@
-"""Persistent cache and audit trail for LLM decisions.
+"""Persistent cache and audit trail for model decisions.
 
-Every call is keyed by a hash of its canonical input plus the prompt version.
-This is not just a cost optimisation — it is what makes the ledger reproducible.
-A ledger whose numbers shift because a model was silently updated underneath it
-is not a ledger. Cached decisions freeze the answer until you explicitly
-invalidate them by bumping the prompt version.
+Cache keys include the canonical input and prompt version. Changing either
+creates a new decision record; existing results remain reproducible until
+explicit invalidation.
 """
 
 from __future__ import annotations
@@ -24,7 +22,7 @@ def input_hash(task: str, payload: Any) -> str:
 def lookup(conn, task: str, ihash: str, prompt_version: str) -> dict | None:
     row = conn.execute(
         "SELECT output, confidence FROM llm_decision "
-        "WHERE task=? AND input_hash=? AND prompt_version=?",
+        "WHERE task=%s AND input_hash=%s AND prompt_version=%s",
         (task, ihash, prompt_version),
     ).fetchone()
     if not row:
@@ -38,9 +36,13 @@ def record(
 ) -> str:
     did = str(uuid.uuid4())
     conn.execute(
-        "INSERT OR REPLACE INTO llm_decision (id, task, input_hash, input_summary, "
+        "INSERT INTO llm_decision (id, task, input_hash, input_summary, "
         "output, confidence, model, prompt_version, applied, created_at) "
-        "VALUES (?,?,?,?,?,?,?,?,0,?)",
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,0,%s) "
+        "ON CONFLICT (task, input_hash, prompt_version) DO UPDATE SET "
+        "input_summary=EXCLUDED.input_summary, output=EXCLUDED.output, "
+        "confidence=EXCLUDED.confidence, model=EXCLUDED.model, "
+        "created_at=EXCLUDED.created_at",
         (did, task, ihash, summary[:500], json.dumps(output, default=str),
          confidence, model, prompt_version, datetime.now().isoformat()),
     )
@@ -53,10 +55,8 @@ def cached_decision(
 ) -> tuple[Any, bool]:
     """Return a cached decision, or compute and store one.
 
-    Returns (output, from_cache). The cache is keyed on the *input*, so an
-    identical question always yields an identical answer regardless of which
-    model version is configured today — which is what stops a ledger's numbers
-    drifting under it.
+    Returns ``(output, from_cache)``. Identical inputs and prompt versions reuse
+    the stored output.
     """
     ihash = input_hash(task, payload if payload is not None else input_summary)
     hit = lookup(conn, task, ihash, prompt_version)
@@ -77,8 +77,11 @@ def annotate(
 ) -> None:
     """Record which layer set a field, so LLM output stays distinguishable."""
     conn.execute(
-        "INSERT OR REPLACE INTO txn_annotation (txn_id, field, value, source, "
-        "confidence, decision_id, created_at) VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO txn_annotation (txn_id, field, value, source, "
+        "confidence, decision_id, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s) "
+        "ON CONFLICT (txn_id, field) DO UPDATE SET value=EXCLUDED.value, "
+        "source=EXCLUDED.source, confidence=EXCLUDED.confidence, "
+        "decision_id=EXCLUDED.decision_id, created_at=EXCLUDED.created_at",
         (txn_id, field, value, source, confidence, decision_id,
          datetime.now().isoformat()),
     )
@@ -87,16 +90,15 @@ def annotate(
 def invalidate(conn, *, task: str | None = None, prompt_version: str | None = None) -> int:
     """Drop cached decisions so they are recomputed.
 
-    Use after changing a prompt or switching models. Deterministic decisions are
-    untouched — only the LLM layer is affected, which is the point of keeping
-    them in a separate table.
+    Use after changing a prompt or switching models. This does not modify
+    deterministic rules or manual annotations.
     """
     sql, params = "DELETE FROM llm_decision WHERE 1=1", []
     if task:
-        sql += " AND task=?"
+        sql += " AND task=%s"
         params.append(task)
     if prompt_version:
-        sql += " AND prompt_version=?"
+        sql += " AND prompt_version=%s"
         params.append(prompt_version)
     cur = conn.execute(sql, params)
     return cur.rowcount

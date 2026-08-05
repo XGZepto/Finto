@@ -4,7 +4,7 @@
 
 <app-filter-bar (changed)="load()" />
 
-<div class="card">
+<div class="card ledger-card">
   <div class="toolbar">
     <span class="small muted mono">
       @if (total()) {
@@ -18,22 +18,49 @@
   </div>
 
   @if (scopeTotals().length) {
+    <div class="aggregation-controls">
+      <span class="aggregation-label">Totals</span>
+      <div class="aggregation-actions">
+        <div class="seg" aria-label="Aggregation currency mode">
+          <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Normalised</button>
+          <button [class.on]="showNative()" (click)="setAggregation('native')">Native</button>
+        </div>
+        @if (!showNative()) {
+          <finto-select class="currency-select" ariaLabel="Aggregation currency"
+                        [options]="currencies()" [ngModel]="convertTo()"
+                        (ngModelChange)="setConvertTo($event)" />
+        }
+      </div>
+    </div>
+    @if (!showNative() && normalised(); as total) {
+      <div class="scope normalised-scope">
+        <div class="scope-item">
+          <span class="ccy mono">{{ total.net.currency }}</span>
+          <span class="metric out"><small>Out</small><b class="mono">{{ total.spend | money: 'bare' }}</b></span>
+          <span class="metric in"><small>In</small><b class="mono">{{ total.income | money: 'bare' }}</b></span>
+          <span class="metric net" [class.neg]="total.net.amount < 0" [class.pos]="total.net.amount > 0"><small>Net</small><b class="mono">{{ total.net | money: 'bare' }}</b></span>
+        </div>
+      </div>
+    } @else {
     <div class="scope">
       @for (t of scopeTotals(); track t.currency) {
         <div class="scope-item">
           <span class="ccy mono">{{ t.currency }}</span>
-          <span class="out mono">{{ t.spend | money: 'bare' }}</span>
-          <span class="in mono">{{ t.income | money: 'bare' }}</span>
-          <span class="net mono" [class.neg]="t.net.amount < 0" [class.pos]="t.net.amount > 0">
-            {{ t.net | money: 'bare' }}
-          </span>
+          <span class="metric out"><small>Out</small><b class="mono">{{ t.spend | money: 'bare' }}</b></span>
+          <span class="metric in"><small>In</small><b class="mono">{{ t.income | money: 'bare' }}</b></span>
+          <span class="metric net" [class.neg]="t.net.amount < 0" [class.pos]="t.net.amount > 0"><small>Net</small><b class="mono">{{ t.net | money: 'bare' }}</b></span>
         </div>
       }
     </div>
+    }
   }
 
   @if (loading()) {
-    <div class="spinner">loading </div>
+    <div class="blotter-skeleton" aria-label="Loading transactions">
+      @for (row of [1,2,3,4,5,6,7,8]; track row) {
+        <div class="skeleton-row"><i class="skeleton"></i><i class="skeleton"></i><i class="skeleton"></i></div>
+      }
+    </div>
   } @else {
     <div class="table-wrap">
       <table>
@@ -53,7 +80,11 @@
         </thead>
         <tbody>
           @for (t of rows(); track t.id) {
-            <tr (click)="open(t)" class="clickable" [class.on]="selected()?.id === t.id">
+            <tr (click)="openFromRow($event, t)" (keydown.enter)="openFromKeyboard($event, t)"
+                (keydown.space)="openFromKeyboard($event, t)"
+                class="clickable" [class.on]="selected()?.id === t.id" tabindex="0"
+                role="button" [attr.aria-expanded]="selected()?.id === t.id"
+                [attr.aria-label]="(t.merchant || t.description) + ', ' + (t.booked | money)">
               <td class="date mono small nowrap">{{ t.date | shortDate }}</td>
               <td class="account">
                 {{ t.account_name }}
@@ -87,8 +118,8 @@
                   via {{ gateway(t) }}
                   <span class="muted small block">gateway payment</span>
                 } @else if (t.category) {
-                  {{ t.category }}
-                  @if (t.subcategory) { <span class="muted small block">{{ t.subcategory }}</span> }
+                  {{ friendlyTaxonomy(t.category) }}
+                  @if (t.subcategory) { <span class="muted small block">{{ friendlyTaxonomy(t.subcategory) }}</span> }
                 } @else {
                   <span class="dim small">uncategorised</span>
                 }
@@ -121,20 +152,18 @@
 <!-- Detail drawer. Provenance is the point: every number here traces to a line
      in a file you downloaded, and you can read that line. -->
 @if (selected(); as txn) {
-  <div class="drawer-backdrop" (click)="close()"></div>
-  <aside class="drawer">
+  <button type="button" class="drawer-backdrop" (click)="close()" aria-label="Close transaction details"></button>
+  <aside #drawer class="drawer" role="dialog" aria-modal="true" aria-labelledby="transaction-title"
+         tabindex="-1" [attr.aria-busy]="detailLoading()" (keydown)="trapFocus($event)">
     <header>
       <div class="head-text">
-        <h2>{{ txn.merchant || txn.description }}</h2>
-        <p class="muted small mono">
-          {{ txn.account_name }} · {{ txn.date | shortDate }}
-          @if (txn.cardholder_name) { · {{ txn.cardholder_name }}
-            @if (txn.card_last4) { ·{{ txn.card_last4 }} }
-          }
-        </p>
+        <h2 id="transaction-title">{{ txn.merchant || txn.description }}</h2>
+        @if (txn.description !== (txn.merchant || txn.description)) { <p class="muted small">{{ txn.description }}</p> }
       </div>
       <button class="bare close" (click)="close()" aria-label="Close">×</button>
     </header>
+
+    @if (detailLoading()) { <div class="drawer-loading" aria-live="polite">Loading</div> }
 
     <div class="amount-hero" [class.neg]="txn.booked.amount < 0" [class.pos]="txn.booked.amount > 0">
       {{ txn.booked | money }}
@@ -144,6 +173,14 @@
         Merchant charged {{ txn.native | money }}@if (txn.fx_rate) {, converted at {{ txn.fx_rate }}}
       </p>
     }
+
+    <dl class="drawer-overview">
+      <div><dt>Account</dt><dd>{{ txn.account_name }}</dd></div>
+      <div><dt>Date</dt><dd class="mono">{{ txn.date | shortDate }}</dd></div>
+      <div><dt>Category</dt><dd>{{ friendlyTaxonomy(txn.category) }}@if (txn.subcategory) { <span class="taxonomy sub">{{ friendlyTaxonomy(txn.subcategory) }}</span> }</dd></div>
+      <div><dt>Type</dt><dd><span class="tag">{{ txn.kind }}</span><span class="tag">{{ txn.status }}</span></dd></div>
+      @if (txn.cardholder_name) { <div class="wide"><dt>Cardholder</dt><dd>{{ txn.cardholder_name }}@if (txn.card_last4) { <span class="mono muted"> ·{{ txn.card_last4 }}</span> }</dd></div> }
+    </dl>
 
     @if (gateway(txn); as g) {
       <section class="gateway-note">
@@ -157,11 +194,9 @@
     }
 
     <div class="drawer-flags">
-      <span class="tag">{{ txn.kind }}</span>
-      <span class="tag">{{ txn.status }}</span>
-      @if (txn.installment_seq) {
+      @if (txn.installment_plan_id) {
         <button class="tag installment link" (click)="openPlan()">
-          instalment {{ txn.installment_seq }} →
+          instalment@if (txn.installment_seq) { {{ txn.installment_seq }} } →
         </button>
       }
       @if (txn.refund_of_id) {
@@ -172,34 +207,40 @@
     </div>
 
     <section>
-      <h3>Classification</h3>
-      <div class="field">
-        <label for="cat">Category</label>
-        <input id="cat" [ngModel]="editCategory()" (ngModelChange)="editCategory.set($event)"
-               placeholder="e.g. dining" />
+      <div class="section-head">
+        <h3>Annotations</h3>
+        @if (!editMode()) { <button class="ghost" (click)="editMode.set(true)">Edit</button> }
       </div>
-      <div class="field">
-        <label for="notes">Notes</label>
-        <textarea id="notes" rows="2" [ngModel]="editNotes()"
-                  (ngModelChange)="editNotes.set($event)"></textarea>
-      </div>
-      <button class="primary" [disabled]="saving()" (click)="save()">
-        {{ saving() ? 'Saving…' : 'Save' }}
-      </button>
-    </section>
-
-    <section>
-      <h3>Tags</h3>
-      <div class="tag-edit">
-        @for (tg of txn.tags; track tg) {
-          <span class="tag tagchip removable">
-            <button class="bare" (click)="filterByTag(tg)">{{ tg }}</button>
-            <button class="bare x" (click)="removeTag(tg)" aria-label="Remove">×</button>
-          </span>
-        }
-        <input class="tag-input" [ngModel]="newTag()" (ngModelChange)="newTag.set($event)"
-               (keyup.enter)="addTag()" placeholder="add tag" />
-      </div>
+      @if (editMode()) {
+        <div class="edit-panel">
+          <div class="field">
+            <label for="cat">Category</label>
+            <input id="cat" [ngModel]="editCategory()" (ngModelChange)="editCategory.set($event)" />
+          </div>
+          <div class="field">
+            <label for="notes">Notes</label>
+            <textarea id="notes" rows="2" [ngModel]="editNotes()" (ngModelChange)="editNotes.set($event)"></textarea>
+          </div>
+          <label>Tags</label>
+          <div class="tag-edit">
+            @for (tg of txn.tags; track tg) {
+              <span class="tag tagchip removable">
+                <span>{{ tg }}</span><button class="bare x" (click)="removeTag(tg)" [attr.aria-label]="'Remove ' + tg">×</button>
+              </span>
+            }
+            <input class="tag-input" [ngModel]="newTag()" (ngModelChange)="newTag.set($event)" (keyup.enter)="addTag()" placeholder="add tag" />
+          </div>
+          <div class="edit-actions">
+            <button class="primary" [disabled]="saving()" (click)="save()">{{ saving() ? 'Saving…' : 'Save' }}</button>
+            <button class="ghost" [disabled]="saving()" (click)="cancelEdit()">Cancel</button>
+          </div>
+        </div>
+      } @else {
+        <dl class="details classification-read">
+          <dt>Notes</dt><dd>{{ txn.notes || '—' }}</dd>
+          <dt>Tags</dt><dd class="read-tags">@for (tg of txn.tags; track tg) { <button class="tag tagchip" (click)="filterByTag(tg)">{{ tg }}</button> } @empty { — }</dd>
+        </dl>
+      }
     </section>
 
     @if (detailEntries(txn).length) {
@@ -230,6 +271,22 @@
             <span class="mono leg-amt"
                   [class.neg]="leg.amount_booked < 0" [class.pos]="leg.amount_booked > 0">
               {{ { amount: leg.amount_booked, currency: leg.currency_booked } | money: 'bare' }}
+            </span>
+          </button>
+        }
+      </section>
+    }
+
+    @if (txn.related_transactions?.length) {
+      <section>
+        <h3>Linked transactions</h3>
+        @for (linked of txn.related_transactions; track linked.id) {
+          <button class="leg" (click)="openById(linked.id)">
+            <span class="tag">{{ linked.relation }}</span>
+            <span class="leg-desc">{{ linked.description_raw }}</span>
+            <span class="mono small muted">{{ linked.account_id }} · {{ linked.txn_date }}</span>
+            <span class="mono leg-amt" [class.neg]="linked.amount_booked < 0" [class.pos]="linked.amount_booked > 0">
+              {{ { amount: linked.amount_booked, currency: linked.currency_booked } | money: 'bare' }}
             </span>
           </button>
         }
