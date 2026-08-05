@@ -49,8 +49,6 @@ from .routers import (
 
 # Vercel routes only /api/* to this function; the spec and docs must live under
 # that prefix or they resolve to the SPA in production.
-BUILD_MARKER = "endswith-nostore-v3"
-
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
@@ -407,9 +405,7 @@ async def authenticated_api_context(request: Request, call_next):
             return await call_next(request)
         except HTTPException as error:
             return Response(
-                json.dumps({"detail": error.detail, "_seen": path,
-                            "_build": BUILD_MARKER}),
-                status_code=error.status_code,
+                json.dumps({"detail": error.detail}), status_code=error.status_code,
                 media_type="application/json", headers={"Cache-Control": "no-store"},
             )
         finally:
@@ -463,7 +459,7 @@ def health() -> dict:
     conn = dbm.connect()
     try:
         conn.execute("SELECT 1")
-        return {"status": "ok", "storage": "postgresql", "build": BUILD_MARKER}
+        return {"status": "ok", "storage": "postgresql"}
     finally:
         conn.close()
 
