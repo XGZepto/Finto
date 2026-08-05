@@ -417,8 +417,12 @@ async def authenticated_api_context(request: Request, call_next):
 async def private_route_cache(request: Request, call_next):
     """Let one signed-in browser reuse route data without shared CDN caching."""
     response = await call_next(request)
-    response.headers["X-Finto-Path"] = f"{request.scope.get('root_path','')}|{request.url.path}"
-    if request.method == "GET" and request.url.path.startswith("/api/"):
+    cacheable = (
+        request.method == "GET"
+        and request.url.path.startswith("/api/")
+        and 200 <= response.status_code < 300
+    )
+    if cacheable:
         path = request.url.path
         stable = path in {
             "/api/accounts", "/api/cards", "/api/facets", "/api/institutions",
@@ -437,6 +441,8 @@ async def private_route_cache(request: Request, call_next):
             else "private, max-age=300, stale-while-revalidate=3600"
         )
         response.headers["Vary"] = "Cookie"
+    elif request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
     else:
         response.headers.setdefault("Cache-Control", "no-store")
     return response
