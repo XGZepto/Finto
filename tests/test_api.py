@@ -180,6 +180,27 @@ def test_agent_taxonomy_api_requires_confirmation_and_audits(
     assert client.get("/api/agent/taxonomy/audit", headers=auth).status_code == 401
 
 
+def test_agent_ledger_categorize_gates_apply_and_llm(client, monkeypatch):
+    token = client.post("/api/auth/api-keys", json={"name": "cat"}).json()["key"]
+    auth = {"Authorization": f"Bearer {token}"}
+
+    audit = client.post("/api/agent/ledger/categorize", headers=auth)
+    assert audit.status_code == 200
+    assert audit.json()["applied"] is False
+    assert "distinct_merchants" in audit.json()["result"]
+
+    # Apply needs the explicit confirmation header.
+    assert client.post(
+        "/api/agent/ledger/categorize?apply=true", headers=auth).status_code == 409
+
+    # With confirmation but no LLM key, it declines rather than guessing.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    denied = client.post(
+        "/api/agent/ledger/categorize?apply=true",
+        headers={**auth, "X-Finto-Confirm": "apply-categorize"})
+    assert denied.status_code == 503
+
+
 def test_transactions_list(client):
     body = client.get("/api/transactions").json()
     assert body["total"] > 0

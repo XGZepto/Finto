@@ -165,6 +165,44 @@ def agent_taxonomy_apply(request: Request) -> dict:
     return _taxonomy_operation(request, apply=True)
 
 
+@app.post("/api/agent/ledger/categorize")
+def agent_ledger_categorize(request: Request, apply: bool = False,
+                            promote: bool = True) -> dict:
+    """LLM-categorise transactions no rule matched. Deterministic rules always
+    win; the model only sees what is left, its answers are cached and recorded
+    source='llm', and low-confidence rows stay uncategorised."""
+    from .. import db as dbm
+    from ..llm.categorize import apply_to_ledger, promote_to_rules
+    from ..llm.provider import AnthropicProvider, LLMUnavailable
+
+    user_id, key_id = _api_key_owner(
+        request, "ledger:write" if apply else "ledger:read")
+    if apply and request.headers.get("x-finto-confirm") != "apply-categorize":
+        raise HTTPException(409, "explicit apply confirmation required")
+    provider = None
+    if apply:
+        try:
+            provider = AnthropicProvider()
+        except LLMUnavailable as error:
+            raise HTTPException(503, str(error)) from error
+
+    conn = dbm.connect()
+    try:
+        result = apply_to_ledger(conn, provider, dry_run=not apply)
+        if apply and promote:
+            result["promoted_rules"] = promote_to_rules(conn)
+        conn.execute(
+            "INSERT INTO agent_operation (id,subject,action,user_id,applied,result,created_at) "
+            "VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s)",
+            (str(uuid.uuid4()), f"api-key:{key_id}", "llm_categorize", user_id,
+             int(apply), json.dumps(result), datetime.now(timezone.utc).isoformat()),
+        )
+        conn.commit()
+        return {"ok": True, "applied": apply, "result": result}
+    finally:
+        conn.close()
+
+
 def _session_secret() -> str:
     secret = os.environ.get("FINTO_SESSION_SECRET", "")
     if not secret:
