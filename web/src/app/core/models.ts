@@ -158,11 +158,11 @@ export interface Position {
   balance_converted?: ConvertedMoney;
   inflow_converted?: ConvertedMoney;
   outflow_converted?: ConvertedMoney;
-  /** 'statement' when the bank's own closing figure was available. */
-  basis: 'statement' | 'movements';
+  /** Source of the displayed point-in-time balance. */
+  basis: 'statement' | 'movements' | 'investment_snapshot';
   basis_date: string | null;
-  first_date: string;
-  last_date: string;
+  first_date: string | null;
+  last_date: string | null;
 }
 
 export interface Account {

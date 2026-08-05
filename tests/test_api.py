@@ -198,6 +198,38 @@ def test_flow_report_includes_external_nodes_for_account_sankey(client):
                for node in body["normalised"]["external_nodes"])
 
 
+def test_positions_include_investment_snapshots_under_acl(client, database_url):
+    from datetime import date
+
+    from fin.investment import InvestmentSnapshot, SubaccountBalance, save_snapshot
+    from fin.models import Account, Money
+
+    conn = dbm.connect(database_url)
+    dbm.upsert_account(conn, Account(
+        id="hsbc_mpf_regular", institution_id="hsbc_hk", display_name="MPF Regular",
+        account_type="investment", primary_currency="HKD", balance_group="hsbc_mpf",
+    ))
+    conn.commit()
+    save_snapshot(conn, InvestmentSnapshot(
+        as_of_date=date(2026, 7, 31), scheme="hsbc_mpf", currency="HKD",
+        total_value=Money(amount=16593537, currency="HKD"), source="test",
+        subaccounts=[SubaccountBalance(
+            account_id="hsbc_mpf_regular", member_no=None,
+            balance=Money(amount=16593537, currency="HKD"),
+        )],
+    ))
+    conn.close()
+
+    body = client.get("/api/positions?convert_to=HKD").json()
+    position = next(p for p in body["positions"] if p["account_id"] == "hsbc_mpf_regular")
+    assert position["balance"]["amount"] == 16593537
+    assert position["basis"] == "investment_snapshot"
+    investment = next(
+        r for r in body["normalised"]["by_type"] if r["account_type"] == "investment"
+    )
+    assert investment["balance"]["amount"] == 16593537
+
+
 def test_money_is_integer_minor_units(client):
     """A float here would hand the ledger's rounding error to JavaScript."""
     item = client.get("/api/transactions").json()["items"][0]

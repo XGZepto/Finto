@@ -13,7 +13,7 @@ from decimal import Decimal
 from fin import db as dbm
 from fin import fx as fxm
 from fin.models import Account, FxRate, Money
-from fin.reporting import positions, summary, totals
+from fin.reporting import positions, rollup, summary, totals
 
 
 def _add(conn, account, amount, ccy, when="2025-01-15", desc="THING"):
@@ -94,6 +94,44 @@ def test_position_falls_back_to_movements_and_says_so(conn):
     row = next(p for p in positions(conn) if p["account_id"] == "amex_us_main")
     assert row["basis"] == "movements"
     assert row["balance"]["amount"] == -12345
+
+
+def test_investment_snapshot_is_in_positions_and_supersedes_contributions(conn):
+    from fin.investment import InvestmentSnapshot, SubaccountBalance, save_snapshot
+
+    dbm.upsert_account(conn, Account(
+        id="hsbc_mpf_regular", institution_id="hsbc_hk", display_name="MPF Regular",
+        account_type="investment", primary_currency="HKD", balance_group="hsbc_mpf",
+    ))
+    conn.commit()
+    _add(conn, "hsbc_mpf_regular", 250000, "HKD", when="2026-06-30",
+         desc="MPF CONTRIBUTION")
+    save_snapshot(conn, InvestmentSnapshot(
+        as_of_date=date(2026, 7, 31), scheme="hsbc_mpf", currency="HKD",
+        total_value=Money(amount=16593537, currency="HKD"), source="test",
+        subaccounts=[SubaccountBalance(
+            account_id="hsbc_mpf_regular", member_no=None,
+            balance=Money(amount=16593537, currency="HKD"),
+        )],
+    ))
+
+    row = next(p for p in positions(conn) if p["account_id"] == "hsbc_mpf_regular")
+    assert row["balance"]["amount"] == 16593537
+    assert row["net"]["amount"] == 250000
+    assert row["basis"] == "investment_snapshot"
+    assert row["basis_date"] == "2026-07-31"
+    by_type = rollup(
+        conn, positions(conn), fields=("balance",), to_currency="HKD", key="account_type",
+    )
+    investment = next(r for r in by_type["rows"] if r["account_type"] == "investment")
+    assert investment["balance"]["amount"] == 16593537
+
+    before_snapshot = next(
+        p for p in positions(conn, as_of="2026-07-01")
+        if p["account_id"] == "hsbc_mpf_regular"
+    )
+    assert before_snapshot["basis"] == "movements"
+    assert before_snapshot["balance"]["amount"] == 250000
 
 
 # ---------------------------------------------------------------------------

@@ -606,7 +606,49 @@ def positions(conn, *, as_of: str | None = None) -> list[dict]:
             "first_date": r["first_date"],
             "last_date": r["last_date"],
         })
-    return rows
+
+    # Investment values are point-in-time valuations, not the sum of cash
+    # contributions. The latest snapshot for each scheme therefore replaces the
+    # balance of its subaccounts while leaving their transaction-derived flow
+    # fields intact.
+    snapshot_sql = """
+        WITH ranked AS (
+            SELECT id, as_of_date,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY scheme ORDER BY as_of_date DESC, created_at DESC
+                   ) AS snapshot_rank
+            FROM investment_snapshot
+            {as_of}
+        )
+        SELECT b.account_id, a.display_name AS account_name, a.institution_id,
+               a.account_type, b.currency, b.balance, s.as_of_date
+        FROM ranked s
+        JOIN investment_subaccount_balance b ON b.snapshot_id=s.id
+        JOIN account a ON a.id=b.account_id
+        WHERE s.snapshot_rank=1
+    """.format(as_of="WHERE as_of_date <= %s" if as_of else "")
+    existing = {(r["account_id"], r["currency"]): r for r in rows}
+    for valuation in conn.execute(snapshot_sql, (as_of,) if as_of else ()):
+        key = (valuation["account_id"], valuation["currency"])
+        movement = existing.get(key)
+        zero = money(0, valuation["currency"])
+        existing[key] = {
+            "account_id": valuation["account_id"],
+            "account_name": valuation["account_name"],
+            "institution_id": valuation["institution_id"],
+            "account_type": valuation["account_type"],
+            "currency": valuation["currency"],
+            "txn_count": movement["txn_count"] if movement else 0,
+            "balance": money(valuation["balance"], valuation["currency"]),
+            "net": movement["net"] if movement else zero,
+            "inflow": movement["inflow"] if movement else zero,
+            "outflow": movement["outflow"] if movement else zero,
+            "basis": "investment_snapshot",
+            "basis_date": valuation["as_of_date"],
+            "first_date": movement["first_date"] if movement else None,
+            "last_date": movement["last_date"] if movement else None,
+        }
+    return sorted(existing.values(), key=lambda r: (r["account_name"], r["currency"]))
 
 
 def declared_currencies(conn) -> dict[str, list[str]]:
