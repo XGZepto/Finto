@@ -134,6 +134,7 @@ def test_agent_taxonomy_api_requires_confirmation_and_audits(
     listed = client.get("/api/auth/api-keys").json()["keys"]
     assert listed[0]["prefix"] in token
     assert "key" not in listed[0]
+    assert "ledger:write" in listed[0]["scopes"]
     auth = {"Authorization": f"Bearer {token}"}
 
     audit = client.get("/api/agent/taxonomy/audit", headers=auth)
@@ -147,12 +148,30 @@ def test_agent_taxonomy_api_requires_confirmation_and_audits(
     assert applied.status_code == 200
     assert applied.json()["applied"] is True
 
+    rebuilt = client.post(
+        "/api/agent/ledger/rebuild-transfers?month=2026-07&start_day=24&end_day=24",
+        headers=auth,
+    )
+    assert rebuilt.status_code == 200
+    assert rebuilt.json()["result"]["range"] == ["2026-07-24", "2026-07-24"]
+    ledger = client.get(
+        "/api/agent/ledger/transactions?date_from=2026-07-01&date_to=2026-07-31",
+        headers=auth,
+    )
+    assert ledger.status_code == 200
+    assert "items" in ledger.json()
+    assert client.get(
+        "/api/agent/ledger/transactions?date_from=2026-01-01&date_to=2026-07-31",
+        headers=auth,
+    ).status_code == 422
+
     conn = dbm.connect(database_url)
     rows = conn.execute(
         "SELECT subject,applied FROM agent_operation ORDER BY created_at"
     ).fetchall()
     assert rows == [
         {"subject": f"api-key:{key_id}", "applied": 0},
+        {"subject": f"api-key:{key_id}", "applied": 1},
         {"subject": f"api-key:{key_id}", "applied": 1},
     ]
     conn.close()

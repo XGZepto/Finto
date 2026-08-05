@@ -84,13 +84,20 @@ updates from conflicts and leaves the database unchanged.
 
 ## API keys
 
-Create and revoke API keys from Settings. Keys currently provide
-`taxonomy:read` and `taxonomy:write` scopes for their owner. The plaintext key
-is returned once; PostgreSQL stores its digest and prefix.
+Create and revoke API keys from Settings. New keys provide taxonomy and bounded
+ledger-maintenance scopes for their owner. The plaintext key is returned once;
+PostgreSQL stores its digest and prefix.
 
 Use `GET /api/agent/taxonomy/audit` for a read-only audit. Applying the same
 deterministic changes requires `POST /api/agent/taxonomy/apply` and the header
 `X-Finto-Confirm: apply-taxonomy`.
+
+Use `POST /api/agent/ledger/rebuild-transfers?month=YYYY-MM&start_day=D&end_day=D`
+to recompute automatic links in a narrow date window. The route is audited and
+enforces the key owner's account ACL.
+
+Use `GET /api/agent/ledger/transactions?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD`
+to verify the affected rows. Reads are limited to 31 days and 100 rows.
 
 ## Backup and restore
 

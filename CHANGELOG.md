@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6 — 2026-08-05
+
+- Add bounded ledger read and audited transfer-maintenance routes for user-minted API keys.
+
 ## 0.2.5 — 2026-08-05
 
 - Link exact near-date transfers when the receiving leg, rather than the debit,

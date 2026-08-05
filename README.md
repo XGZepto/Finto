@@ -144,7 +144,7 @@ tables. Audit proposed changes before applying them:
 .venv/bin/finto taxonomy audit --user owner --apply
 ```
 
-Users can mint and revoke taxonomy API keys in Settings. A generated key is
+Users can mint and revoke maintenance API keys in Settings. A generated key is
 shown once and stored only as a SHA-256 digest.
 
 ```bash
@@ -159,10 +159,14 @@ curl -fsS -X POST \
   -H "Authorization: Bearer $FINTO_API_KEY" \
   -H 'X-Finto-Confirm: apply-taxonomy' \
   "$FINTO_URL/api/agent/taxonomy/apply"
+
+curl -fsS -X POST \
+  -H "Authorization: Bearer $FINTO_API_KEY" \
+  "$FINTO_URL/api/agent/ledger/rebuild-transfers?month=2026-07&start_day=24&end_day=24"
 ```
 
-Each audit and apply operation is recorded in PostgreSQL. API keys are scoped
-to their owner and can be revoked without changing the login password.
+Each maintenance operation is recorded in PostgreSQL. API keys are scoped to
+their owner and can be revoked without changing the login password.
 
 ## LLM analysis
 

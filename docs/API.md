@@ -28,15 +28,19 @@ Send a maintenance key as a bearer token:
 Authorization: Bearer finto_...
 ```
 
-Taxonomy maintenance routes:
+Maintenance routes:
 
 | Method | Route | Scope | Additional header |
 |---|---|---|---|
 | `GET` | `/api/agent/taxonomy/audit` | `taxonomy:read` | — |
 | `POST` | `/api/agent/taxonomy/apply` | `taxonomy:write` | `X-Finto-Confirm: apply-taxonomy` |
+| `GET` | `/api/agent/ledger/transactions` | `ledger:read` | — |
+| `POST` | `/api/agent/ledger/rebuild-transfers` | `ledger:write` | — |
 
-Audit and apply responses include proposal, conflict, and update counts. Every
-operation records its user, key, action, outcome, and timestamp.
+Transfer rebuilds require `month=YYYY-MM`; optional `start_day` and `end_day`
+bound the work within that month. Ledger reads require `date_from` and `date_to`
+and accept ranges up to 31 days. Every write records its user, key, action,
+outcome, and timestamp.
 
 ## Access control
 

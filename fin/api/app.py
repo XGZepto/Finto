@@ -50,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.2.5",
+    version="0.2.6",
 )
 
 
@@ -218,7 +218,7 @@ def create_api_key(req: ApiKeyRequest, request: Request) -> dict:
         token = "finto_" + secrets.token_urlsafe(32)
         key_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
-        scopes = ["taxonomy:read", "taxonomy:write"]
+        scopes = ["taxonomy:read", "taxonomy:write", "ledger:read", "ledger:write"]
         conn.execute(
             "INSERT INTO user_api_key (id,user_id,name,key_prefix,key_hash,scopes,created_at) "
             "VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s)",
@@ -409,44 +409,110 @@ def health() -> dict:
         conn.close()
 
 
+def _bounded_transfer_rebuild(conn, month: str, start_day: int, end_day: int) -> dict:
+    """Recompute automatic transfer links in a bounded monthly window."""
+    from datetime import date, timedelta
+
+    from .. import db as dbm
+    from ..transfers import TransferContext, find_transfers
+
+    if not 1 <= start_day <= 31 or not 1 <= end_day <= 31 or start_day > end_day:
+        raise HTTPException(422, "invalid day range")
+    try:
+        start = date.fromisoformat(f"{month}-{start_day:02d}")
+    except ValueError as error:
+        raise HTTPException(422, "invalid month or start day") from error
+    next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    last_day = (next_month - timedelta(days=1)).day
+    end = date.fromisoformat(f"{month}-{min(end_day, last_day):02d}")
+    window_start, window_end = start - timedelta(days=10), end + timedelta(days=10)
+    txns = dbm.load_txns(
+        conn, include_duplicates=True,
+        from_date=window_start, to_date=window_end,
+    )
+    accounts_by_id = dbm.load_accounts(conn)
+    report = find_transfers(
+        txns, accounts_by_id, fx_lookup=dbm.make_fx_lookup(conn),
+        context=TransferContext(
+            self_aliases=dbm.load_self_aliases(conn),
+            account_aliases=dbm.load_account_alias_index(conn),
+            person_aliases=dbm.load_person_aliases(conn),
+        ),
+    )
+    dbm.insert_transfer_groups(conn, report.groups)
+    dbm.insert_transfer_candidates(conn, report.candidates)
+    linked = [t for t in txns if t.transfer_group_id]
+    with conn.cursor() as cursor:
+        cursor.executemany(
+            "UPDATE txn SET transfer_group_id=%s, kind=%s WHERE id=%s",
+            [(t.transfer_group_id, t.kind.value, t.id) for t in linked],
+        )
+    return {"month": month, "range": [str(start), str(end)],
+            "groups": len(report.groups), "candidates": len(report.candidates)}
+
+
+@app.get("/api/agent/ledger/transactions")
+def agent_ledger_transactions(request: Request, date_from: str, date_to: str,
+                              q: str | None = None, limit: int = 100) -> dict:
+    """Read at most 31 days of the key owner's ledger for maintenance work."""
+    from datetime import date
+
+    from .. import db as dbm
+    from .. import reporting
+
+    user_id, _key_id = _api_key_owner(request, "ledger:read")
+    try:
+        start, end = date.fromisoformat(date_from), date.fromisoformat(date_to)
+    except ValueError as error:
+        raise HTTPException(422, "invalid date range") from error
+    if end < start or (end - start).days > 31:
+        raise HTTPException(422, "date range must be 31 days or less")
+    conn = dbm.connect()
+    try:
+        dbm.apply_acl(conn, user_id)
+        return reporting.transactions(
+            conn,
+            filters={"from": date_from, "to": date_to, "q": q, "includeTransfers": True},
+            limit=min(max(limit, 1), 100),
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/agent/ledger/rebuild-transfers")
+def agent_rebuild_transfers(request: Request, month: str, start_day: int = 1,
+                            end_day: int = 31) -> dict:
+    """Run audited, bounded transfer maintenance with a user API key."""
+    from .. import db as dbm
+
+    user_id, key_id = _api_key_owner(request, "ledger:write")
+    conn = dbm.connect()
+    try:
+        dbm.apply_acl(conn, user_id)
+        result = _bounded_transfer_rebuild(conn, month, start_day, end_day)
+        conn.execute(
+            "INSERT INTO agent_operation (id,subject,action,user_id,applied,result,created_at) "
+            "VALUES (%s,%s,%s,%s,1,%s::jsonb,%s)",
+            (str(uuid.uuid4()), f"api-key:{key_id}", "rebuild_transfers", user_id,
+             json.dumps(result), datetime.now(timezone.utc).isoformat()),
+        )
+        conn.commit()
+        return {"ok": True, "result": result}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 @app.post("/api/admin/rebuild-transfers")
 def rebuild_transfers(month: str, start_day: int = 1, end_day: int = 31,
                       conn=Depends(api_get_conn)) -> dict:
     """Authenticated, bounded transfer maintenance for one part of a month."""
-    from .. import db as dbm
-    from ..transfers import TransferContext, find_transfers
     try:
-        from datetime import date, timedelta
-        start = date.fromisoformat(f"{month}-{start_day:02d}")
-        next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
-        last_day = (next_month - timedelta(days=1)).day
-        end = date.fromisoformat(f"{month}-{min(end_day, last_day):02d}")
-        window_start, window_end = start - timedelta(days=10), end + timedelta(days=10)
-        txns = dbm.load_txns(
-            conn, include_duplicates=True,
-            from_date=window_start, to_date=window_end,
-        )
-        accounts_by_id = dbm.load_accounts(conn)
-        report = find_transfers(
-            txns, accounts_by_id, fx_lookup=dbm.make_fx_lookup(conn),
-            context=TransferContext(
-                self_aliases=dbm.load_self_aliases(conn),
-                account_aliases=dbm.load_account_alias_index(conn),
-                person_aliases=dbm.load_person_aliases(conn),
-            ),
-        )
-        dbm.insert_transfer_groups(conn, report.groups)
-        dbm.insert_transfer_candidates(conn, report.candidates)
-        linked = [t for t in txns if t.transfer_group_id]
-        with conn.cursor() as cursor:
-            cursor.executemany(
-                "UPDATE txn SET transfer_group_id=%s, kind=%s WHERE id=%s",
-                [(t.transfer_group_id, t.kind.value, t.id) for t in linked],
-            )
+        result = _bounded_transfer_rebuild(conn, month, start_day, end_day)
         conn.commit()
-        return {"month": month, "range": [str(start), str(end)],
-                "groups": len(report.groups),
-                "candidates": len(report.candidates)}
+        return result
     except Exception:
         conn.rollback()
         raise
