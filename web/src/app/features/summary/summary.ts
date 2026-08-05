@@ -121,7 +121,7 @@ export class SummaryPage {
   /** How far back the net worth chart reaches, in months per pill. */
   readonly rangeOptions = ['3M', '6M', '1Y', '2Y'];
   readonly rangeMonths: Record<string, number> = { '3M': 3, '6M': 6, '1Y': 12, '2Y': 24 };
-  range = signal('1Y');
+  range = signal(sessionStorage.getItem('finto.summary.range') ?? '1Y');
   seriesMonths = computed(() => this.rangeMonths[this.range()] ?? 12);
   netWorthPoints = signal<Array<{ bucket: string; as_of: string; balance: Money }>>([]);
 
@@ -146,12 +146,16 @@ export class SummaryPage {
 
   setRange(value: string): void {
     this.range.set(value);
-    const convert = this.convertTo();
-    if (!convert) return;
-    this.api.netWorthSeries(convert, this.seriesMonths()).subscribe({
-      next: (res) => this.netWorthPoints.set(res.points),
-      error: () => this.netWorthPoints.set([]),
-    });
+    sessionStorage.setItem('finto.summary.range', value);
+    this.load();
+  }
+
+  /** Start of the window the pills select, as the ledger filter both use. */
+  private periodFilter(): { from: string } {
+    const start = new Date();
+    start.setMonth(start.getMonth() - this.seriesMonths() + 1);
+    start.setDate(1);
+    return { from: start.toISOString().slice(0, 10) };
   }
 
   /** What the net worth is made of, largest holding first. */
@@ -297,7 +301,8 @@ export class SummaryPage {
     this.loading.set(true);
     const convert = this.convertTo() || undefined;
 
-    this.api.summary(this.groupBy(), {}, convert).subscribe({
+    const period = this.periodFilter();
+    this.api.summary(this.groupBy(), period, convert).subscribe({
       next: (res) => {
         this.rows.set(res.rows);
         this.totals.set(res.totals);
@@ -308,7 +313,7 @@ export class SummaryPage {
 
     // The trend is always per month: the dimension control picks what the
     // breakdown splits by, never how time is bucketed.
-    this.api.summary('month', {}, convert).subscribe({
+    this.api.summary('month', period, convert).subscribe({
       next: (res) => {
         this.monthRows.set(res.rows);
         this.headline.set(res.normalised?.total ?? null);

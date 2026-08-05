@@ -167,7 +167,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
      band already carries the date, so the row does not repeat it. */
   .table-wrap tr.clickable {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 2px var(--s3);
     min-height: 58px;
@@ -179,14 +179,14 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .skeleton-row { grid-template-columns: 1fr 88px; min-height: 58px; gap: var(--s2) var(--s4); }
   .skeleton-row i:nth-child(3) { display: none; }
 
-  .table-wrap td.desc { grid-column: 2; grid-row: 1; min-width: 0; display: flex; align-items: center; gap: var(--s3); }
+  .table-wrap td.desc { grid-column: 1; grid-row: 1; min-width: 0; display: flex; align-items: center; gap: var(--s3); }
   .table-wrap td.desc .glyph { display: grid; }
-  .table-wrap td.num { grid-column: 3; grid-row: 1; text-align: right; white-space: nowrap; }
-  .table-wrap td.account { grid-column: 2; grid-row: 2; min-width: 0; }
-  .table-wrap td.category { grid-column: 2; grid-row: 2; min-width: 0; justify-self: end; }
+  .table-wrap td.num { grid-column: 2; grid-row: 1; text-align: right; white-space: nowrap; }
+  .table-wrap td.account { grid-column: 1; grid-row: 2; min-width: 0; }
+  .table-wrap td.category { grid-column: 1; grid-row: 2; min-width: 0; justify-self: end; }
   .table-wrap td.date { display: none; }
   .table-wrap td.account, td.category { font-size: 11px; color: var(--fg-3); }
-  .table-wrap td.flags { grid-column: 3; grid-row: 2; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; }
+  .table-wrap td.flags { grid-column: 2; grid-row: 2; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; }
   .table-wrap td.flags:empty { display: none; }
 
   /* The band stays put while its own rows scroll under it, which is what lets
