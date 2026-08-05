@@ -53,6 +53,25 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, sans-serif;
 
+  /* Spacing scale. Padding, gaps and section rhythm come from here — a loose
+     value is a bug, because that is what makes two panels breathe differently. */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* Type scale. A ledger has a headline figure and supporting detail; rendering
+     both at one size leaves the ranking to the reader. */
+  --t-hero: 34px;
+  --t-figure: 22px;
+  --t-body: 14px;
+  --t-data: 13px;
+  --t-label: 10.5px;
+  --t-micro: 9.5px;
+
   color-scheme: dark;
 }
 
@@ -132,13 +151,13 @@
 @media (max-width: 700px) {
   body { font-size: 13.5px; }
   .page-head { align-items: center; justify-content: space-between; }
-  .card { padding: 12px; }
+  .card { padding: var(--s3); }
   input, select, textarea { min-height: 40px; font-size: 13px; }
   button, .btn { min-height: 40px; }
   .section-head { align-items: flex-start; }
   .section-head > .row { width: 100%; }
-  .table-wrap { margin-inline: -12px; border-left: 0; border-right: 0; }
-  th, td { padding-inline: 9px; }
+  .table-wrap { margin-inline: calc(-1 * var(--s3)); border-left: 0; border-right: 0; }
+  th, td { padding-inline: var(--s2); }
 }
 
 * { box-sizing: border-box; }
@@ -189,16 +208,16 @@ h3 {
   color: var(--fg-3);
 }
 
-p { margin: 0 0 8px; }
+p { margin: 0 0 var(--s2); }
 a { color: var(--fg); }
 
 .page-head {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--s3);
   flex-wrap: wrap;
-  padding-bottom: 12px;
-  margin-bottom: 20px;
+  padding-bottom: var(--s3);
+  margin-bottom: var(--s5);
   border-bottom: 1px solid var(--line);
 }
 .page-head .sub {
@@ -219,20 +238,20 @@ a { color: var(--fg); }
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
-  padding: 16px;
+  padding: var(--s4);
 }
 
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.grid { display: grid; gap: 12px; }
-.spread { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.row { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+.grid { display: grid; gap: var(--s3); }
+.spread { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); flex-wrap: wrap; }
 
 .section-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: var(--s3);
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  margin-bottom: var(--s4);
 }
 .section-head label { margin: 0; }
 
@@ -240,7 +259,7 @@ a { color: var(--fg); }
 
 button, .btn {
   min-height: 34px;
-  padding: 5px 11px;
+  padding: var(--s1) var(--s3);
   border: 1px solid var(--line-2);
   border-radius: 0;
   background: var(--panel-2);
@@ -262,7 +281,7 @@ button.bare:hover { color: var(--fg); }
 
 input, select, textarea {
   min-height: 34px;
-  padding: 5px 8px;
+  padding: var(--s1) var(--s2);
   border: 1px solid var(--line);
   border-radius: 0;
   background: var(--bg);
@@ -290,7 +309,7 @@ input[type='search']::-webkit-search-cancel-button { appearance: none; }
 
 label {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: var(--s1);
   font-family: var(--mono);
   font-size: 10.5px;
   letter-spacing: 0.13em;
@@ -304,7 +323,7 @@ label {
   border: none;
   border-right: 1px solid var(--line);
   background: transparent;
-  padding: 5px 12px;
+  padding: var(--s1) var(--s3);
 }
 .seg button:last-child { border-right: none; }
 .seg button.on { background: var(--fg); color: var(--bg); }
@@ -319,7 +338,7 @@ th {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 7px 12px;
+  padding: var(--s2) var(--s3);
   text-align: left;
   background: var(--panel-2);
   border-bottom: 1px solid var(--line);
@@ -331,7 +350,7 @@ th {
   color: var(--fg-4);
   white-space: nowrap;
 }
-td { padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td { padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); vertical-align: top; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--panel-2); }
 
@@ -350,8 +369,8 @@ th.num, td.num {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 7px;
+  gap: var(--s2);
+  padding: 2px var(--s2);
   background: var(--panel-3);
   border: 1px solid var(--line-2);
   font-family: var(--mono);
@@ -367,7 +386,7 @@ th.num, td.num {
    reads as a button, and none of these are clickable. */
 .tag {
   display: inline-block;
-  padding: 0 5px;
+  padding: 0 var(--s1);
   border: 1px solid var(--line-2);
   font-family: var(--mono);
   font-size: 10px;
@@ -394,7 +413,7 @@ th.num, td.num {
 .kbd {
   display: inline-block;
   min-width: 18px;
-  padding: 0 4px;
+  padding: 0 var(--s1);
   border: 1px solid var(--line-2);
   border-bottom-width: 2px;
   background: var(--panel-2);
@@ -408,7 +427,7 @@ th.num, td.num {
 /* --- Messages ------------------------------------------------------------ */
 
 .banner {
-  padding: 9px 12px;
+  padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
   border-left-width: 3px;
   background: var(--panel-2);
@@ -425,7 +444,7 @@ th.num, td.num {
 .bar-fill { display: block; height: 100%; background: var(--fg-3); }
 
 .empty {
-  padding: 36px 20px;
+  padding: var(--s7) var(--s5);
   text-align: center;
   color: var(--fg-4);
   font-family: var(--mono);
@@ -435,7 +454,7 @@ th.num, td.num {
 
 /* Not a spinner — a terminal blinks. */
 .spinner {
-  padding: 28px 20px;
+  padding: var(--s6) var(--s5);
   text-align: center;
   color: var(--fg-3);
   font-family: var(--mono);
