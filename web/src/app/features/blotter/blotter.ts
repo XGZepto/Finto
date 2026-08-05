@@ -7,6 +7,7 @@ import { Api } from '../../core/api.service';
 import { FilterState } from '../../core/filter-state';
 import { DetailKeyPipe, MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { Money, TotalRow, Txn } from '../../core/models';
+import { scrollPane } from '../../core/scroll';
 import { FilterBar } from '../../shared/filter-bar';
 import { FintoSelect } from '../../shared/finto-select';
 
@@ -204,17 +205,19 @@ export class BlotterPage implements OnDestroy {
     queueMicrotask(() => this.lastTrigger?.focus());
   }
 
-  /** Locking the document scroller drops its offset, so carry it across. */
+  /** Locking a scroller drops its offset, so carry it across. */
   private lockScroll(): void {
-    if (document.body.style.overflow === 'hidden') return;
-    this.scrollLockOffset = window.scrollY;
-    document.body.style.overflow = 'hidden';
+    const pane = scrollPane();
+    if (!pane || pane.style.overflowY === 'hidden') return;
+    this.scrollLockOffset = pane.scrollTop;
+    pane.style.overflowY = 'hidden';
   }
 
   private unlockScroll(): void {
-    if (document.body.style.overflow !== 'hidden') return;
-    document.body.style.overflow = '';
-    window.scrollTo(0, this.scrollLockOffset);
+    const pane = scrollPane();
+    if (!pane || pane.style.overflowY !== 'hidden') return;
+    pane.style.overflowY = '';
+    pane.scrollTop = this.scrollLockOffset;
   }
 
   @HostListener('window:popstate')
@@ -247,7 +250,8 @@ export class BlotterPage implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    document.body.style.overflow = '';
+    const pane = scrollPane();
+    if (pane) pane.style.overflowY = '';
     this.afterClose = null;
   }
 

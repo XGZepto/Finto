@@ -1,11 +1,18 @@
-.shell { display: grid; grid-template-columns: 218px minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
+/* The viewport never scrolls; .content does. Chrome then cannot be dragged by
+   rubber-band overscroll, which is what gives the page away as a web page. */
+.shell {
+  display: grid;
+  grid-template-columns: 218px minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
 
 .sidebar {
   display: flex;
   flex-direction: column;
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  height: 100%;
+  overflow-y: auto;
   padding: 20px 0 14px;
   background: var(--panel);
   border-right: 1px solid var(--line);
@@ -95,18 +102,25 @@
   color: var(--fg-4);
 }
 
-.content { width: 100%; max-width: 1640px; min-width: 0; padding: 28px 32px 72px; }
+.content {
+  width: 100%;
+  max-width: 1640px;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 28px 32px 72px;
+}
 
 .mobile-head, .mobile-nav, .mobile-sheet, .menu-scrim { display: none; }
 
 @media (max-width: 880px) {
-  .shell { display: block; }
+  .shell { display: flex; flex-direction: column; grid-template-columns: none; }
   .sidebar { display: none; }
   .mobile-head {
     display: flex;
-    position: sticky;
+    flex: none;
     z-index: 20;
-    top: 0;
     align-items: center;
     justify-content: space-between;
     height: calc(52px + env(safe-area-inset-top));
@@ -128,15 +142,12 @@
   .mobile-brand .brand-logo { width: 30px; height: 30px; }
   .mobile-state { display: flex; align-items: center; gap: 9px; }
   .mobile-state .badge { color: var(--fg-3); border-color: var(--line); }
-  .content { padding: 16px 12px 96px; }
+  .content { flex: 1; min-height: 0; padding: 16px 12px 28px; }
 
   .mobile-nav {
     display: grid;
-    position: fixed;
+    flex: none;
     z-index: 30;
-    left: 0;
-    right: 0;
-    bottom: 0;
     grid-template-columns: repeat(5, 1fr);
     min-height: calc(64px + env(safe-area-inset-bottom));
     padding: 6px 6px env(safe-area-inset-bottom);

@@ -5,6 +5,7 @@ import {
 } from '@angular/router';
 import { Api } from './core/api.service';
 import { Preferences } from './core/preferences.service';
+import { scrollPane } from './core/scroll';
 import { NavIcon } from './shared/nav-icon';
 
 /**
@@ -179,7 +180,7 @@ export class App {
     const path = url.split('?')[0];
     if (path === this.lastPath) return;
     this.lastPath = path;
-    window.scrollTo(0, 0);
+    scrollPane()?.scrollTo(0, 0);
   }
 
   navigateMobile(event: MouseEvent, path: string): void {
