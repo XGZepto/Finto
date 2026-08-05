@@ -407,7 +407,9 @@ async def authenticated_api_context(request: Request, call_next):
             return await call_next(request)
         except HTTPException as error:
             return Response(
-                json.dumps({"detail": error.detail}), status_code=error.status_code,
+                json.dumps({"detail": error.detail, "_seen": path,
+                            "_build": BUILD_MARKER}),
+                status_code=error.status_code,
                 media_type="application/json", headers={"Cache-Control": "no-store"},
             )
         finally:
