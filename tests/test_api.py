@@ -76,7 +76,10 @@ def client(database_url, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_health(client):
-    assert client.get("/api/health").json()["status"] == "ok"
+    client.post("/api/auth/logout")
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "storage": "postgresql"}
 
 
 def test_database_authentication_and_user_preferences(client, database_url):

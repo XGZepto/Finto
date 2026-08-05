@@ -50,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.2.2",
+    version="0.2.3",
 )
 
 
@@ -343,7 +343,7 @@ app.add_middleware(
 @app.middleware("http")
 async def authenticated_api_context(request: Request, call_next):
     """Verify the database session and attach its user to every private API call."""
-    public = request.url.path in {"/api/auth/login", "/api/auth/logout"} \
+    public = request.url.path in {"/api/auth/login", "/api/auth/logout", "/api/health"} \
         or request.url.path.startswith("/api/agent/")
     if request.url.path.startswith("/api/") and not public:
         from .. import db as dbm
@@ -398,9 +398,15 @@ for router in (transactions, summary, accounts, imports, review, integrity,
 
 
 @app.get("/api/health")
-def health(conn=Depends(api_get_conn)) -> dict:
-    conn.execute("SELECT 1")
-    return {"status": "ok", "storage": "postgresql"}
+def health() -> dict:
+    from .. import db as dbm
+
+    conn = dbm.connect()
+    try:
+        conn.execute("SELECT 1")
+        return {"status": "ok", "storage": "postgresql"}
+    finally:
+        conn.close()
 
 
 @app.post("/api/admin/rebuild-transfers")
