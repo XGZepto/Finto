@@ -6,6 +6,18 @@ import { describeFilter, filterToParams } from '../../core/filter-state';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { QueryResult } from '../../core/models';
 
+function requestError(error: any): string {
+  const body = error?.error;
+  const detail = typeof body === 'string'
+    ? body
+    : body?.detail ?? body?.error;
+  if (typeof detail === 'string' && detail.trim()) return detail.trim();
+  if (error?.status === 401) return 'Session expired. Sign in again.';
+  if (error?.status === 429) return 'Analysis is rate-limited. Try again shortly.';
+  if ([502, 503, 504].includes(error?.status)) return 'Analysis is unavailable.';
+  return error?.status ? `Request failed (HTTP ${error.status}).` : 'Request failed.';
+}
+
 /** Read-only ledger analysis with visible tool filters. */
 @Component({
   selector: 'app-ask',
@@ -44,7 +56,7 @@ export class AskPage {
         this.result.set({
           ok: false,
           question: q,
-          error: err?.error?.detail ?? 'The query could not be run.',
+          error: requestError(err),
         });
         this.asking.set(false);
       },

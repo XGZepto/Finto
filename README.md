@@ -185,7 +185,7 @@ configured independently:
 
 ```bash
 finto config set llm_enabled 1
-finto config set llm_agent_model claude-sonnet-5
+finto config set llm_agent_model claude-sonnet-4-20250514
 ```
 
 Deployments can use `FINTO_LLM_ENABLED`, `FINTO_LLM_MODEL`, and

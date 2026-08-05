@@ -63,3 +63,14 @@ section.card { margin-bottom: 12px; }
 
 .note { margin: 10px 0 0; }
 .note button { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; }
+
+@media (max-width: 600px) {
+  .prompt {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 9px 10px;
+  }
+
+  .prompt button { min-width: 58px; }
+}

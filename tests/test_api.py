@@ -565,7 +565,7 @@ def test_installments_endpoint(client):
 def test_query_without_llm_explains_itself(client):
     body = client.post("/api/query", json={"question": "how much on dining?"}).json()
     assert body["ok"] is False
-    assert "llm" in body["error"].lower()
+    assert body["error"] == "Ask is not configured."
 
 
 def test_concurrent_requests_all_succeed(client):

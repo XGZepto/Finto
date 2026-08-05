@@ -79,7 +79,7 @@ def init_db(conn: psycopg.Connection) -> None:
             ("period_start", "2025-01-01"),
             ("llm_enabled", "0"),
             ("llm_model", "claude-haiku-4-5-20251001"),
-            ("llm_agent_model", "claude-sonnet-5"),
+            ("llm_agent_model", "claude-sonnet-4-20250514"),
         ),
     )
     password = os.environ.get("FINTO_AUTH_PASSWORD")

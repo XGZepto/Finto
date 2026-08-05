@@ -90,11 +90,27 @@ class AnthropicProvider(LLMProvider):
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
             raise LLMUnavailable("ANTHROPIC_API_KEY is not set")
+        self._anthropic = anthropic
         self._client = anthropic.Anthropic(api_key=key)
         self.model = model
 
+    def _create_message(self, **kwargs):
+        """Call Anthropic without leaking vendor exceptions through the HTTP API."""
+        try:
+            return self._client.messages.create(**kwargs)
+        except self._anthropic.AuthenticationError as exc:
+            raise LLMUnavailable("Analysis credentials were rejected.") from exc
+        except self._anthropic.RateLimitError as exc:
+            raise LLMUnavailable("Analysis is rate-limited. Try again shortly.") from exc
+        except self._anthropic.BadRequestError as exc:
+            raise LLMUnavailable("The configured analysis model rejected the request.") from exc
+        except self._anthropic.APIConnectionError as exc:
+            raise LLMUnavailable("The analysis service is unreachable.") from exc
+        except self._anthropic.APIStatusError as exc:
+            raise LLMUnavailable("The analysis service returned an error.") from exc
+
     def complete_json(self, system: str, user: str, *, max_tokens: int = 2000) -> LLMResponse:
-        msg = self._client.messages.create(
+        msg = self._create_message(
             model=self.model,
             max_tokens=max_tokens,
             system=[{
@@ -136,7 +152,7 @@ class AnthropicProvider(LLMProvider):
 
         for turn in range(max_turns + 1):
             final_turn = turn == max_turns
-            msg = self._client.messages.create(
+            msg = self._create_message(
                 model=self.model,
                 max_tokens=max_tokens,
                 system=cached_system,
@@ -257,7 +273,11 @@ def build_provider(
     if not enabled:
         return NullProvider()
     try:
-        default = "claude-sonnet-5" if purpose == "analysis" else "claude-haiku-4-5-20251001"
+        default = (
+            "claude-sonnet-4-20250514"
+            if purpose == "analysis"
+            else "claude-haiku-4-5-20251001"
+        )
         return AnthropicProvider(model=configured_model or default)
     except LLMUnavailable:
         return NullProvider()

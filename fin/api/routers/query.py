@@ -18,8 +18,7 @@ def natural_language_query(req: QueryRequest, conn=Depends(get_conn)) -> dict:
     if provider.name == "null":
         return {
             "ok": False,
-            "error": "The LLM layer is off. Enable it with "
-                     "`config set llm_enabled 1` and set ANTHROPIC_API_KEY.",
+            "error": "Ask is not configured.",
             "question": req.question,
         }
 
