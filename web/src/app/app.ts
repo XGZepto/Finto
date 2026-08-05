@@ -142,6 +142,7 @@ export class App {
   mobileMenu = signal(false);
   navigating = signal(false);
   pendingPath = signal<string | null>(null);
+  private lastPath = '';
 
   constructor() {
     this.preferences.loadUser();
@@ -155,6 +156,7 @@ export class App {
         this.navigating.set(false);
         this.pendingPath.set(null);
       }
+      if (event instanceof NavigationEnd) this.scrollOnPathChange(event.urlAfterRedirects);
     });
     this.api.stats().subscribe({
       next: (s) =>
@@ -165,6 +167,19 @@ export class App {
         ),
       error: () => undefined,
     });
+  }
+
+  /**
+   * Reset scroll on a real page change only.
+   *
+   * Overlays push a same-URL history entry so the back gesture dismisses them;
+   * the router's own scroller reads that as a navigation and jumps to the top.
+   */
+  private scrollOnPathChange(url: string): void {
+    const path = url.split('?')[0];
+    if (path === this.lastPath) return;
+    this.lastPath = path;
+    window.scrollTo(0, 0);
   }
 
   navigateMobile(event: MouseEvent, path: string): void {

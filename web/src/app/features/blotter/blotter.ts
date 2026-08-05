@@ -60,6 +60,7 @@ export class BlotterPage implements OnDestroy {
   private lastTrigger: HTMLElement | null = null;
   private inspectorHistoryActive = false;
   private afterClose: (() => void) | null = null;
+  private scrollLockOffset = 0;
 
   pageStart = computed(() => (this.total() ? this.offset() + 1 : 0));
   pageEnd = computed(() => Math.min(this.offset() + this.limit(), this.total()));
@@ -146,7 +147,7 @@ export class BlotterPage implements OnDestroy {
     this.detailLoading.set(true);
     this.editMode.set(false);
     this.selected.set(txn);
-    document.body.style.overflow = 'hidden';
+    this.lockScroll();
     this.api.transaction(txn.id).subscribe({
       next: (full) => {
         if (this.selected()?.id !== txn.id) return;
@@ -199,8 +200,21 @@ export class BlotterPage implements OnDestroy {
   private closeImmediately(): void {
     this.selected.set(null);
     this.editMode.set(false);
-    document.body.style.overflow = '';
+    this.unlockScroll();
     queueMicrotask(() => this.lastTrigger?.focus());
+  }
+
+  /** Locking the document scroller drops its offset, so carry it across. */
+  private lockScroll(): void {
+    if (document.body.style.overflow === 'hidden') return;
+    this.scrollLockOffset = window.scrollY;
+    document.body.style.overflow = 'hidden';
+  }
+
+  private unlockScroll(): void {
+    if (document.body.style.overflow !== 'hidden') return;
+    document.body.style.overflow = '';
+    window.scrollTo(0, this.scrollLockOffset);
   }
 
   @HostListener('window:popstate')
