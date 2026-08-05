@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5 — 2026-08-05
+
+- Link exact near-date transfers when the receiving leg, rather than the debit,
+  carries a recognised owner name.
+- Remove a stale transaction-specific lookup from bounded transfer maintenance.
+
 ## 0.2.4 — 2026-08-05
 
 - Separated the public connectivity check from the authenticated review-count

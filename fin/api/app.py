@@ -50,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.2.4",
+    version="0.2.5",
 )
 
 
@@ -444,14 +444,9 @@ def rebuild_transfers(month: str, start_day: int = 1, end_day: int = 31,
                 [(t.transfer_group_id, t.kind.value, t.id) for t in linked],
             )
         conn.commit()
-        target = conn.execute(
-            "SELECT transfer_group_id FROM txn WHERE id=%s",
-            ("1c3847b9-cb9e-4588-8fae-423156d5ed12",),
-        ).fetchone()
         return {"month": month, "range": [str(start), str(end)],
                 "groups": len(report.groups),
-                "candidates": len(report.candidates),
-                "target_group": target["transfer_group_id"] if target else None}
+                "candidates": len(report.candidates)}
     except Exception:
         conn.rollback()
         raise

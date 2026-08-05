@@ -304,15 +304,16 @@ def _score_pair(
             break
 
     if ctx.self_aliases:
-        if any(a in out_blob for a in ctx.self_aliases if len(a) >= 4) and \
-                any(a in inc_blob for a in ctx.self_aliases if len(a) >= 4):
+        out_names_self = any(a in out_blob for a in ctx.self_aliases if len(a) >= 4)
+        inc_names_self = any(a in inc_blob for a in ctx.self_aliases if len(a) >= 4)
+        if out_names_self and inc_names_self:
             score += 0.08
             evidence += 1
             reasons.append("both legs name self")
-        elif any(a in out_blob for a in ctx.self_aliases if len(a) >= 4):
+        elif out_names_self or inc_names_self:
             score += 0.06
             evidence += 1
-            reasons.append("outflow counterparty is self")
+            reasons.append("one leg names self")
 
             if same_ccy and delta == 0 and date_delta <= 2:
                 score += 0.10

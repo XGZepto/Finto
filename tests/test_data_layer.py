@@ -69,6 +69,30 @@ def test_self_transfer_named_destination_auto_links(tmp_path):
     assert txns[2].transfer_group_id is None  # P2P left alone
 
 
+def test_self_transfer_links_when_only_inflow_names_owner():
+    """A masked bank debit can pair with an exact inflow that names the owner."""
+    accounts = {
+        "hsbc": Account(id="hsbc", institution_id="hsbc_hk", display_name="HSBC",
+                        account_type=AccountType.SAVINGS, primary_currency="HKD"),
+        "mox": Account(id="mox", institution_id="mox", display_name="Mox",
+                       account_type=AccountType.CHECKING, primary_currency="HKD"),
+    }
+    d = date(2026, 7, 24)
+    out = _txn("hsbc", -5972384, d,
+               "ZHOU Y****** HC12672456765100 24JUL")
+    inc = _txn("mox", 5972384, d, "MR ZHOU YIXIANG")
+
+    report = find_transfers(
+        [out, inc], accounts,
+        context=TransferContext(self_aliases={"ZHOUYIXIANG"}),
+    )
+
+    assert len(report.groups) == 1
+    assert report.groups[0].kind.value == "internal_transfer"
+    assert report.groups[0].confidence >= 0.90
+    assert out.kind == inc.kind == TxnKind.TRANSFER
+
+
 def test_p2p_is_penalised_against_self_transfer(tmp_path):
     accounts = {
         "hsbc": Account(id="hsbc", institution_id="hsbc_hk", display_name="HSBC",
