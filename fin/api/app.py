@@ -50,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.2.1",
+    version="0.2.2",
 )
 
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 — 2026-08-05
+
+- Made the data-free health endpoint available before login so the login shell
+  reports API availability correctly.
+
 ## 0.2.1 — 2026-08-05
 
 ### LLM analysis

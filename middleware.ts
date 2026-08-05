@@ -33,6 +33,7 @@ export default async function middleware(request: Request) {
   }
 
   const publicPath = url.pathname === '/login'
+    || url.pathname === '/api/health'
     || url.pathname === '/api/auth/login'
     || url.pathname === '/api/auth/logout'
     || url.pathname.startsWith('/api/agent/')
