@@ -71,6 +71,19 @@ def _valid(cat: str, sub: str, taxonomy: dict[str, list[str]]) -> bool:
     return cat in taxonomy and sub in taxonomy[cat]
 
 
+def _undecided(conn, descriptions: Sequence[str]) -> list[str]:
+    """Descriptions this prompt version has never ruled on.
+
+    A merchant the model already declined to identify stays declined, so a
+    bounded chunk must step over it or it re-picks the same ones forever.
+    """
+    return [
+        d for d in descriptions
+        if not cache.lookup(conn, "categorize", cache.input_hash("categorize", d),
+                            PROMPT_VERSION)
+    ]
+
+
 def _clean_tags(value) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -164,9 +177,11 @@ def apply_to_ledger(
                 "applied": 0, "note": "dry run — no calls made"}
 
     remaining = 0
-    if max_merchants is not None and len(distinct) > max_merchants:
-        remaining = len(distinct) - max_merchants
-        distinct = distinct[:max_merchants]
+    if max_merchants is not None:
+        fresh = _undecided(conn, distinct)
+        remaining = max(len(fresh) - max_merchants, 0)
+        keep = set(distinct) - set(fresh[max_merchants:])
+        distinct = [d for d in distinct if d in keep]
         by_desc = {d: by_desc[d] for d in distinct}
 
     results = categorize_merchants(conn, provider, distinct)
@@ -234,9 +249,11 @@ def apply_tags(
                 "tagged": 0, "note": "dry run — no calls made"}
 
     remaining = 0
-    if max_merchants is not None and len(distinct) > max_merchants:
-        remaining = len(distinct) - max_merchants
-        distinct = distinct[:max_merchants]
+    if max_merchants is not None:
+        fresh = _undecided(conn, distinct)
+        remaining = max(len(fresh) - max_merchants, 0)
+        keep = set(distinct) - set(fresh[max_merchants:])
+        distinct = [d for d in distinct if d in keep]
         by_desc = {d: by_desc[d] for d in distinct}
 
     results = categorize_merchants(conn, provider, distinct)
