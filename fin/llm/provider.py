@@ -109,6 +109,12 @@ class AnthropicProvider(LLMProvider):
         except self._anthropic.APIStatusError as exc:
             raise LLMUnavailable("The analysis service returned an error.") from exc
 
+    def _generation_options(self) -> dict[str, Any]:
+        """Return only parameters accepted by the selected model family."""
+        if re.match(r"^claude-(?:opus|sonnet|fable)-5(?:$|-)", self.model):
+            return {}
+        return {"temperature": 0}
+
     def complete_json(self, system: str, user: str, *, max_tokens: int = 2000) -> LLMResponse:
         msg = self._create_message(
             model=self.model,
@@ -118,7 +124,7 @@ class AnthropicProvider(LLMProvider):
                 "text": system,
                 "cache_control": {"type": "ephemeral"},
             }],
-            temperature=0,          # classification, not creativity
+            **self._generation_options(),
             messages=[{"role": "user", "content": user}],
         )
         text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
@@ -156,7 +162,7 @@ class AnthropicProvider(LLMProvider):
                 model=self.model,
                 max_tokens=max_tokens,
                 system=cached_system,
-                temperature=0,
+                **self._generation_options(),
                 messages=messages,
                 tools=cached_tools,
                 **({"tool_choice": {"type": "none"}} if final_turn else {}),
@@ -273,11 +279,7 @@ def build_provider(
     if not enabled:
         return NullProvider()
     try:
-        default = (
-            "claude-sonnet-4-20250514"
-            if purpose == "analysis"
-            else "claude-haiku-4-5-20251001"
-        )
+        default = "claude-sonnet-5" if purpose == "analysis" else "claude-haiku-4-5-20251001"
         return AnthropicProvider(model=configured_model or default)
     except LLMUnavailable:
         return NullProvider()

@@ -305,6 +305,15 @@ def test_json_calls_cache_the_system_prefix():
     assert response.metadata["usage"]["cache_creation_input_tokens"] == 600
 
 
+def test_claude_5_calls_omit_deprecated_temperature():
+    provider = _anthropic_with([
+        _message([SimpleNamespace(type="text", text='{"ok":true}')]),
+    ])
+    provider.model = "claude-sonnet-5"
+    provider.complete_json("stable system", "question")
+    assert "temperature" not in provider._client.messages.requests[0]
+
+
 def test_tool_loop_caches_tools_and_system_and_reports_hits():
     tool_use = SimpleNamespace(
         type="tool_use", id="tool-1", name="ledger_totals", input={"filter": {}},
