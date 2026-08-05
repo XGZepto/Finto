@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import Any
 
 from ..models import FileFormat, Money, ParsedTxn, minor_exponent
 
@@ -28,6 +29,7 @@ class ParseContext:
     account_id: str | None = None
     default_currency: str | None = None
     hints: dict[str, str] = field(default_factory=dict)
+    connection: Any | None = None
 
 
 @dataclass
@@ -57,6 +59,9 @@ class StatementParser(ABC):
     version: str = "0.0.0"
     institution_id: str = ""
     file_format: FileFormat = FileFormat.CSV
+    display_name: str = ""
+    institution_ids: tuple[str, ...] = ()
+    extensions: tuple[str, ...] = ()
 
     @abstractmethod
     def sniff(self, ctx: ParseContext, sample: bytes) -> float:
@@ -85,6 +90,11 @@ def register(cls: type[StatementParser]) -> type[StatementParser]:
 
 def all_parsers() -> list[StatementParser]:
     return [c() for c in _REGISTRY]
+
+
+def supported_extensions() -> tuple[str, ...]:
+    return tuple(sorted({suffix for parser in all_parsers()
+                         for suffix in parser.extensions}))
 
 
 # Formats that are parsed as text. A parser declaring one of these must never be

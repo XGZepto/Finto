@@ -31,6 +31,21 @@
 }
 .dropzone .hint { font-size: 11.5px; color: var(--fg-4); }
 
+.format-support { margin-bottom: 16px; }
+.support-head > div { display: flex; align-items: baseline; gap: 10px; }
+.format-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.format-group { min-width: 0; border: 1px solid var(--line); }
+.format-group-head { display: flex; justify-content: space-between; align-items: center; padding: 9px 10px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.format-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.format-row:last-child { border-bottom: 0; }
+.format-name { display: flex; flex-direction: column; min-width: 0; }
+.format-name strong { font-size: 12.5px; font-weight: 550; }
+.format-name span { overflow: hidden; color: var(--fg-3); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.format-meta { display: flex; justify-content: flex-end; gap: 4px; flex-wrap: wrap; flex: none; }
+.contribute-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.contribute-row > span { margin-right: auto; color: var(--fg-3); font-size: 12px; }
+.contribute-row .btn { display: inline-flex; align-items: center; text-decoration: none; }
+
 .entry { margin-bottom: 12px; }
 .entry header { margin-bottom: 12px; }
 .ident { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -90,6 +105,12 @@ td.path { font-family: var(--mono); font-size: 11px; word-break: break-all; }
   .defaults { grid-template-columns: 1fr 1fr; gap: 10px; }
   .defaults .field.narrow { max-width: none; }
   .dropzone { min-height: 132px; padding: 24px 14px; }
+  .format-groups { grid-template-columns: 1fr; }
+  .format-row { align-items: flex-start; }
+  .format-meta { max-width: 42%; }
+  .contribute-row { display: grid; grid-template-columns: 1fr 1fr; }
+  .contribute-row > span { grid-column: 1 / -1; }
+  .contribute-row .btn { justify-content: center; }
   td.path { word-break: normal; overflow-wrap: anywhere; }
   section.card:last-child .table-wrap { overflow: visible; margin-inline: 0; border: 0; }
   section.card:last-child table, section.card:last-child tbody { display: block; }

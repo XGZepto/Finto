@@ -278,6 +278,25 @@ export interface StagePreview {
   error?: string;
 }
 
+export interface ImportFormat {
+  id: string;
+  label: string;
+  file_format: string;
+  extensions: string[];
+  version: string;
+  source: string;
+  institution_ids: string[];
+  institutions: string[];
+  generic: boolean;
+  verified: boolean;
+}
+
+export interface ImportCapabilities {
+  extensions: string[];
+  formats: ImportFormat[];
+  contribution: { guide: string; request: string };
+}
+
 export interface IntegrityReport {
   healthy: boolean;
   violations: Array<{ check: string; count: number; description: string }>;

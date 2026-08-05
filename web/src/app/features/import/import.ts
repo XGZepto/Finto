@@ -1,8 +1,8 @@
-import { Component, OnDestroy, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api } from '../../core/api.service';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { Facets, Job, StagePreview } from '../../core/models';
+import { Facets, ImportCapabilities, ImportFormat, Job, StagePreview } from '../../core/models';
 import { FintoSelect } from '../../shared/finto-select';
 
 /**
@@ -49,6 +49,8 @@ export class ImportPage implements OnDestroy {
   facets = signal<Facets | null>(null);
   entries = signal<Entry[]>([]);
   history = signal<any[]>([]);
+  capabilities = signal<ImportCapabilities | null>(null);
+  formatsOpen = signal(false);
   dragging = signal(false);
   maintenance = signal<Job | null>(null);
 
@@ -62,7 +64,34 @@ export class ImportPage implements OnDestroy {
 
   constructor() {
     this.api.facets().subscribe({ next: (f) => this.facets.set(f) });
+    this.api.importCapabilities().subscribe({ next: (value) => this.capabilities.set(value) });
     this.loadHistory();
+  }
+
+  formatGroups = computed(() => {
+    const groups = new Map<string, ImportFormat[]>();
+    for (const format of this.capabilities()?.formats ?? []) {
+      groups.set(format.file_format, [...(groups.get(format.file_format) ?? []), format]);
+    }
+    return [...groups].map(([fileFormat, formats]) => ({
+      fileFormat,
+      label: fileFormat.toUpperCase(),
+      formats,
+    }));
+  });
+
+  acceptedExtensions = computed(() => this.capabilities()?.extensions ?? ['.csv', '.pdf']);
+
+  acceptAttribute(): string {
+    return this.acceptedExtensions().join(',');
+  }
+
+  acceptedLabel(): string {
+    return this.acceptedExtensions().map((value) => value.slice(1)).join(', ');
+  }
+
+  isWorkspaceFormat(format: ImportFormat): boolean {
+    return format.source !== 'builtin' && format.source !== 'bundled';
   }
 
   ngOnDestroy(): void {

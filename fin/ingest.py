@@ -253,6 +253,7 @@ def ingest_file(
         institution_id=institution_id or _institution_of(conn, account_id),
         account_id=account_id,
         default_currency=default_currency,
+        connection=conn,
     )
     parser = select_parser(ctx)
     if parser is None:

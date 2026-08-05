@@ -425,6 +425,15 @@ def test_all_aggregation_levels_work(client, dimension):
 # Import flow
 # ---------------------------------------------------------------------------
 
+def test_import_capabilities_come_from_registered_formats(client):
+    body = client.get("/api/imports/capabilities").json()
+    assert set(body["extensions"]) == {".csv", ".pdf", ".tsv", ".txt"}
+    assert ".xlsx" not in body["extensions"]
+    assert any(item["id"] == "generic_csv" for item in body["formats"])
+    assert any(item["id"] == "hsbc_hk_savings" for item in body["formats"])
+    assert all(item["label"] for item in body["formats"])
+    assert body["contribution"]["guide"].endswith("docs/STATEMENT_FORMATS.md")
+
 def test_stage_previews_without_importing(client):
     before = client.get("/api/transactions").json()["total"]
     with (FIXTURES / "hsbc_sample.csv").open("rb") as f:

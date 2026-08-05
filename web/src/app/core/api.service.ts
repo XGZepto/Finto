@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { EMPTY, Observable, catchError, concat, shareReplay, take, tap } from 'rxjs';
 import {
   Account, Card, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
-  InstallmentPlan, IntegrityReport, InvestmentDetail, InvestmentSnapshot, Job,
+  ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentDetail, InvestmentSnapshot, Job,
   LedgerFilter, Money, Page, Position, QueryResult, StagePreview, StatementFreshness, SummaryRow,
   TotalRow, Txn,
 } from './models';
@@ -226,6 +226,10 @@ addTag(id: string, tag: string): Observable<Txn> {
 
   importHistory(): Observable<{ files: any[] }> {
     return this.cached<{ files: any[] }>(`${this.base}/imports/history`, this.activityTtl);
+  }
+
+  importCapabilities(): Observable<ImportCapabilities> {
+    return this.cached<ImportCapabilities>(`${this.base}/imports/capabilities`, this.referenceTtl);
   }
 
   reconcile(): Observable<Job> {

@@ -9,7 +9,8 @@ No financial data or production credentials are stored in this repository.
 
 ## Capabilities
 
-- CSV, PDF, and XLSX statement ingestion
+- Registry-driven CSV and PDF transaction-statement ingestion
+- XLSX investment-position snapshots through the investment CLI
 - Duplicate detection and statement-source precedence
 - Internal transfer, credit-card payment, refund, and instalment linkage
 - Account, product, subaccount, cardholder, and investment views
@@ -20,8 +21,9 @@ No financial data or production credentials are stored in this repository.
 - Read-only LLM analysis with allowlisted ledger tools and prompt caching
 - Vercel deployment in the Tokyo region
 
-Bundled parsers cover American Express HK/US, HSBC HK, Mox, Wise, and Chase
-statement formats.
+The Import page lists every active format directly from the parser and PDF
+template registries. See [`docs/STATEMENT_FORMATS.md`](docs/STATEMENT_FORMATS.md)
+to add or request a format.
 
 ## Architecture
 

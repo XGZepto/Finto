@@ -41,6 +41,9 @@ class PdfStatementParser(StatementParser):
     version = "0.2.0"
     institution_id = "generic"
     file_format = FileFormat.PDF
+    display_name = "PDF statement template"
+    institution_ids = ("generic",)
+    extensions = (".pdf",)
 
     def sniff(self, ctx: ParseContext, sample: bytes) -> float:
         if not sample.startswith(b"%PDF"):
@@ -53,7 +56,7 @@ class PdfStatementParser(StatementParser):
             return 0.0
         if not doc.pages or not doc.text.strip():
             return 0.0
-        tpl, score = select_template(doc)
+        tpl, score = select_template(doc, ctx.connection)
         if tpl is not None:
             return min(0.55 + 0.4 * score, 0.95)
         # No template: claim it anyway so import refuses with a useful warning
@@ -74,7 +77,7 @@ class PdfStatementParser(StatementParser):
                 txns=[], raw_rows=[], account_id=ctx.account_id,
                 warnings=[f"PDF extraction failed: {e}"])
 
-        tpl, score = select_template(doc)
+        tpl, score = select_template(doc, ctx.connection)
 
         if tpl is None:
             llm = _try_llm_extract(doc, ctx)

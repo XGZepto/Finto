@@ -26,7 +26,7 @@ from .ingest import ingest_file, reconcile
 from .models import Account, Card, Institution, minor_exponent
 from .parsers import institutions as _reg  # noqa: F401
 from .parsers import pdf as _pdf_reg  # noqa: F401
-from .parsers.base import ParseContext, read_csv_rows, select_parser
+from .parsers.base import ParseContext, read_csv_rows, select_parser, supported_extensions
 
 
 def fmt_money(m: dict, width: int = 0) -> str:
@@ -167,9 +167,9 @@ def cmd_sniff(args):
 def cmd_import(args):
     conn = dbm.connect(args.database_url)
     target = Path(args.path)
+    extensions = set(supported_extensions())
     files = sorted(p for p in (target.rglob("*") if target.is_dir() else [target])
-                   if p.is_file() and p.suffix.lower() in
-                   (".csv", ".tsv", ".txt", ".ofx", ".qfx", ".xlsx", ".pdf"))
+                   if p.is_file() and p.suffix.lower() in extensions)
     for f in files:
         r = ingest_file(conn, f, institution_id=args.institution,
                         account_id=args.account, default_currency=args.currency,

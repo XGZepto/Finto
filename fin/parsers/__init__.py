@@ -5,4 +5,5 @@ from .base import (  # noqa: F401
     all_parsers,
     register,
     select_parser,
+    supported_extensions,
 )

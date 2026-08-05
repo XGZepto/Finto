@@ -53,6 +53,9 @@ class AmexCsvParser(StatementParser):
     version = "0.1.0"
     institution_id = "amex"
     file_format = FileFormat.CSV
+    display_name = "American Express card activity CSV"
+    institution_ids = ("amex_hk", "amex_us")
+    extensions = (".csv",)
 
     def sniff(self, ctx: ParseContext, sample: bytes) -> float:
         text = sample.decode("utf-8", errors="replace").lower()
@@ -168,6 +171,9 @@ class HsbcHkCsvParser(StatementParser):
     version = "0.1.0"
     institution_id = "hsbc_hk"
     file_format = FileFormat.CSV
+    display_name = "HSBC HK transaction history CSV"
+    institution_ids = ("hsbc_hk",)
+    extensions = (".csv",)
 
     def sniff(self, ctx: ParseContext, sample: bytes) -> float:
         text = sample.decode("utf-8", errors="replace").lower()
@@ -266,6 +272,9 @@ class WiseCsvParser(StatementParser):
     version = "0.1.0"
     institution_id = "wise"
     file_format = FileFormat.CSV
+    display_name = "Wise account statement CSV"
+    institution_ids = ("wise",)
+    extensions = (".csv",)
 
     def sniff(self, ctx: ParseContext, sample: bytes) -> float:
         text = sample.decode("utf-8", errors="replace").lower()
@@ -357,6 +366,9 @@ class MoxCsvParser(StatementParser):
     version = "0.1.0"
     institution_id = "mox"
     file_format = FileFormat.CSV
+    display_name = "Mox account activity CSV"
+    institution_ids = ("mox",)
+    extensions = (".csv",)
 
     def sniff(self, ctx: ParseContext, sample: bytes) -> float:
         text = sample.decode("utf-8", errors="replace").lower()
@@ -417,6 +429,9 @@ class GenericCsvParser(StatementParser):
     version = "0.1.0"
     institution_id = "generic"
     file_format = FileFormat.CSV
+    display_name = "Generic transaction table"
+    institution_ids = ("generic",)
+    extensions = (".csv", ".tsv", ".txt")
 
     def sniff(self, ctx: ParseContext, sample: bytes) -> float:
         if ctx.path.suffix.lower() not in (".csv", ".tsv", ".txt"):
@@ -561,6 +576,9 @@ class AmexUsSavingsCsvParser(StatementParser):
     version = "0.1.0"
     institution_id = "amex_us"
     file_format = FileFormat.CSV
+    display_name = "American Express US savings CSV"
+    institution_ids = ("amex_us_bank",)
+    extensions = (".csv",)
 
     def sniff(self, ctx: ParseContext, sample: bytes) -> float:
         text = sample.decode("utf-8", errors="replace")

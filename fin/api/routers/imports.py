@@ -13,6 +13,7 @@ six months later.
 
 from __future__ import annotations
 
+import os
 import tempfile
 import uuid
 from pathlib import Path
@@ -21,7 +22,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 
 from ...ingest import ingest_file, reconcile
 from ...jobs import runner
-from ...parsers.base import ParseContext, read_csv_rows, select_parser
+from ...parsers.base import (
+    ParseContext,
+    all_parsers,
+    read_csv_rows,
+    select_parser,
+    supported_extensions,
+)
+from ...pdf.registry import available_templates
 from ..deps import get_conn, write_conn
 
 router = APIRouter(tags=["imports"])
@@ -31,8 +39,61 @@ STAGING = Path(tempfile.gettempdir()) / "finto-staging"
 STAGING.mkdir(exist_ok=True)
 STAGED_OWNERS: dict[str, str] = {}
 
-ALLOWED_SUFFIXES = {".csv", ".tsv", ".txt", ".ofx", ".qfx", ".pdf", ".xlsx"}
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+
+
+@router.get("/imports/capabilities")
+def import_capabilities(conn=Depends(get_conn)) -> dict:
+    """Formats registered by code and active database templates."""
+    institutions = {
+        row["id"]: row["display_name"]
+        for row in conn.execute("SELECT id, display_name FROM institution")
+    }
+    formats = []
+    for parser in all_parsers():
+        if parser.file_format.value == "pdf":
+            continue
+        institution_ids = parser.institution_ids or (parser.institution_id,)
+        formats.append({
+            "id": parser.parser_id,
+            "label": parser.display_name or parser.parser_id,
+            "file_format": parser.file_format.value,
+            "extensions": list(parser.extensions),
+            "version": parser.version,
+            "source": "bundled",
+            "institution_ids": list(institution_ids),
+            "institutions": [institutions.get(value, _humanize(value))
+                             for value in institution_ids if value != "generic"],
+            "generic": parser.institution_id == "generic",
+            "verified": False,
+        })
+    for template in available_templates(conn):
+        formats.append({
+            "id": template.template_id,
+            "label": template.label or _humanize(template.template_id),
+            "file_format": "pdf",
+            "extensions": [".pdf"],
+            "version": template.version,
+            "source": template.source,
+            "institution_ids": [template.institution_id],
+            "institutions": [institutions.get(
+                template.institution_id, _humanize(template.institution_id))],
+            "generic": False,
+            "verified": bool(template.verify or any(section.balances
+                                                      for section in template.sections)),
+        })
+    formats.sort(key=lambda item: (item["file_format"], item["label"].lower()))
+    repository = os.environ.get(
+        "FINTO_REPOSITORY_URL", "https://github.com/XGZepto/Finto"
+    ).rstrip("/")
+    return {
+        "extensions": list(supported_extensions()),
+        "formats": formats,
+        "contribution": {
+            "guide": f"{repository}/blob/main/docs/STATEMENT_FORMATS.md",
+            "request": f"{repository}/issues/new?labels=statement-format",
+        },
+    }
 
 
 @router.post("/imports/stage")
@@ -42,13 +103,15 @@ async def stage_upload(
     institution_id: str | None = Form(None),
     account_id: str | None = Form(None),
     currency: str | None = Form(None),
+    conn=Depends(get_conn),
 ) -> dict:
     """Accept a file, parse it in memory, and return what *would* be imported."""
     name = Path(file.filename or "upload").name
-    if Path(name).suffix.lower() not in ALLOWED_SUFFIXES:
+    allowed_suffixes = set(supported_extensions())
+    if Path(name).suffix.lower() not in allowed_suffixes:
         raise HTTPException(
             400, f"unsupported file type — expected one of "
-                 f"{sorted(ALLOWED_SUFFIXES)}")
+                 f"{sorted(allowed_suffixes)}")
 
     staged_id = str(uuid.uuid4())
     STAGED_OWNERS[staged_id] = request.state.user_id
@@ -64,7 +127,8 @@ async def stage_upload(
             out.write(chunk)
 
     ctx = ParseContext(path=target, institution_id=institution_id,
-                       account_id=account_id, default_currency=currency)
+                       account_id=account_id, default_currency=currency,
+                       connection=conn)
     parser = select_parser(ctx)
 
     preview: dict = {
@@ -84,8 +148,7 @@ async def stage_upload(
             "No parser recognised this file."
             + (" PDFs need a text layer — a scanned statement cannot be read."
                if suffix == ".pdf" else "")
-            + (" Spreadsheet import is not supported; export CSV instead."
-               if suffix == ".xlsx" else ""))
+            )
         return preview
 
     try:
@@ -200,3 +263,9 @@ def import_history(limit: int = 50, conn=Depends(get_conn)) -> dict:
         "       (SELECT COUNT(*) FROM txn WHERE statement_file_id = sf.id) AS txn_count "
         "FROM statement_file sf ORDER BY sf.imported_at DESC LIMIT %s", (limit,))]
     return {"files": rows}
+
+
+def _humanize(value: str) -> str:
+    words = value.replace("_", " ").replace("-", " ").split()
+    acronyms = {"amex": "AMEX", "hk": "HK", "us": "US", "hsbc": "HSBC"}
+    return " ".join(acronyms.get(word.lower(), word.title()) for word in words)

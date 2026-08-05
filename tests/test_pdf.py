@@ -16,6 +16,7 @@ from pdf_synth import right, row
 from fin.ingest import ingest_file
 from fin.parsers.base import ParseContext, select_parser
 from fin.parsers.pdf import PdfStatementParser
+from fin.pdf.registry import save_template
 from fin.pdf.template import StatementTemplate
 
 # Columns are right-aligned the way real statements set money: the header's
@@ -98,6 +99,21 @@ def test_pdf_parser_is_selected(statement_pdf):
     parser = select_parser(ctx)
     assert parser is not None
     assert parser.parser_id == "pdf_statement"
+
+
+def test_database_template_is_used_for_selection(conn, statement_pdf, monkeypatch):
+    monkeypatch.setattr("fin.pdf.registry.builtin_templates", lambda: ())
+    body = TEMPLATE.to_dict()
+    body["source"] = "community"
+    save_template(conn, StatementTemplate.from_dict(body))
+    conn.commit()
+
+    ctx = ParseContext(path=statement_pdf, institution_id="mox",
+                       default_currency="HKD", connection=conn)
+    parser = select_parser(ctx)
+    assert parser is not None
+    result = parser.parse(ctx)
+    assert len(result.txns) == 5
 
 
 def test_transactions_are_extracted(statement_pdf):

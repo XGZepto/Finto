@@ -28,10 +28,57 @@
 <label class="dropzone" [class.over]="dragging()"
        (dragover)="onDragOver($event)" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
   <input type="file" multiple hidden
-         accept=".csv,.tsv,.txt,.ofx,.qfx,.pdf,.xlsx" (change)="onPick($event)" />
+         [attr.accept]="acceptAttribute()" (change)="onPick($event)" />
   <span class="cue">Drop statements here</span>
-  <span class="hint">or click to browse · csv, tsv, ofx, qfx, pdf</span>
+  <span class="hint">or click to browse · {{ acceptedLabel() }}</span>
 </label>
+
+@if (capabilities(); as support) {
+  <section class="card format-support">
+    <div class="section-head support-head">
+      <div>
+        <h2>Statement formats</h2>
+        <span class="small muted mono">{{ support.formats.length }} registered</span>
+      </div>
+      <button class="ghost" (click)="formatsOpen.set(!formatsOpen())"
+              [attr.aria-expanded]="formatsOpen()">
+        {{ formatsOpen() ? 'Hide' : 'View support' }}
+      </button>
+    </div>
+    @if (formatsOpen()) {
+      <div class="format-groups">
+        @for (group of formatGroups(); track group.fileFormat) {
+          <div class="format-group">
+            <div class="format-group-head">
+              <h3>{{ group.label }}</h3>
+              <span class="mono muted small">{{ group.formats.length }}</span>
+            </div>
+            @for (format of group.formats; track format.id) {
+              <div class="format-row">
+                <div class="format-name">
+                  <strong>{{ format.label }}</strong>
+                  @if (format.institutions.length) {
+                    <span>{{ format.institutions.join(' · ') }}</span>
+                  }
+                </div>
+                <div class="format-meta">
+                  @if (format.verified) { <span class="tag good">balance checked</span> }
+                  @if (format.generic) { <span class="tag">generic</span> }
+                  @if (isWorkspaceFormat(format)) { <span class="tag">workspace</span> }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+      <div class="contribute-row">
+        <span>Missing a format?</span>
+        <a class="btn" [href]="support.contribution.guide" target="_blank" rel="noreferrer">Format guide ↗</a>
+        <a class="btn" [href]="support.contribution.request" target="_blank" rel="noreferrer">Request support ↗</a>
+      </div>
+    }
+  </section>
+}
 
 <!-- Staged files: one card each, nothing committed yet. -->
 @for (e of entries(); track e.key) {

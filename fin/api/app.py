@@ -373,7 +373,7 @@ async def private_route_cache(request: Request, call_next):
         path = request.url.path
         stable = path in {
             "/api/accounts", "/api/cards", "/api/facets", "/api/institutions",
-            "/api/fx/rates", "/api/details",
+            "/api/fx/rates", "/api/details", "/api/imports/capabilities",
         }
         volatile = path.startswith("/api/jobs/") or path == "/api/jobs"
         computed = path in {

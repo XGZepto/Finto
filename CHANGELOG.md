@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Generate Import format support from the parser and PDF-template registries.
+- Use active PostgreSQL PDF templates during preview and import.
+- Add format contribution documentation and request links.
+
 ## 0.2.6 — 2026-08-05
 
 - Add bounded ledger read and audited transfer-maintenance routes for user-minted API keys.
