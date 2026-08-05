@@ -57,6 +57,7 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
     .select-option.active { background: var(--panel-3); color: var(--fg); }
     .select-option.selected { color: var(--fg); }
     .select-option b { color: var(--pos); font-weight: 500; }
+    @media (max-width: 700px) { .select-trigger, .select-option { min-height: 40px; } }
     @media (prefers-reduced-motion: reduce) { .select-trigger i { transition: none; } }
   `],
   providers: [{

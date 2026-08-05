@@ -57,7 +57,7 @@
           @for (p of plans(); track p.id) {
             <tr class="clickable" (click)="toggle(p)">
               <td class="caret mono">{{ expanded() === p.id ? '▾' : '▸' }}</td>
-              <td>
+              <td data-label="Plan">
                 <span class="desc">{{ p.merchant || p.description }}</span>
                 @if (isUncertain(p)) {
                   <span class="tag" title="Matched automatically, not confirmed">
@@ -65,9 +65,9 @@
                   </span>
                 }
               </td>
-              <td class="mono small">{{ p.account_id }}</td>
-              <td class="mono small">{{ p.start_date | shortDate }}</td>
-              <td class="prog">
+              <td data-label="Account" class="mono small">{{ humanize(p.account_id) }}</td>
+              <td data-label="Started" class="mono small">{{ p.start_date | shortDate }}</td>
+              <td data-label="Progress" class="prog">
                 <span class="bar-track">
                   <span class="bar-fill" [style.width]="progress(p)"></span>
                 </span>
@@ -75,9 +75,9 @@
                   {{ p.settled_early ? 'settled ' + p.paid_count + '/' + p.term_months : p.paid_count + '/' + p.term_months }}
                 </span>
               </td>
-              <td class="num neg">{{ p.per_installment | money: 'bare' }}</td>
-              <td class="num neg">{{ p.outstanding | money: 'bare' }}</td>
-              <td>
+              <td data-label="Per month" class="num neg">{{ p.per_installment | money: 'bare' }}</td>
+              <td data-label="Outstanding" class="num neg">{{ p.outstanding | money: 'bare' }}</td>
+              <td data-label="Status">
                 <span class="tag" [class.good]="p.status === 'completed'">{{ p.status }}</span>
               </td>
             </tr>

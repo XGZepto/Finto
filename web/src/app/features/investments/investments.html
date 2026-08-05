@@ -11,7 +11,7 @@
 } @else if (current(); as snap) {
   <div class="card">
     <div class="toolbar">
-      <span class="small muted mono">{{ snap.scheme }}</span>
+      <span class="small muted mono">{{ friendly(snap.scheme) }}</span>
       @if (snapshots().length > 1) {
         <finto-select ariaLabel="Snapshot" [options]="snapshots()" valueKey="id"
                       labelKey="as_of_date" [ngModel]="snap.id" (ngModelChange)="select($event)" />
@@ -40,10 +40,10 @@
           <tbody>
             @for (s of snap.subaccounts; track s.account_id) {
               <tr>
-                <td>{{ s.account_id }}</td>
-                <td class="mono small muted">{{ s.member_no || '—' }}</td>
-                <td class="num muted small">{{ percent(s.allocation) }}</td>
-                <td class="num">{{ s.balance | money }}</td>
+                <td data-label="Account">{{ friendly(s.account_id) }}</td>
+                <td data-label="Member no." class="mono small muted">{{ s.member_no || '—' }}</td>
+                <td data-label="Share" class="num muted small">{{ percent(s.allocation) }}</td>
+                <td data-label="Balance" class="num">{{ s.balance | money }}</td>
               </tr>
             }
           </tbody>
@@ -68,14 +68,14 @@
         <tbody>
           @for (h of snap.holdings; track h.instrument) {
             <tr>
-              <td class="fund">
+              <td data-label="Fund" class="fund">
                 <span class="bar" [style.width]="width(h.market_value.amount)"></span>
                 <span class="fund-name">{{ h.instrument }}</span>
               </td>
-              <td class="num mono small muted">{{ h.units || '—' }}</td>
-              <td class="num mono small muted">{{ h.unit_price || '—' }}</td>
-              <td class="num muted small">{{ percent(h.allocation) }}</td>
-              <td class="num">{{ h.market_value | money }}</td>
+              <td data-label="Units" class="num mono small muted">{{ h.units || '—' }}</td>
+              <td data-label="Unit price" class="num mono small muted">{{ h.unit_price || '—' }}</td>
+              <td data-label="Share" class="num muted small">{{ percent(h.allocation) }}</td>
+              <td data-label="Value" class="num">{{ h.market_value | money }}</td>
             </tr>
           } @empty {
             <tr><td colspan="5" class="empty">No fund breakdown in this snapshot</td></tr>

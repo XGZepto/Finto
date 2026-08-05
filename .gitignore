@@ -43,6 +43,9 @@ venv/
 dist/
 build/
 
+# JavaScript
+node_modules/
+
 # Editors / OS
 .DS_Store
 .idea/

@@ -1,5 +1,5 @@
-const CACHE = 'finto-shell-v1';
-const SHELL = ['/index.html', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png', '/icon-512.png'];
+const CACHE = 'finto-shell-v3';
+const SHELL = ['/index.html', '/manifest.webmanifest', '/favicon.svg?v=3', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
@@ -27,7 +27,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (['script', 'style', 'font', 'image', 'manifest'].includes(request.destination)) {
+  if (['image', 'manifest'].includes(request.destination)) {
+    event.respondWith(fetch(request).then((response) => {
+      if (response.ok) caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
+      return response;
+    }).catch(() => caches.match(request)));
+    return;
+  }
+
+  if (['script', 'style', 'font'].includes(request.destination)) {
     event.respondWith(
       caches.match(request).then((cached) => cached || fetch(request).then((response) => {
         if (response.ok) caches.open(CACHE).then((cache) => cache.put(request, response.clone()));

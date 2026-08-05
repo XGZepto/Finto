@@ -5,6 +5,7 @@ import {
 } from '@angular/router';
 import { Api } from './core/api.service';
 import { Preferences } from './core/preferences.service';
+import { NavIcon } from './shared/nav-icon';
 
 /**
  * App shell.
@@ -15,12 +16,12 @@ import { Preferences } from './core/preferences.service';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NavIcon],
   template: `
     <div class="shell">
       <nav class="sidebar">
         <div class="brand">
-          <div class="brand-row"><img class="brand-logo" src="/favicon.svg" alt=""><div class="name">Finto@if (navigating()) { <span class="caret">▌</span> }</div></div>
+          <div class="brand-row"><img class="brand-logo" src="/favicon.svg?v=3" alt=""><div class="name">Finto@if (navigating()) { <span class="caret">▌</span> }</div></div>
         </div>
 
         <div class="nav" aria-label="Workspace navigation">
@@ -29,7 +30,7 @@ import { Preferences } from './core/preferences.service';
               <h2>{{ preferences.text(group.label, group.labelZh) }}</h2>
               @for (item of group.items; track item.path) {
                 <a [routerLink]="item.path" routerLinkActive="active">
-                  <span class="idx" aria-hidden="true">{{ item.icon }}</span>
+                  <span class="idx"><finto-nav-icon [name]="item.icon" /></span>
                   <span class="label">{{ preferences.text(item.label, item.labelZh) }}</span>
                   @if (item.path === '/review' && reviewCount() > 0) {
                     <span class="badge">{{ reviewCount() }}</span>
@@ -43,7 +44,7 @@ import { Preferences } from './core/preferences.service';
         <div class="spacer"></div>
         <div class="nav nav-settings">
           <a routerLink="/profile" routerLinkActive="active">
-            <span class="idx" aria-hidden="true">⚙</span><span class="label">{{ preferences.text('Settings', '設定') }}</span>
+            <span class="idx"><finto-nav-icon name="settings" /></span><span class="label">{{ preferences.text('Settings', '設定') }}</span>
           </a>
         </div>
         <div class="status">
@@ -53,7 +54,7 @@ import { Preferences } from './core/preferences.service';
       </nav>
 
       <header class="mobile-head">
-        <div class="mobile-brand"><img class="brand-logo" src="/favicon.svg" alt="">Finto@if (navigating()) { <span class="caret">▌</span> }</div>
+        <div class="mobile-brand"><img class="brand-logo" src="/favicon.svg?v=3" alt="">Finto@if (navigating()) { <span class="caret">▌</span> }</div>
         <div class="mobile-state">
           @if (reviewCount() > 0) { <span class="badge">{{ reviewCount() }} review</span> }
           <span class="dot" [class.ok]="online()" [class.bad]="!online()"></span>
@@ -71,16 +72,21 @@ import { Preferences } from './core/preferences.service';
             <span>{{ preferences.text('Workspace', '工作區') }}</span>
             <button class="bare close" (click)="mobileMenu.set(false)" aria-label="Close menu">×</button>
           </div>
-          @for (item of secondaryNav; track item.path) {
-            <a [attr.href]="item.path" [class.active]="isActive(item.path)"
-               [class.pending]="pendingPath() === item.path"
-               (click)="navigateMobile($event, item.path)">
-              <span class="mobile-icon">{{ item.icon }}</span>
-              <span>{{ preferences.text(item.label, item.labelZh) }}</span>
-              @if (item.path === '/review' && reviewCount() > 0) {
-                <span class="badge">{{ reviewCount() }}</span>
+          @for (group of mobileGroups; track group.label) {
+            <h2 class="sheet-group">{{ preferences.text(group.label, group.labelZh) }}</h2>
+            <div class="sheet-grid">
+              @for (item of group.items; track item.path) {
+                <a [attr.href]="item.path" [class.active]="isActive(item.path)"
+                   [class.pending]="pendingPath() === item.path"
+                   (click)="navigateMobile($event, item.path)">
+                  <span class="mobile-icon"><finto-nav-icon [name]="item.icon" /></span>
+                  <span>{{ preferences.text(item.label, item.labelZh) }}</span>
+                  @if (item.path === '/review' && reviewCount() > 0) {
+                    <span class="badge">{{ reviewCount() }}</span>
+                  }
+                </a>
               }
-            </a>
+            </div>
           }
         </nav>
       }
@@ -88,12 +94,12 @@ import { Preferences } from './core/preferences.service';
       <nav class="mobile-nav" aria-label="Primary navigation">
         @for (item of primaryNav; track item.path) {
           <a [routerLink]="item.path" routerLinkActive="active">
-            <span class="mobile-icon">{{ item.icon }}</span>
+            <span class="mobile-icon"><finto-nav-icon [name]="item.icon" /></span>
             <span>{{ preferences.text(item.mobile, item.mobileZh) }}</span>
           </a>
         }
         <button type="button" [class.active]="mobileMenu()" (click)="mobileMenu.set(!mobileMenu())">
-          <span class="mobile-icon">•••</span>
+          <span class="mobile-icon"><finto-nav-icon name="more" /></span>
           <span>{{ preferences.text('More', '更多') }}</span>
         </button>
       </nav>
@@ -107,21 +113,24 @@ export class App {
   preferences = inject(Preferences);
 
   readonly nav = [
-    { path: '/summary', label: 'Summary', labelZh: '總覽', mobile: 'Overview', mobileZh: '總覽', icon: '⌁' },
-    { path: '/blotter', label: 'Blotter', labelZh: '帳目', mobile: 'Activity', mobileZh: '帳目', icon: '≡' },
-    { path: '/timeline', label: 'Timeline', labelZh: '時間軸', mobile: 'Timeline', mobileZh: '時間軸', icon: '⌇' },
-    { path: '/accounts', label: 'Accounts', labelZh: '帳戶', mobile: 'Accounts', mobileZh: '帳戶', icon: '▣' },
-    { path: '/import', label: 'Import', labelZh: '匯入', mobile: 'Import', mobileZh: '匯入', icon: '↥' },
-    { path: '/installments', label: 'Instalments', labelZh: '分期', mobile: 'Plans', mobileZh: '分期', icon: '◫' },
-    { path: '/investments', label: 'Investments', labelZh: '投資', mobile: 'Invest', mobileZh: '投資', icon: '↗' },
-    { path: '/review', label: 'Review', labelZh: '審核', mobile: 'Review', mobileZh: '審核', icon: '◇' },
-    { path: '/integrity', label: 'Integrity', labelZh: '完整性', mobile: 'Integrity', mobileZh: '完整性', icon: '✓' },
-    { path: '/ask', label: 'Ask', labelZh: '查詢', mobile: 'Ask', mobileZh: '查詢', icon: '?' },
-    { path: '/profile', label: 'Profile & settings', labelZh: '個人及設定', mobile: 'Settings', mobileZh: '設定', icon: '⚙' },
+    { path: '/summary', label: 'Summary', labelZh: '總覽', mobile: 'Overview', mobileZh: '總覽', icon: 'summary' },
+    { path: '/blotter', label: 'Blotter', labelZh: '帳目', mobile: 'Activity', mobileZh: '帳目', icon: 'blotter' },
+    { path: '/timeline', label: 'Timeline', labelZh: '時間軸', mobile: 'Timeline', mobileZh: '時間軸', icon: 'timeline' },
+    { path: '/accounts', label: 'Accounts', labelZh: '帳戶', mobile: 'Accounts', mobileZh: '帳戶', icon: 'accounts' },
+    { path: '/import', label: 'Import', labelZh: '匯入', mobile: 'Import', mobileZh: '匯入', icon: 'import' },
+    { path: '/installments', label: 'Instalments', labelZh: '分期', mobile: 'Plans', mobileZh: '分期', icon: 'installments' },
+    { path: '/investments', label: 'Investments', labelZh: '投資', mobile: 'Invest', mobileZh: '投資', icon: 'investments' },
+    { path: '/review', label: 'Review', labelZh: '審核', mobile: 'Review', mobileZh: '審核', icon: 'review' },
+    { path: '/integrity', label: 'Integrity', labelZh: '完整性', mobile: 'Integrity', mobileZh: '完整性', icon: 'integrity' },
+    { path: '/ask', label: 'Ask', labelZh: '查詢', mobile: 'Ask', mobileZh: '查詢', icon: 'ask' },
+    { path: '/profile', label: 'Profile & settings', labelZh: '個人及設定', mobile: 'Settings', mobileZh: '設定', icon: 'settings' },
   ];
 
   readonly primaryNav = this.nav.slice(0, 4);
-  readonly secondaryNav = this.nav.slice(4);
+  readonly mobileGroups = [
+    { label: 'Ledger', labelZh: '帳務', items: this.nav.filter((item) => ['/import', '/installments', '/investments'].includes(item.path)) },
+    { label: 'Control', labelZh: '管理', items: this.nav.filter((item) => ['/review', '/integrity', '/ask', '/profile'].includes(item.path)) },
+  ];
   readonly desktopGroups = [
     { label: 'Overview', labelZh: '概覽', items: this.nav.filter((item) => ['/summary', '/accounts', '/timeline'].includes(item.path)) },
     { label: 'Ledger', labelZh: '帳務', items: this.nav.filter((item) => ['/blotter', '/import', '/installments', '/investments'].includes(item.path)) },

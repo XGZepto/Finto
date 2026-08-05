@@ -38,3 +38,26 @@ section.card { margin-bottom: 12px; }
 tr.problem td { background: var(--neg-wash); }
 td.action { width: 1%; white-space: nowrap; text-align: right; }
 td.action button { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; }
+
+@media (max-width: 700px) {
+  .verdict { align-items: flex-start; flex-wrap: wrap; }
+  .verdict .text { min-width: calc(100% - 24px); }
+  .verdict button { margin-left: 17px; }
+  .stats { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat .v { font-size: 21px; }
+  .section-head .seg { width: 100%; }
+  .section-head .seg button { flex: 1; }
+  .table-wrap { margin-inline: 0; border: 0; overflow: visible; }
+  table, tbody, tr, td { display: block; }
+  thead { display: none; }
+  tbody tr { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding: 12px 0 12px 18px; border-bottom: 1px solid var(--line); }
+  tbody tr td { display: block; padding: 0; border: 0; min-width: 0; }
+  tbody tr td::before { display: block; content: attr(data-label); color: var(--fg-4); font: 9px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+  td.check-state { position: absolute; top: 16px; left: 0; }
+  td.check-state::before, td.action::before { display: none; }
+  td.num { text-align: left; white-space: normal; }
+  td.action { grid-column: 1 / -1; width: auto; text-align: left; }
+  td.action button { min-height: 36px; }
+  td.empty { grid-column: 1 / -1; padding: 22px 0; }
+  td.empty::before { display: none; }
+}

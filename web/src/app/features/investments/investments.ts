@@ -62,4 +62,9 @@ export class InvestmentsPage {
     const n = Number(allocation);
     return Number.isFinite(n) ? `${(n * 100).toFixed(1)}%` : allocation;
   }
+
+  friendly(value: string): string {
+    return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+      .replace(/\b(Hsbc|Mpf|Hkd|Usd|Amex)\b/g, (word) => word.toUpperCase());
+  }
 }

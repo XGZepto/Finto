@@ -136,6 +136,11 @@ export class InstallmentsPage {
   isUncertain(plan: InstallmentPlan): boolean {
     return !plan.is_confirmed && plan.confidence < 0.95;
   }
+
+  humanize(value: string): string {
+    return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+      .replace(/\b(Hsbc|Mpf|Hkd|Usd|Amex)\b/g, (word) => word.toUpperCase());
+  }
 }
 
 /** Same day-of-month, clamped to the length of the target month. */

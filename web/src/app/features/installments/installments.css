@@ -65,3 +65,25 @@ tr.schedule-row td { background: var(--panel-2); padding: 14px 16px; }
 .ticks li.due .state { color: var(--warn); }
 
 .schedule p { margin: 10px 0 0; }
+
+@media (max-width: 700px) {
+  .liability { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .liability .block:last-child { grid-column: 1 / -1; }
+  .figure { font-size: 18px; }
+  section.card { padding-inline: 12px; }
+  .table-wrap { margin-inline: 0; border: 0; overflow: visible; }
+  table, tbody { display: block; }
+  thead { display: none; }
+  tr.clickable { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 14px; padding: 12px 4px 12px 24px; border-bottom: 1px solid var(--line); }
+  tr.clickable td { display: block; padding: 0; border: 0; min-width: 0; }
+  tr.clickable td::before { display: block; content: attr(data-label); margin-bottom: 1px; color: var(--fg-4); font: 9px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+  tr.clickable td.caret { position: absolute; left: 3px; top: 14px; }
+  tr.clickable td:nth-child(2), tr.clickable td.prog { grid-column: 1 / -1; }
+  tr.clickable td:nth-child(3), tr.clickable td:nth-child(4) { color: var(--fg-3); }
+  tr.clickable td.num { text-align: right; }
+  tr.schedule-row, tr.schedule-row td { display: block; }
+  tr.schedule-row td { padding: 14px 4px; }
+  .schedule .meta { grid-template-columns: 1fr 1fr; }
+  .ticks li { grid-template-columns: 22px 74px minmax(0, 1fr) 52px; gap: 6px; font-size: 10.5px; }
+  tbody > tr:only-child td.empty { display: block; width: 100%; padding: 28px 4px; }
+}

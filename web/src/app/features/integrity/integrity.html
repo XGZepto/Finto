@@ -81,14 +81,14 @@
         <tbody>
           @for (c of checks(); track c.account_id + c.period) {
             <tr [class.problem]="c.status === 'discrepancy'">
-              <td><span class="dot" [class.ok]="c.status === 'ok'" [class.bad]="c.status === 'discrepancy'"></span></td>
-              <td>{{ c.account_name || c.account_id }}</td>
-              <td class="mono small">
+              <td class="check-state"><span class="dot" [class.ok]="c.status === 'ok'" [class.bad]="c.status === 'discrepancy'"></span></td>
+              <td data-label="Account">{{ c.account_name || c.account_id }}</td>
+              <td data-label="Period" class="mono small">
                 {{ c.period_start | shortDate }} → {{ c.period_end | shortDate }}
               </td>
-              <td class="num">{{ c.expected_delta | money: 'bare' }}</td>
-              <td class="num">{{ c.actual_delta | money: 'bare' }}</td>
-              <td class="num" [class.neg]="c.status === 'discrepancy'">
+              <td data-label="Bank moved" class="num">{{ c.expected_delta | money: 'bare' }}</td>
+              <td data-label="We hold" class="num">{{ c.actual_delta | money: 'bare' }}</td>
+              <td data-label="Difference" class="num" [class.neg]="c.status === 'discrepancy'">
                 {{ c.discrepancy | money }}
               </td>
               <td class="action">
@@ -129,8 +129,8 @@
           <tbody>
             @for (u of r.unverified_accounts; track u.account_id) {
               <tr>
-                <td>{{ u.display_name }}</td>
-                <td class="num">{{ u.txn_count }}</td>
+                <td data-label="Account">{{ u.display_name }}</td>
+                <td data-label="Transactions" class="num">{{ u.txn_count }}</td>
                 <td class="action">
                   <button class="bare" (click)="inspectAccount(u.account_id)">open →</button>
                 </td>

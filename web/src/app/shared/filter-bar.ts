@@ -4,6 +4,7 @@ import { Api } from '../core/api.service';
 import { FilterState } from '../core/filter-state';
 import { Facets } from '../core/models';
 import { FintoSelect } from './finto-select';
+import { FintoDate } from './finto-date';
 
 /**
  * Shared filter controls.
@@ -15,7 +16,7 @@ import { FintoSelect } from './finto-select';
  */
 @Component({
   selector: 'app-filter-bar',
-  imports: [FormsModule, FintoSelect],
+  imports: [FormsModule, FintoSelect, FintoDate],
   template: `
     <div class="filter-bar card">
       <div class="filter-primary">
@@ -41,14 +42,14 @@ import { FintoSelect } from './finto-select';
 
         <div class="field narrow">
           <label for="from">From</label>
-          <input id="from" type="date" [ngModel]="filters.filter().from ?? ''"
-                 (ngModelChange)="patch({ from: $event || undefined })" />
+          <finto-date id="from" [ngModel]="filters.filter().from ?? ''"
+                      (ngModelChange)="patch({ from: $event || undefined })" />
         </div>
 
         <div class="field narrow">
           <label for="to">To</label>
-          <input id="to" type="date" [ngModel]="filters.filter().to ?? ''"
-                 (ngModelChange)="patch({ to: $event || undefined })" />
+          <finto-date id="to" [ngModel]="filters.filter().to ?? ''"
+                      (ngModelChange)="patch({ to: $event || undefined })" />
         </div>
 
         <div class="field">
@@ -120,7 +121,7 @@ import { FintoSelect } from './finto-select';
     .advanced { margin-top: 10px; }
     .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; }
     .field.narrow { max-width: 150px; }
-    .field input, .field finto-select { width: 100%; }
+    .field input, .field finto-select, .field finto-date { width: 100%; }
     .toggles {
       display: flex; gap: 16px; flex-wrap: wrap;
       margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
