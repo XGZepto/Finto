@@ -172,7 +172,7 @@ def agent_ledger_categorize(request: Request, apply: bool = False,
     win; the model only sees what is left, its answers are cached and recorded
     source='llm', and low-confidence rows stay uncategorised."""
     from .. import db as dbm
-    from ..llm.categorize import apply_to_ledger, promote_to_rules
+    from ..llm.categorize import apply_tags, apply_to_ledger, promote_to_rules
     from ..llm.provider import AnthropicProvider, LLMUnavailable
 
     user_id, key_id = _api_key_owner(
@@ -189,6 +189,7 @@ def agent_ledger_categorize(request: Request, apply: bool = False,
     conn = dbm.connect()
     try:
         result = apply_to_ledger(conn, provider, dry_run=not apply)
+        result["tags"] = apply_tags(conn, provider, dry_run=not apply)
         if apply and promote:
             result["promoted_rules"] = promote_to_rules(conn)
         conn.execute(

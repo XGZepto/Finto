@@ -16,10 +16,17 @@ from ..taxonomy import BASE_TAXONOMY, load_taxonomy, register_merchant
 from . import cache
 from .provider import LLMProvider, LLMUnavailable
 
-PROMPT_VERSION = "cat-v1"
+PROMPT_VERSION = "cat-v2"
 
 # Model output is limited to the same taxonomy used by deterministic rules.
 TAXONOMY: dict[str, list[str]] = {key: list(values) for key, values in BASE_TAXONOMY.items()}
+
+# Cross-cutting attributes a category cannot express: a coffee can be recurring,
+# a flight can be business. Closed set, so tags stay aggregatable.
+TAG_VOCABULARY: tuple[str, ...] = (
+    "recurring", "subscription", "travel", "business",
+    "online", "cash", "fee", "gift",
+)
 
 CONFIDENCE_FLOOR = 0.60   # below this, leave uncategorised rather than guess
 BATCH_SIZE = 40
@@ -34,10 +41,15 @@ same order.
 
 Each object must be exactly:
   {"i": <input index>, "category": <category>, "subcategory": <subcategory>, \
-"merchant": <cleaned merchant name>, "confidence": <0.0-1.0>}
+"merchant": <cleaned merchant name>, "tags": [<tag>, ...], "confidence": <0.0-1.0>}
 
 Rules:
 - category and subcategory MUST come from the provided taxonomy. Never invent one.
+- tags MUST come from the provided tag vocabulary. Return between 0 and 3, and \
+only ones you are confident about. They describe how the money was spent, not \
+what was bought: a monthly cloud bill is ["subscription", "recurring", "online"], \
+a hotel abroad is ["travel"], an ATM withdrawal is ["cash"]. Return [] when none \
+clearly apply.
 - merchant is the human-readable name, e.g. "CTY SPR TST 3 KLN" -> "City Super".
 - If you cannot identify the merchant with reasonable certainty, use category \
 "other", subcategory "uncategorised", and set confidence below 0.5. Guessing is \
@@ -50,12 +62,20 @@ worse than abstaining here.
 def _user_prompt(descriptions: Sequence[str], taxonomy: dict[str, list[str]]) -> str:
     return (
         f"Taxonomy:\n{json.dumps(taxonomy, indent=0)}\n\n"
+        f"Tag vocabulary:\n{json.dumps(list(TAG_VOCABULARY), indent=0)}\n\n"
         f"Descriptions:\n{json.dumps(list(descriptions), indent=0)}"
     )
 
 
 def _valid(cat: str, sub: str, taxonomy: dict[str, list[str]]) -> bool:
     return cat in taxonomy and sub in taxonomy[cat]
+
+
+def _clean_tags(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    seen = {str(tag).strip().lower() for tag in value if isinstance(tag, str)}
+    return [tag for tag in TAG_VOCABULARY if tag in seen][:3]
 
 
 def categorize_merchants(
@@ -104,7 +124,8 @@ def categorize_merchants(
                 continue          # reject anything outside the closed taxonomy
             conf = float(row.get("confidence", 0.0))
             out = {"category": cat, "subcategory": sub,
-                   "merchant": row.get("merchant"), "tags": [],
+                   "merchant": row.get("merchant"),
+                   "tags": _clean_tags(row.get("tags")),
                    "confidence": conf}
             cache.record(conn, task="categorize",
                          ihash=cache.input_hash("categorize", desc),
@@ -172,6 +193,50 @@ def apply_to_ledger(conn, provider: LLMProvider, *, dry_run: bool = False) -> di
     conn.commit()
     return {"transactions": len(rows), "distinct_merchants": len(distinct),
             "applied": applied, "skipped_low_confidence": skipped}
+
+
+def apply_tags(conn, provider: LLMProvider, *, dry_run: bool = False) -> dict:
+    """Tag transactions that carry no tags yet, categorised or not.
+
+    Categories were backfilled before the model was asked for tags, so most
+    rows already have one and no tags — invisible to apply_to_ledger, which
+    only considers uncategorised rows.
+    """
+    rows = list(conn.execute(
+        "SELECT t.id, t.description_norm, t.description_raw FROM txn t "
+        "WHERE t.duplicate_of_id IS NULL "
+        "AND t.kind NOT IN ('transfer','cc_payment','fx_conversion') "
+        "AND NOT EXISTS (SELECT 1 FROM txn_tag g WHERE g.txn_id = t.id)"))
+    if not rows:
+        return {"transactions": 0, "distinct_merchants": 0, "tagged": 0}
+
+    by_desc: dict[str, list[str]] = defaultdict(list)
+    for r in rows:
+        by_desc[r["description_norm"] or r["description_raw"]].append(r["id"])
+
+    distinct = sorted(by_desc)
+    if dry_run:
+        return {"transactions": len(rows), "distinct_merchants": len(distinct),
+                "tagged": 0, "note": "dry run — no calls made"}
+
+    results = categorize_merchants(conn, provider, distinct)
+
+    tagged = tags_written = 0
+    for desc, txn_ids in by_desc.items():
+        res = results.get(desc)
+        if not res or res["confidence"] < CONFIDENCE_FLOOR:
+            continue
+        tags = _clean_tags(res.get("tags"))
+        if not tags:
+            continue
+        for tid in txn_ids:
+            for tag in tags:
+                dbm.add_tag(conn, tid, tag, source="llm")
+                tags_written += 1
+            tagged += 1
+    conn.commit()
+    return {"transactions": len(rows), "distinct_merchants": len(distinct),
+            "tagged": tagged, "tags_written": tags_written}
 
 
 def promote_to_rules(conn, *, min_confidence: float = 0.9, min_occurrences: int = 3) -> int:
