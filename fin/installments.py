@@ -50,7 +50,8 @@ _PATTERNS = (
         r"\b(\d{1,2})\s*(?:/|OF|-)\s*(\d{1,2})\b\D{0,12}?\b(?:INSTAL?LMENT|INSTAL|INST)\b",
         re.IGNORECASE),
     re.compile(r"分期\D{0,6}?(\d{1,2})\s*/\s*(\d{1,2})"),
-    re.compile(r"\b(?:INSTAL?LMENT|INSTAL)\b\D{0,8}?(\d{1,2})\s*期\D{0,4}?共?\s*(\d{1,2})", re.IGNORECASE),
+    re.compile(r"\b(?:INSTAL?LMENT|INSTAL)\b\D{0,8}?(\d{1,2})\s*期\D{0,4}?共?\s*(\d{1,2})",  # noqa: E501
+        re.IGNORECASE),
 )
 
 _PLAN_WORDS = re.compile(

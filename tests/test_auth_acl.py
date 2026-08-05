@@ -26,7 +26,8 @@ def test_account_acl_roles_are_enforced_by_postgres(conn, database_url):
     )
     conn.execute(
         "INSERT INTO txn (id,account_id,txn_date,status,amount_booked,currency_booked,"
-        "description_raw,description_norm,kind,dedup_key,statement_file_id,created_at,updated_at) VALUES "
+        "description_raw,description_norm,kind,dedup_key,statement_file_id,"
+        "created_at,updated_at) VALUES "
         "('acl-txn','hsbc_hk_current','2026-08-01','posted',-100,'HKD',"
         "'ACL TEST','ACL TEST','purchase','acl-dedup','acl-file','2026-08-01','2026-08-01')"
     )

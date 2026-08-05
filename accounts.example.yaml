@@ -67,7 +67,7 @@ cards:
 rules:
   - id: example_grocery_rule
     priority: 100
-    match_field: description
+    match_field: description_norm
     match_type: contains
     pattern: EXAMPLE SUPERMARKET
     set_kind: purchase

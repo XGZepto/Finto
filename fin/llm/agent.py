@@ -44,7 +44,8 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "ledger_summary",
-        "description": "Aggregate matching transactions by period, account, category, merchant, or kind.",
+        "description": "Aggregate matching transactions by period, account, "
+                       "category, merchant, or kind.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -57,20 +58,23 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "search_transactions",
-        "description": "Return matching ledger rows. Use for largest, latest, merchant, or row-level questions.",
+        "description": "Return matching ledger rows. Use for largest, latest, "
+                       "merchant, or row-level questions.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "filter": {"type": "object"},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 25},
-                "sort": {"type": "string", "enum": ["date", "amount", "merchant", "account", "category"]},
+                "sort": {"type": "string",
+                         "enum": ["date", "amount", "merchant", "account", "category"]},
                 "direction": {"type": "string", "enum": ["asc", "desc"]},
             },
         },
     },
     {
         "name": "account_positions",
-        "description": "Return account balances or net worth at a date, optionally normalized to one currency.",
+        "description": "Return account balances or net worth at a date, "
+                       "optionally normalized to one currency.",
         "input_schema": {
             "type": "object",
             "properties": {

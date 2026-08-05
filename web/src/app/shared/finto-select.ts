@@ -6,7 +6,7 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 @Component({
   selector: 'finto-select',
   template: `
-    <div class="select-root" [class.open]="open()">
+    <div class="select-root" [class.open]="open()" [class.up]="dropUp()">
       <button type="button" class="select-trigger" role="combobox"
               [disabled]="disabled()" [attr.aria-label]="ariaLabel"
               [attr.aria-expanded]="open()" aria-haspopup="listbox"
@@ -48,6 +48,9 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
       padding: 4px; border: 1px solid var(--line-2); background: var(--panel);
       box-shadow: 0 8px 22px #0005;
     }
+    /* Opens upward near the foot of the screen, so it never lands under the
+       fixed mobile nav (which reads as the nav vanishing behind it). */
+    .up .select-menu { top: auto; bottom: calc(100% + 4px); }
     .select-option {
       display: grid; grid-template-columns: minmax(0, 1fr) 14px; gap: 12px;
       width: 100%; min-height: 34px; padding: 6px 8px; border: 0;
@@ -76,6 +79,7 @@ export class FintoSelect implements ControlValueAccessor {
 
   value = signal('');
   open = signal(false);
+  dropUp = signal(false);
   disabled = signal(false);
   activeIndex = signal(0);
   private onChange: (value: string) => void = () => undefined;
@@ -109,6 +113,12 @@ export class FintoSelect implements ControlValueAccessor {
   toggle(): void {
     if (this.disabled()) return;
     this.open.update((open) => !open);
+    if (this.open()) {
+      const rect = this.host.nativeElement.getBoundingClientRect();
+      const below = window.innerHeight - rect.bottom;
+      // Flip up when the space below can't hold the menu and there's more above.
+      this.dropUp.set(below < 280 && rect.top > below);
+    }
     const selected = this.options.findIndex((option) => this.optionValue(option) === this.value());
     this.activeIndex.set(Math.max(0, selected));
   }

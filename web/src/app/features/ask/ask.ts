@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { describeFilter, filterToParams } from '../../core/filter-state';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { QueryResult } from '../../core/models';
+import { QueryResult, SummaryRow } from '../../core/models';
 
 function requestError(error: any): string {
   const body = error?.error;
@@ -40,6 +40,15 @@ export class AskPage {
   asking = signal(false);
   result = signal<QueryResult | null>(null);
   history = signal<string[]>([]);
+  showAllRows = signal(false);
+  /** A broad query can group into hundreds of buckets; lead with the movers. */
+  readonly rowCap = 12;
+
+  rankedRows(): SummaryRow[] {
+    const rows = [...(this.result()?.rows ?? [])]
+      .sort((a, b) => Math.abs(b.spend.amount) - Math.abs(a.spend.amount));
+    return this.showAllRows() ? rows : rows.slice(0, this.rowCap);
+  }
 
   ask(): void {
     const q = this.question().trim();
@@ -49,6 +58,7 @@ export class AskPage {
     this.api.ask(q).subscribe({
       next: (res) => {
         this.result.set(res);
+        this.showAllRows.set(false);
         this.asking.set(false);
         if (res.ok) this.history.update((h) => [q, ...h.filter((x) => x !== q)].slice(0, 8));
       },

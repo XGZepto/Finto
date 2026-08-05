@@ -100,7 +100,15 @@
 
     @if (r.rows?.length) {
       <section class="card">
-        <div class="section-head"><h2>By {{ r.group_by }}</h2></div>
+        <div class="section-head">
+          <h2>By {{ r.group_by }}</h2>
+          @if (r.rows!.length > rowCap) {
+            <span class="small muted mono">
+              @if (showAllRows()) { {{ r.rows!.length }} groups }
+              @else { top {{ rowCap }} of {{ r.rows!.length }} by spend }
+            </span>
+          }
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -114,7 +122,7 @@
               </tr>
             </thead>
             <tbody>
-              @for (row of r.rows!; track row.bucket + row.currency) {
+              @for (row of rankedRows(); track row.bucket + row.currency) {
                 <tr>
                   <td class="mono">{{ row.bucket }}</td>
                   <td><span class="tag">{{ row.currency }}</span></td>
@@ -129,6 +137,16 @@
             </tbody>
           </table>
         </div>
+        @if (r.rows!.length > rowCap) {
+          <p class="small muted note">
+            <button class="bare" (click)="showAllRows.set(!showAllRows())">
+              @if (showAllRows()) { Show top {{ rowCap }} } @else { Show all {{ r.rows!.length }} groups }
+            </button>
+            @if (r.filter) {
+              · <button class="bare" (click)="openInBlotter()">open in blotter →</button>
+            }
+          </p>
+        }
       </section>
     }
 

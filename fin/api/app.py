@@ -47,10 +47,15 @@ from .routers import (
     transactions,
 )
 
+# Vercel routes only /api/* to this function; the spec and docs must live under
+# that prefix or they resolve to the SPA in production.
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
     version="0.2.7",
+    openapi_url="/api/openapi.json",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
 )
 
 
@@ -343,8 +348,10 @@ app.add_middleware(
 @app.middleware("http")
 async def authenticated_api_context(request: Request, call_next):
     """Verify the database session and attach its user to every private API call."""
-    public = request.url.path in {"/api/auth/login", "/api/auth/logout", "/api/health"} \
-        or request.url.path.startswith("/api/agent/")
+    public = request.url.path in {
+        "/api/auth/login", "/api/auth/logout", "/api/health",
+        "/api/openapi.json", "/api/docs", "/api/redoc",
+    } or request.url.path.startswith("/api/agent/")
     if request.url.path.startswith("/api/") and not public:
         from .. import db as dbm
 

@@ -61,7 +61,8 @@ def statement_freshness(conn=Depends(get_conn)) -> dict:
                SELECT sf.account_id, sf.id AS statement_id, sf.row_count,
                       COALESCE(sf.statement_date, sf.period_end,
                                substring(sf.source_path from 'to_(20[0-9]{2}-[0-9]{2}-[0-9]{2})'),
-                               substring(sf.source_path from '_(20[0-9]{2}-[0-9]{2}-[0-9]{2})\.[^.]+$'),
+                               substring(sf.source_path from
+                                         '_(20[0-9]{2}-[0-9]{2}-[0-9]{2})\.[^.]+$'),
                                CASE WHEN sf.row_count=0
                                     THEN substr(sf.imported_at, 1, 10) END) AS covered_on
                  FROM statement_file sf
@@ -70,7 +71,8 @@ def statement_freshness(conn=Depends(get_conn)) -> dict:
                SELECT ba.account_id, sf.id AS statement_id, sf.row_count,
                       COALESCE(sf.statement_date, sf.period_end,
                                substring(sf.source_path from 'to_(20[0-9]{2}-[0-9]{2}-[0-9]{2})'),
-                               substring(sf.source_path from '_(20[0-9]{2}-[0-9]{2}-[0-9]{2})\.[^.]+$'),
+                               substring(sf.source_path from
+                                         '_(20[0-9]{2}-[0-9]{2}-[0-9]{2})\.[^.]+$'),
                                ba.as_of_date) AS covered_on
                  FROM balance_assertion ba
                  JOIN statement_file sf ON sf.id=ba.statement_file_id

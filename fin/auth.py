@@ -114,7 +114,9 @@ def public_user(row: dict) -> dict:
     }
 
 
-def issue_session(conn, user_id: str, secret: str, user_agent: str | None = None) -> tuple[str, int]:
+def issue_session(
+    conn, user_id: str, secret: str, user_agent: str | None = None,
+) -> tuple[str, int]:
     if not secret:
         raise RuntimeError("FINTO_SESSION_SECRET must be set")
     expires = int(time.time()) + SESSION_MAX_AGE

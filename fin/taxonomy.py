@@ -266,7 +266,8 @@ def audit_backfill(conn, *, apply: bool = False, user_id: str | None = None) -> 
         merchant_key = canonical_key(row["merchant"] or "")
         proposal: dict[str, Any] = {"txn_id": row["id"], "user_id": row["user_id"]}
         if not row["category"] and row["category_source"] != "manual":
-            pair = resolved.get((row["user_id"], "merchant", merchant_key)) if merchant_key else None
+            pair = (resolved.get((row["user_id"], "merchant", merchant_key))
+                    if merchant_key else None)
             method = "exact_merchant"
             if pair is None and desc_key:
                 pair = resolved.get((row["user_id"], "description", desc_key))
@@ -332,7 +333,8 @@ def audit_backfill(conn, *, apply: bool = False, user_id: str | None = None) -> 
                 applied_categories += cur.rowcount
                 if cur.rowcount:
                     conn.execute(
-                        "INSERT INTO txn_annotation (txn_id,field,value,source,confidence,created_at) "
+                        "INSERT INTO txn_annotation "
+                        "(txn_id,field,value,source,confidence,created_at) "
                         "VALUES (%s,'category',%s,'rule',1.0,%s) ON CONFLICT (txn_id,field) "
                         "DO UPDATE SET value=EXCLUDED.value,source='rule',confidence=1.0,"
                         "created_at=EXCLUDED.created_at",
