@@ -386,10 +386,13 @@ app.add_middleware(
 @app.middleware("http")
 async def authenticated_api_context(request: Request, call_next):
     """Verify the database session and attach its user to every private API call."""
-    public = request.url.path in {
+    path = request.url.path
+    public = path in {
         "/api/auth/login", "/api/auth/logout", "/api/health",
         "/api/openapi.json", "/api/docs", "/api/redoc",
-    } or request.url.path.startswith("/api/agent/")
+    } or path.startswith("/api/agent/") or path.endswith(
+        ("/openapi.json", "/docs", "/redoc")
+    )
     if request.url.path.startswith("/api/") and not public:
         from .. import db as dbm
 
@@ -414,6 +417,7 @@ async def authenticated_api_context(request: Request, call_next):
 async def private_route_cache(request: Request, call_next):
     """Let one signed-in browser reuse route data without shared CDN caching."""
     response = await call_next(request)
+    response.headers["X-Finto-Path"] = f"{request.scope.get('root_path','')}|{request.url.path}"
     if request.method == "GET" and request.url.path.startswith("/api/"):
         path = request.url.path
         stable = path in {
