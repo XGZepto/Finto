@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4 — 2026-08-05
+
+- Separated the public connectivity check from the authenticated review-count
+  request so the login shell no longer reports an expected 401 as an outage.
+
 ## 0.2.3 — 2026-08-05
 
 - Removed the authenticated database dependency from the public health handler.

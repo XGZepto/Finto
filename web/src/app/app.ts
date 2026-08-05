@@ -136,6 +136,10 @@ export class App {
 
   constructor() {
     this.preferences.loadUser();
+    this.api.health().subscribe({
+      next: () => this.online.set(true),
+      error: () => this.online.set(false),
+    });
     this.router.events.subscribe((event) => {
       if (event instanceof NavigationStart) this.navigating.set(true);
       if (event instanceof NavigationEnd || event instanceof NavigationCancel || event instanceof NavigationError) {
@@ -150,7 +154,7 @@ export class App {
             (s.open_transfer_candidates ?? 0) +
             (s.open_installment_candidates ?? 0),
         ),
-      error: () => this.online.set(false),
+      error: () => undefined,
     });
   }
 
