@@ -163,19 +163,13 @@ import { FintoDate } from './finto-date';
       .advanced, .filter-toggle .chev { transition: none; }
     }
     @media (max-width: 700px) {
-      /* Search stays reachable while the ledger scrolls under it, and takes the
-         same edge treatment as the rows so the two line up. */
+      /* The search scrolls away so only the day headers stick — two competing
+         sticky layers would leave the date hidden behind the search. */
       .filter-bar {
-        position: sticky;
-        top: calc(-1 * var(--s3));
-        z-index: 25;
         margin-inline: calc(-1 * var(--s3));
         padding: var(--s3);
         border-left: 0;
         border-right: 0;
-        /* No backdrop-filter here: it would make this bar the containing block
-           for the fixed sheet below, which would then inherit its bled width. */
-        background: var(--panel);
       }
       /* Inline expansion would push the ledger off screen, so on a phone the
          panel arrives as a sheet over it and leaves the rows where they were. */
