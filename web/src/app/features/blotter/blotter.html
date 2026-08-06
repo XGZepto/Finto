@@ -2,7 +2,7 @@
   <h1>Blotter</h1>
 </div>
 
-<app-filter-bar (changed)="load()" />
+<app-filter-bar #filterBar (changed)="load()" />
 
 <div class="card ledger-card">
   <div class="toolbar">
@@ -114,7 +114,7 @@
                   <span class="primary dim">Merchant not disclosed</span>
                   <span class="muted small block">{{ t.description }}</span>
                 } @else {
-                  <span class="primary">{{ t.merchant || t.description }}</span>
+                  <span class="primary">{{ displayTitle(t) }}</span>
                   @if (t.merchant && t.description !== t.merchant) {
                     <span class="muted small block">{{ t.description }}</span>
                   }

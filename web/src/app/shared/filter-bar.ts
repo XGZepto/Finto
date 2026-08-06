@@ -163,13 +163,17 @@ import { FintoDate } from './finto-date';
       .advanced, .filter-toggle .chev { transition: none; }
     }
     @media (max-width: 700px) {
-      /* The search scrolls away so only the day headers stick — two competing
-         sticky layers would leave the date hidden behind the search. */
+      /* Sticky search; the day headers pin below it using the height the
+         blotter measures into --filter-h. */
       .filter-bar {
+        position: sticky;
+        top: 0;
+        z-index: 25;
         margin-inline: calc(-1 * var(--s3));
         padding: var(--s3);
         border-left: 0;
         border-right: 0;
+        background: var(--panel);
       }
       /* Inline expansion would push the ledger off screen, so on a phone the
          panel arrives as a sheet over it and leaves the rows where they were. */

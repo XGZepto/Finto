@@ -216,7 +216,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .table-wrap tr.daygroup {
     display: flex;
     position: sticky;
-    top: 0;
+    top: var(--filter-h, 82px);
     z-index: 5;
     justify-content: space-between;
     align-items: baseline;

@@ -31,7 +31,25 @@ export class BlotterPage implements OnDestroy {
   private api = inject(Api);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private host = inject(ElementRef<HTMLElement>);
   filters = inject(FilterState);
+
+  /**
+   * Publish the sticky filter bar's height so the day headers can pin directly
+   * beneath it. Two sticky layers at top:0 would overlap; measuring keeps the
+   * date visible under the search rather than behind it.
+   */
+  @ViewChild('filterBar', { read: ElementRef }) set filterBar(el: ElementRef<HTMLElement> | undefined) {
+    this.filterObserver?.disconnect();
+    if (!el) return;
+    const node = el.nativeElement;
+    const publish = () =>
+      this.host.nativeElement.style.setProperty('--filter-h', `${node.offsetHeight}px`);
+    publish();
+    this.filterObserver = new ResizeObserver(publish);
+    this.filterObserver.observe(node);
+  }
+  private filterObserver?: ResizeObserver;
 
   loading = signal(true);
   rows = signal<Txn[]>([]);
@@ -277,6 +295,7 @@ export class BlotterPage implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.filterObserver?.disconnect();
     const pane = scrollPane();
     if (pane) pane.style.overflowY = '';
     this.afterClose = null;
@@ -405,6 +424,25 @@ export class BlotterPage implements OnDestroy {
 
   merchantHidden(txn: Txn): boolean {
     return txn.details?.['merchant.disclosed'] === 'no';
+  }
+
+  /**
+   * A readable title from the merchant string.
+   *
+   * Some rows keep a raw run-on like MEITUANDIANPING; title-case long all-caps
+   * words while leaving short acronyms (AWS) and already-cased names (DiDi,
+   * Spotify) untouched.
+   */
+  displayTitle(txn: Txn): string {
+    const source = (txn.merchant || txn.description || '').trim();
+    return source
+      .split(/\s+/)
+      .map((word) =>
+        /^[A-Z0-9]{5,}$/.test(word) && /[A-Z]/.test(word)
+          ? word.charAt(0) + word.slice(1).toLowerCase()
+          : word,
+      )
+      .join(' ');
   }
 
   isTravel(txn: Txn): boolean {
