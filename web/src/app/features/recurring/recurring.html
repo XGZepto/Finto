@@ -2,55 +2,154 @@
   <h1>Recurring</h1>
 </div>
 
+<section class="controls-bar">
+  <div class="control">
+    <label for="rec-search">Search</label>
+    <input id="rec-search" type="search" placeholder="merchant…"
+           [ngModel]="search()" (ngModelChange)="search.set($event)" />
+  </div>
+  <div class="control">
+    <label>Currency</label>
+    <finto-select ariaLabel="Reporting currency" [options]="reportingCurrencies"
+                  [ngModel]="convertTo()" (ngModelChange)="setConvertTo($event)" />
+  </div>
+  <div class="control">
+    <label>Kind</label>
+    <finto-pills [options]="kinds" [value]="kind()" ariaLabel="Kind"
+                 (pick)="kind.set($event)" />
+  </div>
+  <div class="control">
+    <label>Cadence</label>
+    <finto-select ariaLabel="Cadence" [options]="cadences"
+                  [ngModel]="cadence()" (ngModelChange)="cadence.set($event)" />
+  </div>
+</section>
+
+<section class="card hero">
+  <div class="hero-figure">
+    <span class="label">Committed each month</span>
+    <span class="figure mono">{{ monthlyTotal() | money }}</span>
+  </div>
+  <div class="hero-meta">
+    <span>{{ visibleSubs().length }} subscription{{ visibleSubs().length === 1 ? '' : 's' }}</span>
+    <span>{{ visiblePlans().length }} instalment plan{{ visiblePlans().length === 1 ? '' : 's' }}</span>
+    @if (irregularCount()) {
+      <span class="note">{{ irregularCount() }} irregular, not counted</span>
+    }
+    @if (dormantCount()) {
+      <span class="warn">{{ dormantCount() }} overdue</span>
+    }
+  </div>
+</section>
+
 @if (loading()) {
   <div class="card"><div class="spinner">loading</div></div>
 } @else {
-  <section class="card head-card">
-    <span class="label">Committed each month</span>
-    <span class="hero mono">{{ monthlyTotal() | money: 'bare' }}</span>
-    <span class="sub">{{ subs().length }} subscription{{ subs().length === 1 ? '' : 's' }} · {{ plans().length }} instalment plan{{ plans().length === 1 ? '' : 's' }}</span>
-  </section>
-
-  <section class="card">
-    <div class="section-head"><h2>Subscriptions</h2></div>
-    @if (subs().length) {
+  @if (visibleSubs().length) {
+    <section class="card list-card">
+      <div class="section-head"><h2>Subscriptions</h2></div>
       <div class="rows">
-        @for (s of subs(); track s.merchant) {
-          <button type="button" class="row" (click)="openMerchant(s.merchant)">
-            <span class="glyph">{{ s.merchant.slice(0, 2).toUpperCase() }}</span>
-            <span class="who">
-              <span class="name">{{ s.merchant }}</span>
-              <span class="meta mono">{{ s.count }}× · {{ s.spend | money: 'bare' }} total</span>
+        @for (c of visibleSubs(); track c.key) {
+          <button type="button" class="row" (click)="open(c)">
+            <span class="glyph">
+              <finto-icon kind="merchant" [name]="c.merchant"
+                          [fallbackCategory]="c.category || 'services'" />
             </span>
-            <span class="each mono">{{ s.each | money: 'bare' }}</span>
+            <span class="who">
+              <span class="name">{{ c.merchant }}</span>
+              <span class="meta">
+                <span class="tag">{{ c.cadence }}</span>
+                @if (c.dormant) { <span class="tag bad">overdue</span> }
+                @if (c.nextDue && !c.dormant) {
+                  <span class="mono">next {{ c.nextDue | shortDate }}</span>
+                } @else {
+                  <span class="mono">last {{ c.lastCharge | shortDate }}</span>
+                }
+              </span>
+            </span>
+            <span class="cost">
+              <span class="each mono">{{ c.amount | money: 'bare' }}</span>
+              @if (c.monthly) {
+                <span class="permo mono">{{ c.monthly | money: 'bare' }}/mo</span>
+              } @else {
+                <span class="permo dim">not counted</span>
+              }
+            </span>
           </button>
         }
       </div>
-    } @else {
-      <div class="empty">Nothing tagged as a subscription</div>
-    }
-  </section>
+    </section>
+  }
 
-  <section class="card">
-    <div class="section-head">
-      <h2>Instalment plans</h2>
-      <button class="bare" (click)="openPlans()">All plans →</button>
-    </div>
-    @if (plans().length) {
+  @if (visiblePlans().length) {
+    <section class="card list-card">
+      <div class="section-head">
+        <h2>Instalment plans</h2>
+        <button class="bare" (click)="openPlans()">All plans →</button>
+      </div>
       <div class="rows">
-        @for (p of plans(); track p.id) {
+        @for (p of visiblePlans(); track p.id) {
           <button type="button" class="row" (click)="openPlans()">
-            <span class="glyph">{{ (p.merchant || '—').slice(0, 2).toUpperCase() }}</span>
-            <span class="who">
-              <span class="name">{{ p.merchant || 'Instalment plan' }}</span>
-              <span class="meta mono">{{ p.paid_count ?? 0 }} of {{ p.term_months }} paid</span>
+            <span class="glyph">
+              <finto-icon kind="merchant" [name]="p.merchant || 'plan'" fallbackCategory="fees" />
             </span>
-            <span class="each mono">{{ perMonth(p) | money: 'bare' }}</span>
+            <span class="who">
+              <span class="name">{{ p.merchant || p.description }}</span>
+              <span class="meta">
+                <span class="tag">{{ p.paid_count ?? 0 }} of {{ p.term_months }}</span>
+                <span class="mono">{{ p.outstanding | money: 'bare' }} left</span>
+              </span>
+            </span>
+            <span class="cost">
+              <span class="each mono">{{ perMonth(p) | money: 'bare' }}</span>
+              <span class="permo mono">/mo</span>
+            </span>
           </button>
         }
       </div>
-    } @else {
-      <div class="empty">No active instalment plans</div>
-    }
-  </section>
+    </section>
+  }
+
+  @if (!visibleSubs().length && !visiblePlans().length) {
+    <div class="card"><div class="empty">Nothing matches this filter</div></div>
+  }
+}
+
+@if (selected(); as c) {
+  <button class="drawer-backdrop" aria-label="Close" (click)="close()"></button>
+  <aside class="drawer" role="dialog" aria-label="Commitment detail">
+    <header>
+      <div class="head-text">
+        <h2>{{ c.merchant }}</h2>
+        <p class="small muted">{{ c.cadence }} · {{ c.count }} charge{{ c.count === 1 ? '' : 's' }}</p>
+      </div>
+      <button class="bare close" (click)="close()" aria-label="Close">×</button>
+    </header>
+
+    <dl class="facts">
+      <div><dt>Typical</dt><dd class="mono">{{ c.amount | money }}</dd></div>
+      <div><dt>Per month</dt><dd class="mono">{{ c.monthly ? (c.monthly | money) : '—' }}</dd></div>
+      <div><dt>Average</dt><dd class="mono">{{ averageOf(c) | money }}</dd></div>
+      <div><dt>Total paid</dt><dd class="mono">{{ c.totalPaid | money }}</dd></div>
+      <div><dt>First seen</dt><dd class="mono">{{ firstSeen(c) | shortDate }}</dd></div>
+      <div><dt>Last charge</dt><dd class="mono">{{ c.lastCharge | shortDate }}</dd></div>
+      <div><dt>Next due</dt><dd class="mono">{{ c.nextDue ? (c.nextDue | shortDate) : '—' }}</dd></div>
+      <div><dt>Category</dt><dd>{{ c.category || '—' }}</dd></div>
+    </dl>
+
+    <section>
+      <div class="section-head"><h3>Charge history</h3></div>
+      <div class="history">
+        @for (t of c.charges; track t.id) {
+          <div class="hrow">
+            <span class="mono">{{ t.date | shortDate }}</span>
+            <span class="acct">{{ t.account_name }}</span>
+            <span class="mono neg">{{ t.booked | money: 'bare' }}</span>
+          </div>
+        }
+      </div>
+    </section>
+
+    <button class="btn wide" (click)="openInBlotter(c)">Open in blotter →</button>
+  </aside>
 }

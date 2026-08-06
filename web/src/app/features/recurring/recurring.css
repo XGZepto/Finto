@@ -1,33 +1,131 @@
-.head-card { display: flex; flex-direction: column; gap: var(--s1); margin-bottom: var(--s3); }
-.head-card .hero {
+/* One label row over one control row, so every control shares a baseline. */
+.controls-bar {
+  display: flex;
+  align-items: end;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s3);
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.control { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
+.control label {
+  color: var(--fg-4); font-family: var(--mono); font-size: var(--t-micro);
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.control:first-child { flex: 1; min-width: 160px; }
+.control input { width: 100%; height: 31px; }
+.control finto-select { min-width: 118px; }
+
+.hero {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  margin-bottom: var(--s3);
+}
+.hero-figure { display: flex; flex-direction: column; gap: var(--s1); }
+.hero .figure {
   font-size: var(--t-hero); letter-spacing: -.02em; line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
-.head-card .sub { color: var(--fg-3); font-size: 12.5px; }
+.hero-meta { display: flex; gap: var(--s4); flex-wrap: wrap; color: var(--fg-3); font-size: 12.5px; }
+.hero-meta .note { color: var(--fg-4); }
+.hero-meta .warn { color: var(--warn); }
 
+.list-card { padding-bottom: var(--s2); }
 .rows { display: flex; flex-direction: column; }
 .row {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s3);
-  min-height: 52px;
+  min-height: 56px;
   padding: var(--s2) 0;
   border: 0;
   border-bottom: 1px solid var(--line);
   background: none;
   text-align: left;
   color: inherit;
+  letter-spacing: 0;
 }
 .row:last-child { border-bottom: 0; }
 .row:hover { background: var(--panel-2); }
 .glyph {
-  display: grid; place-items: center;
-  width: 30px; height: 30px;
-  border: 1px solid var(--line-2);
-  color: var(--fg-3); font-family: var(--mono); font-size: 11px;
+  display: grid; place-items: center; overflow: hidden;
+  width: 30px; height: 30px; border: 1px solid var(--line);
+  color: var(--fg-3);
 }
-.who { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.who .name { font-size: 13px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.who .meta { font-size: 10.5px; color: var(--fg-4); }
-.each { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.who .name {
+  font-family: var(--sans); font-size: 13px; color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.who .meta { display: flex; align-items: center; gap: var(--s2); font-size: 10.5px; color: var(--fg-4); }
+.cost { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; white-space: nowrap; }
+.cost .each { font-size: 13px; font-variant-numeric: tabular-nums; }
+.cost .permo { font-size: 10.5px; color: var(--fg-4); font-variant-numeric: tabular-nums; }
+
+/* Drawer ------------------------------------------------------------------ */
+
+.drawer-backdrop {
+  position: fixed; inset: 0; z-index: 40;
+  width: 100%; height: 100%; padding: 0; border: 0; background: #000a;
+}
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 41;
+  width: min(430px, 100vw);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--s5);
+  background: var(--panel);
+  border-left: 1px solid var(--line-2);
+}
+.drawer header {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3);
+  margin-bottom: var(--s4); padding-bottom: var(--s3); border-bottom: 1px solid var(--line);
+}
+.drawer header h2 { overflow-wrap: anywhere; }
+.drawer .close { min-width: 40px; min-height: 40px; margin: -8px -8px 0 0; font-size: 22px; line-height: 1; }
+
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0; background: var(--line); border: 1px solid var(--line); }
+.facts > div { padding: var(--s2) var(--s3); background: var(--panel-2); }
+.facts dt { color: var(--fg-4); font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+.facts dd { margin: 3px 0 0; font-size: 12.5px; color: var(--fg-2); font-variant-numeric: tabular-nums; }
+
+.drawer section { margin-top: var(--s5); }
+.history { display: flex; flex-direction: column; }
+.hrow {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--s3); align-items: baseline;
+  padding: var(--s2) 0; border-bottom: 1px solid var(--line);
+  font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.hrow:last-child { border-bottom: 0; }
+.hrow .acct { color: var(--fg-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn.wide { width: 100%; margin-top: var(--s5); }
+
+@media (max-width: 700px) {
+  .controls-bar { gap: var(--s3); padding: var(--s3); }
+  /* Search and the pill group take a row each; the two selects pair up, so the
+     controls do not push the list off the first screen. */
+  .control { flex: 1; }
+  .control:first-child { order: 1; flex-basis: 100%; }
+  .control:nth-child(2) { order: 2; }
+  .control:nth-child(4) { order: 3; }
+  .control:nth-child(3) { order: 4; flex-basis: 100%; }
+  .control:nth-child(3) finto-pills, .control:nth-child(3) .pills { width: 100%; }
+  .hero .figure { font-size: 27px; }
+  .drawer { width: 100vw; padding: var(--s4); }
+}
+
+/* Pills and selects differ in intrinsic height; pin the control row so every
+   label sits on one baseline instead of three. */
+.controls-bar .control > :not(label),
+.controls-bar .control-pair > :not(label) { --control-height: 33px; height: var(--control-height); }
+.controls-bar .control input,
+.controls-bar .control-pair input { height: var(--control-height); }
+.controls-bar finto-pills, .controls-bar .pills { height: var(--control-height); }
+.controls-bar .pill { display: grid; place-items: center; }

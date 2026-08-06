@@ -43,6 +43,7 @@ export class ReportsPage {
   readonly dimensions = ['category', 'subcategory', 'tag', 'merchant',
                          'cardholder', 'account', 'kind'];
 
+  readonly reportingCurrencies = ['USD', 'HKD', 'GBP', 'EUR', 'JPY', 'CNY', 'SGD', 'AUD', 'CAD'];
   readonly periods = ['1M', '3M', '6M', '1Y', 'YTD'];
   readonly periodMonths: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 };
 
@@ -147,6 +148,11 @@ export class ReportsPage {
     this.load();
   }
 
+  setConvertTo(currency: string): void {
+    this.preferences.setBaseCurrency(currency);
+    this.load();
+  }
+
   setAccount(value: string): void {
     this.accountId.set(value === 'All accounts' ? '' : value);
     this.load();
@@ -165,11 +171,22 @@ export class ReportsPage {
 
   /** Outflow per bucket in one currency, largest first. */
   bands = computed<Band[]>(() => {
-    const totals = new Map<string, number>();
+    // Net per bucket, so a bucket that took in more than it paid out — income,
+    // rewards, a refunded category — is not listed as somewhere money went.
+    const net = new Map<string, { out: number; in: number }>();
     for (const row of this.rows()) {
       const spend = row.spend_converted?.ok ? row.spend_converted.amount : null;
       if (spend === null) continue;
-      totals.set(row.bucket, (totals.get(row.bucket) ?? 0) + Math.abs(spend));
+      const income = row.income_converted?.ok ? row.income_converted.amount : 0;
+      const acc = net.get(row.bucket) ?? { out: 0, in: 0 };
+      acc.out += Math.abs(spend);
+      acc.in += Math.abs(income);
+      net.set(row.bucket, acc);
+    }
+    const totals = new Map<string, number>();
+    for (const [bucket, acc] of net) {
+      if (acc.out <= acc.in) continue;
+      totals.set(bucket, acc.out - acc.in);
     }
     const all = [...totals.values()].reduce((sum, n) => sum + n, 0) || 1;
     const peak = Math.max(1, ...totals.values());

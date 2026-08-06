@@ -14,7 +14,7 @@ import { NavIcon } from '../../shared/nav-icon';
   selector: 'app-tools',
   imports: [RouterLink, NavIcon],
   template: `
-    <div class="page-head"><h1>Tools</h1></div>
+    <div class="page-head"><h1>More</h1></div>
 
     @for (group of groups; track group.label) {
       <section class="tool-group">
@@ -67,9 +67,15 @@ export class ToolsPage {
 
   readonly groups = [
     {
-      label: 'Ledger',
+      label: 'Money',
       items: [
         { path: '/recurring', icon: 'installments', name: 'Recurring', note: 'Subscriptions and instalment plans committed each month' },
+        { path: '/ask', icon: 'ask', name: 'Ask', note: 'Question the ledger in plain language' },
+      ],
+    },
+    {
+      label: 'Ledger',
+      items: [
         { path: '/import', icon: 'import', name: 'Import', note: 'Add a statement and preview it before it commits' },
         { path: '/installments', icon: 'installments', name: 'Instalments', note: 'Plans and what remains on each' },
         { path: '/investments', icon: 'investments', name: 'Investments', note: 'Holdings and valuation snapshots' },

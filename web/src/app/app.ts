@@ -69,8 +69,8 @@ import { NavIcon } from './shared/nav-icon';
           </a>
         }
         <a routerLink="/tools" routerLinkActive="active">
-          <span class="mobile-icon"><finto-nav-icon name="settings" /></span>
-          <span>{{ preferences.text('Tools', '工具') }}</span>
+          <span class="mobile-icon"><finto-nav-icon name="more" /></span>
+          <span>{{ preferences.text('More', '更多') }}</span>
         </a>
       </nav>
     </div>
@@ -82,6 +82,12 @@ export class App {
   private router = inject(Router);
   preferences = inject(Preferences);
 
+  /**
+   * One ordered list. The first four are the mobile tab bar and the desktop
+   * "Money" group; everything after is the desktop "More" group and lives
+   * behind the mobile More tab. The group boundary is the fold, so the two
+   * platforms cannot drift apart.
+   */
   readonly nav = [
     { path: '/summary', label: 'Summary', labelZh: '總覽', icon: 'summary' },
     { path: '/blotter', label: 'Blotter', labelZh: '帳目', icon: 'blotter' },
@@ -89,13 +95,12 @@ export class App {
     { path: '/accounts', label: 'Accounts', labelZh: '帳戶', icon: 'accounts' },
     { path: '/recurring', label: 'Recurring', labelZh: '定期', icon: 'installments' },
     { path: '/ask', label: 'Ask', labelZh: '查詢', icon: 'ask' },
-    { path: '/tools', label: 'Tools', labelZh: '工具', icon: 'settings' },
   ];
 
   readonly primaryNav = this.nav.slice(0, 4);
   readonly desktopGroups = [
-    { label: 'Money', labelZh: '財務', items: this.nav.filter((item) => ['/summary', '/reports', '/recurring', '/accounts'].includes(item.path)) },
-    { label: 'Ledger', labelZh: '帳務', items: this.nav.filter((item) => ['/blotter', '/ask'].includes(item.path)) },
+    { label: 'Money', labelZh: '財務', items: this.nav.slice(0, 4) },
+    { label: 'More', labelZh: '更多', items: this.nav.slice(4) },
   ];
 
   reviewCount = signal(0);
