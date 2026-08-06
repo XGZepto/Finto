@@ -152,11 +152,11 @@ tr:hover .bar-col .bar-fill { background: var(--fg-3); }
 }
 
 .rank-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 22px; margin-top: 10px; }
-.rank-list button { display: grid; grid-template-columns: 24px minmax(90px, 1fr) minmax(50px, 1fr) 78px 42px; align-items: center; gap: 8px; min-width: 0; padding: 9px 4px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.rank-list button { display: grid; grid-template-columns: 24px minmax(80px, 1fr) minmax(40px, 1fr) auto 42px; align-items: center; gap: 8px; min-width: 0; padding: 9px 4px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .rank-list button:hover { background: var(--panel-2); }
 .rank-list .rank, .rank-list .share { color: var(--fg-4); font-size: 9.5px; }
 .rank-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
-.rank-list .amount { text-align: right; font-size: 10.5px; }
+.rank-list .amount { text-align: right; font-size: 10.5px; white-space: nowrap; min-width: max-content; }
 
 .head-controls { display: flex; align-items: baseline; gap: 8px; }
 .head-controls label {

@@ -44,8 +44,8 @@ import { NavIcon } from './shared/nav-icon';
 
         <div class="spacer"></div>
         <div class="nav nav-settings">
-          <a routerLink="/profile" routerLinkActive="active">
-            <span class="idx"><finto-nav-icon name="settings" /></span><span class="label">{{ preferences.text('Settings', '設定') }}</span>
+          <a routerLink="/tools" routerLinkActive="active">
+            <span class="idx"><finto-nav-icon name="settings" /></span><span class="label">{{ preferences.text('Tools', '工具') }}</span>
           </a>
         </div>
         @if (!online()) {

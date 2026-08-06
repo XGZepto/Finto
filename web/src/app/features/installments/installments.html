@@ -99,15 +99,10 @@
                             <span class="seq mono">{{ s.settlement ? '↳' : s.seq }}</span>
                             <span class="date mono">{{ s.date | shortDate }}</span>
                             <span class="amt mono" [class.neg]="s.paid">{{ s.amount | money: 'bare' }}</span>
-                            <span class="state">{{ s.settlement ? 'settled' : (s.paid ? 'charged' : 'due') }}</span>
+                            <span class="state">{{ s.settlement ? 'settled' : (s.paid ? 'charged' : 'projected') }}</span>
                           </li>
                         }
                       </ol>
-                      @if (d.settled_early) {
-                        <p class="small muted">The remaining principal was charged when the plan was cancelled and paid early. Nothing remains due.</p>
-                      } @else if (d.status !== 'completed') {
-                        <p class="small muted">Rows marked <em>due</em> are not in the ledger — they are the remaining term projected forward from the start date.</p>
-                      }
                     </div>
                   } @else {
                     <div class="spinner">loading </div>

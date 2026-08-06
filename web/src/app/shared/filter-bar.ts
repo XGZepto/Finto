@@ -173,8 +173,9 @@ import { FintoDate } from './finto-date';
         padding: var(--s3);
         border-left: 0;
         border-right: 0;
-        background: color-mix(in srgb, var(--panel) 94%, transparent);
-        backdrop-filter: blur(14px);
+        /* No backdrop-filter here: it would make this bar the containing block
+           for the fixed sheet below, which would then inherit its bled width. */
+        background: var(--panel);
       }
       /* Inline expansion would push the ledger off screen, so on a phone the
          panel arrives as a sheet over it and leaves the rows where they were. */

@@ -179,14 +179,30 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .skeleton-row { grid-template-columns: 1fr 88px; min-height: 58px; gap: var(--s2) var(--s4); }
   .skeleton-row i:nth-child(3) { display: none; }
 
-  .table-wrap td.desc { grid-column: 1; grid-row: 1; min-width: 0; display: flex; align-items: center; gap: var(--s3); }
+  .table-wrap td.desc {
+    grid-column: 1; grid-row: 1; min-width: 0;
+    display: flex; align-items: center; gap: var(--s3);
+  }
+  /* Every text cell truncates: a long merchant string must not push the amount
+     off the row or paint over the line below it. */
+  /* The raw statement line lives in the inspector on a phone; here it would
+     halve the width of the merchant name, which is what gets read. */
+  .table-wrap td.desc .block { display: none; }
+  .table-wrap td.desc .primary,
+  .table-wrap td.account,
+  .table-wrap td.category {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .table-wrap td.desc .glyph { display: grid; }
   .table-wrap td.num { grid-column: 2; grid-row: 1; text-align: right; white-space: nowrap; }
-  .table-wrap td.account { grid-column: 1; grid-row: 2; min-width: 0; }
-  .table-wrap td.category { grid-column: 1; grid-row: 2; min-width: 0; justify-self: end; }
+  .table-wrap td.account { grid-column: 1; grid-row: 2; }
+  .table-wrap td.category { grid-column: 2; grid-row: 2; justify-self: end; max-width: 45vw; }
   .table-wrap td.date { display: none; }
   .table-wrap td.account, td.category { font-size: 11px; color: var(--fg-3); }
-  .table-wrap td.flags { grid-column: 2; grid-row: 2; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; }
+  .table-wrap td.flags { grid-column: 1 / -1; grid-row: 3; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; }
   .table-wrap td.flags:empty { display: none; }
 
   /* The band stays put while its own rows scroll under it, which is what lets
