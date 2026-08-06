@@ -211,7 +211,10 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .table-wrap tr.daygroup {
     display: flex;
     position: sticky;
-    top: calc(var(--filter-h, 82px) - var(--s3));
+    /* Tuck a few px under the sticky filter bar (which sits above it): an
+       exact join can leave a sub-pixel gap on some devices that shows a row
+       sliver, whereas a small overlap is hidden by the bar. */
+    top: calc(var(--filter-h, 82px) - var(--s3) - 3px);
     z-index: 5;
     justify-content: space-between;
     align-items: baseline;
