@@ -1,0 +1,33 @@
+.head-card { display: flex; flex-direction: column; gap: var(--s1); margin-bottom: var(--s3); }
+.head-card .hero {
+  font-size: var(--t-hero); letter-spacing: -.02em; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.head-card .sub { color: var(--fg-3); font-size: 12.5px; }
+
+.rows { display: flex; flex-direction: column; }
+.row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 52px;
+  padding: var(--s2) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  text-align: left;
+  color: inherit;
+}
+.row:last-child { border-bottom: 0; }
+.row:hover { background: var(--panel-2); }
+.glyph {
+  display: grid; place-items: center;
+  width: 30px; height: 30px;
+  border: 1px solid var(--line-2);
+  color: var(--fg-3); font-family: var(--mono); font-size: 11px;
+}
+.who { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.who .name { font-size: 13px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who .meta { font-size: 10.5px; color: var(--fg-4); }
+.each { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }

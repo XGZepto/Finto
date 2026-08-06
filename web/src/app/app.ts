@@ -87,13 +87,14 @@ export class App {
     { path: '/blotter', label: 'Blotter', labelZh: '帳目', icon: 'blotter' },
     { path: '/reports', label: 'Reports', labelZh: '報表', icon: 'timeline' },
     { path: '/accounts', label: 'Accounts', labelZh: '帳戶', icon: 'accounts' },
+    { path: '/recurring', label: 'Recurring', labelZh: '定期', icon: 'installments' },
     { path: '/ask', label: 'Ask', labelZh: '查詢', icon: 'ask' },
     { path: '/tools', label: 'Tools', labelZh: '工具', icon: 'settings' },
   ];
 
   readonly primaryNav = this.nav.slice(0, 4);
   readonly desktopGroups = [
-    { label: 'Money', labelZh: '財務', items: this.nav.filter((item) => ['/summary', '/reports', '/accounts'].includes(item.path)) },
+    { label: 'Money', labelZh: '財務', items: this.nav.filter((item) => ['/summary', '/reports', '/recurring', '/accounts'].includes(item.path)) },
     { label: 'Ledger', labelZh: '帳務', items: this.nav.filter((item) => ['/blotter', '/ask'].includes(item.path)) },
   ];
 

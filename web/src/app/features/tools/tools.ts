@@ -69,6 +69,7 @@ export class ToolsPage {
     {
       label: 'Ledger',
       items: [
+        { path: '/recurring', icon: 'installments', name: 'Recurring', note: 'Subscriptions and instalment plans committed each month' },
         { path: '/import', icon: 'import', name: 'Import', note: 'Add a statement and preview it before it commits' },
         { path: '/installments', icon: 'installments', name: 'Instalments', note: 'Plans and what remains on each' },
         { path: '/investments', icon: 'investments', name: 'Investments', note: 'Holdings and valuation snapshots' },

@@ -18,6 +18,11 @@ export const routes: Routes = [
     title: 'Reports · Finto',
   },
   {
+    path: 'recurring',
+    loadComponent: () => import('./features/recurring/recurring').then((m) => m.RecurringPage),
+    title: 'Recurring · Finto',
+  },
+  {
     path: 'tools',
     loadComponent: () => import('./features/tools/tools').then((m) => m.ToolsPage),
     title: 'Tools · Finto',

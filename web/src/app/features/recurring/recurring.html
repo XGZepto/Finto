@@ -1,0 +1,56 @@
+<div class="page-head">
+  <h1>Recurring</h1>
+</div>
+
+@if (loading()) {
+  <div class="card"><div class="spinner">loading</div></div>
+} @else {
+  <section class="card head-card">
+    <span class="label">Committed each month</span>
+    <span class="hero mono">{{ monthlyTotal() | money: 'bare' }}</span>
+    <span class="sub">{{ subs().length }} subscription{{ subs().length === 1 ? '' : 's' }} · {{ plans().length }} instalment plan{{ plans().length === 1 ? '' : 's' }}</span>
+  </section>
+
+  <section class="card">
+    <div class="section-head"><h2>Subscriptions</h2></div>
+    @if (subs().length) {
+      <div class="rows">
+        @for (s of subs(); track s.merchant) {
+          <button type="button" class="row" (click)="openMerchant(s.merchant)">
+            <span class="glyph">{{ s.merchant.slice(0, 2).toUpperCase() }}</span>
+            <span class="who">
+              <span class="name">{{ s.merchant }}</span>
+              <span class="meta mono">{{ s.count }}× · {{ s.spend | money: 'bare' }} total</span>
+            </span>
+            <span class="each mono">{{ s.each | money: 'bare' }}</span>
+          </button>
+        }
+      </div>
+    } @else {
+      <div class="empty">Nothing tagged as a subscription</div>
+    }
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <h2>Instalment plans</h2>
+      <button class="bare" (click)="openPlans()">All plans →</button>
+    </div>
+    @if (plans().length) {
+      <div class="rows">
+        @for (p of plans(); track p.id) {
+          <button type="button" class="row" (click)="openPlans()">
+            <span class="glyph">{{ (p.merchant || '—').slice(0, 2).toUpperCase() }}</span>
+            <span class="who">
+              <span class="name">{{ p.merchant || 'Instalment plan' }}</span>
+              <span class="meta mono">{{ p.paid_count ?? 0 }} of {{ p.term_months }} paid</span>
+            </span>
+            <span class="each mono">{{ perMonth(p) | money: 'bare' }}</span>
+          </button>
+        }
+      </div>
+    } @else {
+      <div class="empty">No active instalment plans</div>
+    }
+  </section>
+}
