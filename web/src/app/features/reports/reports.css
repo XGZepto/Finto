@@ -1,4 +1,28 @@
-.dimension-select { min-width: 150px; margin-left: auto; }
+.controls-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s3);
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.control-pair { display: flex; flex-direction: column; gap: var(--s1); min-width: 150px; }
+.control-pair label {
+  color: var(--fg-4); font-family: var(--mono); font-size: var(--t-micro);
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.totals-row em {
+  font-style: normal; font-family: var(--mono); font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.totals-row .vs { color: var(--fg-4); }
+
+@media (max-width: 700px) {
+  .controls-bar { gap: var(--s3); padding: var(--s3); }
+  .control-pair { flex: 1; min-width: 130px; }
+}
 
 .totals-card { display: flex; flex-direction: column; gap: var(--s4); margin-bottom: var(--s3); }
 .totals-row { display: flex; align-items: baseline; gap: var(--s5); flex-wrap: wrap; }
@@ -51,4 +75,10 @@
   .rank-list button { grid-template-columns: 8px minmax(0, 1fr) auto; row-gap: var(--s1); }
   .rank-list .bar-track { grid-column: 2 / -1; grid-row: 2; }
   .rank-list .share { display: none; }
+}
+
+/* The flow diagram needs width to label its nodes; below that the ranked list
+   and the donut carry the same split without a sideways scroll. */
+@media (max-width: 760px) {
+  .flow-card { display: none; }
 }

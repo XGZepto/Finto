@@ -56,14 +56,6 @@ import { NavIcon } from './shared/nav-icon';
         }
       </nav>
 
-      <header class="mobile-head">
-        <div class="mobile-brand"><img class="brand-logo" src="/favicon.svg?v=3" alt="">Finto@if (navigating()) { <span class="caret">▌</span> }</div>
-        <div class="mobile-state">
-          @if (reviewCount() > 0) { <span class="badge">{{ reviewCount() }} review</span> }
-          @if (!online()) { <span class="dot bad"></span> }
-        </div>
-      </header>
-
       <main class="content">
         <router-outlet />
       </main>

@@ -5,6 +5,7 @@ import { Api } from '../../core/api.service';
 import { MoneyPipe } from '../../core/money.pipe';
 import { Money, SummaryRow } from '../../core/models';
 import { Preferences } from '../../core/preferences.service';
+import { FintoPills } from '../../shared/finto-pills';
 import { FintoSelect } from '../../shared/finto-select';
 import { FintoDonut, FintoShareBar, Slice } from '../../shared/finto-viz';
 
@@ -28,7 +29,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
  */
 @Component({
   selector: 'app-reports',
-  imports: [FormsModule, MoneyPipe, FintoSelect, FintoDonut, FintoShareBar],
+  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoDonut, FintoShareBar],
   templateUrl: './reports.html',
   styleUrl: './reports.css',
 })
@@ -41,19 +42,61 @@ export class ReportsPage {
   readonly dimensions = ['category', 'subcategory', 'tag', 'merchant',
                          'cardholder', 'account', 'kind'];
 
+  readonly periods = ['1M', '3M', '6M', '1Y', 'YTD'];
+  readonly periodMonths: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 };
+
   splitBy = signal('category');
+  period = signal('3M');
+  accountId = signal('');
+  accounts = signal<Array<{ id: string; display_name: string }>>([]);
   convertTo = this.preferences.baseCurrency;
   loading = signal(true);
   rows = signal<SummaryRow[]>([]);
   headline = signal<{ net: Money; spend: Money; income: Money } | null>(null);
+  priorHeadline = signal<{ net: Money; spend: Money; income: Money } | null>(null);
+
+  accountOptions = computed(() =>
+    ['All accounts', ...this.accounts().map((a) => a.display_name)]);
 
   constructor() {
+    this.api.accounts().subscribe({
+      next: (res: any) => this.accounts.set(res.accounts ?? res ?? []),
+      error: () => undefined,
+    });
     this.load();
+  }
+
+  /** The selected window, and the one immediately before it for comparison. */
+  private windows(): { current: { from: string; to: string }; prior: { from: string; to: string } } {
+    const today = new Date();
+    const to = today.toISOString().slice(0, 10);
+    const start = new Date(today);
+    if (this.period() === 'YTD') start.setMonth(0, 1);
+    else start.setMonth(start.getMonth() - (this.periodMonths[this.period()] ?? 3));
+    const from = start.toISOString().slice(0, 10);
+
+    const span = new Date(to).getTime() - new Date(from).getTime();
+    const priorTo = new Date(new Date(from).getTime() - 86400000);
+    const priorFrom = new Date(priorTo.getTime() - span);
+    return {
+      current: { from, to },
+      prior: { from: priorFrom.toISOString().slice(0, 10), to: priorTo.toISOString().slice(0, 10) },
+    };
+  }
+
+  private scope(range: { from: string; to: string }): Record<string, unknown> {
+    const filter: Record<string, unknown> = { ...range };
+    const chosen = this.accounts().find((a) => a.display_name === this.accountId());
+    if (chosen) filter['accounts'] = [chosen.id];
+    return filter;
   }
 
   load(): void {
     this.loading.set(true);
-    this.api.summary(this.splitBy(), {}, this.convertTo() || undefined).subscribe({
+    const convert = this.convertTo() || undefined;
+    const { current, prior } = this.windows();
+
+    this.api.summary(this.splitBy(), this.scope(current) as any, convert).subscribe({
       next: (res) => {
         this.rows.set(res.rows);
         this.headline.set(res.normalised?.total ?? null);
@@ -61,12 +104,38 @@ export class ReportsPage {
       },
       error: () => this.loading.set(false),
     });
+
+    this.api.summary('kind', this.scope(prior) as any, convert).subscribe({
+      next: (res) => this.priorHeadline.set(res.normalised?.total ?? null),
+      error: () => this.priorHeadline.set(null),
+    });
   }
 
   setSplitBy(value: string): void {
     this.splitBy.set(value);
     this.load();
   }
+
+  setPeriod(value: string): void {
+    this.period.set(value);
+    this.load();
+  }
+
+  setAccount(value: string): void {
+    this.accountId.set(value === 'All accounts' ? '' : value);
+    this.load();
+  }
+
+  /** Change in outflow against the previous window of equal length. */
+  spendDelta = computed<{ amount: Money; percent: number } | null>(() => {
+    const now = this.headline(); const before = this.priorHeadline();
+    if (!now || !before || !before.spend.amount) return null;
+    const diff = Math.abs(now.spend.amount) - Math.abs(before.spend.amount);
+    return {
+      amount: { amount: diff, currency: now.spend.currency },
+      percent: (diff / Math.abs(before.spend.amount)) * 100,
+    };
+  });
 
   /** Outflow per bucket in one currency, largest first. */
   bands = computed<Band[]>(() => {

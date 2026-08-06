@@ -1,14 +1,37 @@
 <div class="page-head">
   <h1>Reports</h1>
-  <finto-select class="dimension-select" ariaLabel="Split by" [options]="dimensions"
-                [ngModel]="splitBy()" (ngModelChange)="setSplitBy($event)" />
 </div>
+
+<section class="controls-bar">
+  <finto-pills [options]="periods" [value]="period()" ariaLabel="Period"
+               (pick)="setPeriod($event)" />
+  <div class="control-pair">
+    <label>Accounts</label>
+    <finto-select ariaLabel="Account scope" [options]="accountOptions()"
+                  [ngModel]="accountId() || 'All accounts'"
+                  (ngModelChange)="setAccount($event)" />
+  </div>
+  <div class="control-pair">
+    <label>Split by</label>
+    <finto-select ariaLabel="Split by" [options]="dimensions"
+                  [ngModel]="splitBy()" (ngModelChange)="setSplitBy($event)" />
+  </div>
+</section>
 
 @if (headline(); as h) {
   <section class="card totals-card">
     <div class="totals-row">
       <span><label>In</label><b class="pos">{{ h.income | money: 'bare' }}</b></span>
-      <span><label>Out</label><b class="neg">{{ h.spend | money: 'bare' }}</b></span>
+      <span>
+        <label>Out</label>
+        <b class="neg">{{ h.spend | money: 'bare' }}</b>
+        @if (spendDelta(); as d) {
+          <em class="delta" [class.neg]="d.amount.amount > 0" [class.pos]="d.amount.amount < 0">
+            {{ d.amount.amount > 0 ? '↑' : '↓' }}{{ d.percent < 0 ? -d.percent.toFixed(1) : d.percent.toFixed(1) }}%
+            <span class="vs">vs prior {{ period() }}</span>
+          </em>
+        }
+      </span>
       <span>
         <label>Net</label>
         <b [class.neg]="h.net.amount < 0" [class.pos]="h.net.amount > 0">{{ h.net | money: 'bare' }}</b>
@@ -27,7 +50,7 @@
 } @else if (!bands().length) {
   <div class="card"><div class="empty">Nothing to report for this filter</div></div>
 } @else {
-  <section class="card">
+  <section class="card flow-card">
     <div class="section-head"><h2>Where it went</h2></div>
     <div class="flow-wrap">
       <svg [attr.viewBox]="'0 0 520 260'" role="img"
