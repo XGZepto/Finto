@@ -100,7 +100,7 @@ const MERCHANT_DOMAIN: Record<string, string> = {
     @if (logoUrl()) {
       <img class="logo" [class.shown]="loaded()" [src]="logoUrl()" alt=""
            loading="lazy" referrerpolicy="no-referrer"
-           (load)="loaded.set(true)" (error)="loaded.set(false)" />
+           (load)="onLoad($event)" (error)="loaded.set(false)" />
     }
   `,
   styles: [`
@@ -133,6 +133,13 @@ export class FintoIcon {
   loaded = signal(false);
   private key = computed(() => (this.name() || '').trim().toLowerCase());
 
+  /** Show the logo only if it is sharp enough; a tiny favicon degrades to the
+   *  fallback badge or icon rather than upscaling into a blurry mess. */
+  onLoad(event: Event): void {
+    const img = event.target as HTMLImageElement;
+    this.loaded.set(img.naturalWidth >= 32);
+  }
+
   constructor() {
     // A changed name is a different brand, so retry the logo.
     effect(() => { this.logoUrl(); this.loaded.set(false); });
@@ -145,8 +152,8 @@ export class FintoIcon {
   });
 
   private domain = computed<string | null>(() => {
-    // Gateways keep their badge — payment-rail favicons are low-quality globes.
     if (this.kind() === 'issuer') return ISSUER[this.issuerKey()]?.domain ?? null;
+    if (this.kind() === 'gateway') return GATEWAY[this.key()]?.domain ?? null;
     if (this.kind() === 'merchant') {
       const k = this.key();
       if (MERCHANT_DOMAIN[k]) return MERCHANT_DOMAIN[k];
