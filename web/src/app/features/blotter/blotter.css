@@ -274,6 +274,10 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .aggregation-actions .seg button { flex: 1; padding-inline: 8px; }
   .scope { display: block; padding: 0 12px 10px; }
   .scope-item { display: grid; grid-template-columns: 42px repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; padding: 8px 0 0; }
+  /* The normalised total hides its currency label, so it does not need the
+     leading column the native (per-currency) rows use — reclaim it for the
+     three figures so a large value is not squeezed into an ellipsis. */
+  .normalised-scope .scope-item { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .scope-item + .scope-item { margin-top: 8px; border-top: 1px solid var(--line); }
   .scope-item .metric { display: grid; gap: 3px; min-width: 0; }
   .scope-item .metric b { overflow: hidden; text-overflow: ellipsis; }
