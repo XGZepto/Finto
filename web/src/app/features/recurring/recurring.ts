@@ -32,8 +32,12 @@ export interface Commitment {
   count: number;
   lastCharge: string;
   nextDue: string | null;
-  /** Overdue by more than one interval: probably cancelled, still listed. */
-  dormant: boolean;
+  /**
+   * No charge arrived when one was due. Stated as observed rather than as a
+   * debt: nothing is owed, the charge simply stopped, so it is listed but kept
+   * out of the committed total.
+   */
+  inactive: boolean;
   totalPaid: Money;
 }
 
@@ -169,7 +173,7 @@ export class RecurringPage {
         count: rows.length,
         lastCharge,
         nextDue,
-        dormant: !!nextDue && daysBetween(nextDue, today) > interval && nextDue < today,
+        inactive: !!nextDue && nextDue < today && daysBetween(nextDue, today) > interval,
         totalPaid: { amount: -amounts.reduce((s, n) => s + n, 0), currency },
       });
     }
@@ -206,7 +210,9 @@ export class RecurringPage {
   /** Cadences with a known period, summed with instalments still running. */
   monthlyTotal = computed<Money>(() => {
     const ccy = this.convertTo() || 'USD';
-    const subs = this.visibleSubs().reduce((sum, c) => sum + (c.monthly?.amount ?? 0), 0);
+    const subs = this.visibleSubs()
+      .filter((c) => !c.inactive)
+      .reduce((sum, c) => sum + (c.monthly?.amount ?? 0), 0);
     const plans = this.visiblePlans().reduce((sum, p) => sum + this.perMonth(p).amount, 0);
     return { amount: subs + plans, currency: ccy };
   });
@@ -214,7 +220,7 @@ export class RecurringPage {
   irregularCount = computed(() =>
     this.visibleSubs().filter((c) => c.cadence === 'irregular').length);
 
-  dormantCount = computed(() => this.visibleSubs().filter((c) => c.dormant).length);
+  inactiveCount = computed(() => this.visibleSubs().filter((c) => c.inactive).length);
 
   open(commitment: Commitment): void {
     this.selected.set(commitment);

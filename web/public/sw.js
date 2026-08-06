@@ -1,4 +1,6 @@
 const CACHE = 'finto-shell-v3';
+const LOGOS = 'finto-logos-v1';
+const LOGO_HOSTS = ['www.google.com'];
 const SHELL = ['/index.html', '/manifest.webmanifest', '/favicon.svg?v=3', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -20,6 +22,23 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+
+  /* Brand marks are immutable for our purposes and the host only allows a
+     half-hour of HTTP caching, so serve them from the cache and refresh in the
+     background rather than re-fetching a logo per row on every visit. */
+  if (LOGO_HOSTS.includes(url.hostname) && url.pathname.startsWith('/s2/favicons')) {
+    event.respondWith(
+      caches.open(LOGOS).then((cache) => cache.match(request).then((cached) => {
+        const network = fetch(request).then((response) => {
+          if (response.ok || response.type === 'opaque') cache.put(request, response.clone());
+          return response;
+        }).catch(() => cached);
+        return cached || network;
+      })),
+    );
+    return;
+  }
+
   if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   if (request.mode === 'navigate') {

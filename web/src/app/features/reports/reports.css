@@ -78,22 +78,3 @@
 
 .focus-chip { color: var(--info); font-family: var(--mono); font-size: 11px; letter-spacing: .04em; }
 .focus-chip:hover { color: var(--fg); }
-
-/* Pills and selects differ in intrinsic height; pin the control row so every
-   label sits on one baseline instead of three. */
-.controls-bar .control > :not(label),
-.controls-bar .control-pair > :not(label) { --control-height: 33px; height: var(--control-height); }
-.controls-bar .control input,
-.controls-bar .control-pair input { height: var(--control-height); }
-.controls-bar finto-pills, .controls-bar .pills { height: var(--control-height); }
-.controls-bar .pill { display: grid; place-items: center; }
-
-/* Trend and allocation share the width rather than each taking a full row. */
-.report-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-  align-items: start;
-  gap: var(--s3);
-  margin-bottom: var(--s3);
-}
-.report-grid > .card { margin: 0; }

@@ -52,7 +52,7 @@
   </section>
 }
 
-@if (loading()) {
+@if (loading() && !bands().length) {
   <div class="card"><div class="spinner">loading</div></div>
 } @else if (!bands().length) {
   <div class="card"><div class="empty">Nothing to report for this filter</div></div>

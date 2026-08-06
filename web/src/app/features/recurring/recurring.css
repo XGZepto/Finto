@@ -120,12 +120,3 @@
   .hero .figure { font-size: 27px; }
   .drawer { width: 100vw; padding: var(--s4); }
 }
-
-/* Pills and selects differ in intrinsic height; pin the control row so every
-   label sits on one baseline instead of three. */
-.controls-bar .control > :not(label),
-.controls-bar .control-pair > :not(label) { --control-height: 33px; height: var(--control-height); }
-.controls-bar .control input,
-.controls-bar .control-pair input { height: var(--control-height); }
-.controls-bar finto-pills, .controls-bar .pills { height: var(--control-height); }
-.controls-bar .pill { display: grid; place-items: center; }

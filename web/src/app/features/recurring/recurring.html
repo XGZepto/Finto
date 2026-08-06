@@ -36,13 +36,13 @@
     @if (irregularCount()) {
       <span class="note">{{ irregularCount() }} irregular, not counted</span>
     }
-    @if (dormantCount()) {
-      <span class="warn">{{ dormantCount() }} overdue</span>
+    @if (inactiveCount()) {
+      <span class="note">{{ inactiveCount() }} inactive, not counted</span>
     }
   </div>
 </section>
 
-@if (loading()) {
+@if (loading() && !commitments().length) {
   <div class="card"><div class="spinner">loading</div></div>
 } @else {
   @if (visibleSubs().length) {
@@ -59,8 +59,8 @@
               <span class="name">{{ c.merchant }}</span>
               <span class="meta">
                 <span class="tag">{{ c.cadence }}</span>
-                @if (c.dormant) { <span class="tag bad">overdue</span> }
-                @if (c.nextDue && !c.dormant) {
+                @if (c.inactive) { <span class="tag">inactive</span> }
+                @if (c.nextDue && !c.inactive) {
                   <span class="mono">next {{ c.nextDue | shortDate }}</span>
                 } @else {
                   <span class="mono">last {{ c.lastCharge | shortDate }}</span>
@@ -69,7 +69,7 @@
             </span>
             <span class="cost">
               <span class="each mono">{{ c.amount | money: 'bare' }}</span>
-              @if (c.monthly) {
+              @if (c.monthly && !c.inactive) {
                 <span class="permo mono">{{ c.monthly | money: 'bare' }}/mo</span>
               } @else {
                 <span class="permo dim">not counted</span>
