@@ -214,7 +214,9 @@ export class AccountsPage {
   }
   humanize(value: string): string {
     return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-      .replace(/\b(Hsbc|Mpf|Hkd|Usd|Amex)\b/g, (word) => word.toUpperCase());
+      .replace(
+        /\b(Hsbc|Mpf|Amex|Hk|Us|Uk|Sg|Cn|Jp|Au|Nz|Mo|Tw|Hkd|Usd|Cny|Rmb|Gbp|Eur|Jpy|Sgd|Aud|Nzd|Cad)\b/g,
+        (word) => word.toUpperCase());
   }
 
   setFlowView(view: 'chart' | 'list', detail = false): void {
