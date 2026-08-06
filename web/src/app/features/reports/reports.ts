@@ -7,7 +7,7 @@ import { Money, SummaryRow } from '../../core/models';
 import { Preferences } from '../../core/preferences.service';
 import { FintoPills } from '../../shared/finto-pills';
 import { FintoSelect } from '../../shared/finto-select';
-import { FintoDonut, FintoShareBar, Slice } from '../../shared/finto-viz';
+import { FintoFlow, FlowNode } from '../../shared/finto-flow';
 
 interface Band {
   label: string;
@@ -29,7 +29,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
  */
 @Component({
   selector: 'app-reports',
-  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoDonut, FintoShareBar],
+  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoFlow],
   templateUrl: './reports.html',
   styleUrl: './reports.css',
 })
@@ -159,8 +159,6 @@ export class ReportsPage {
   });
 
   topBands = computed(() => this.bands().slice(0, 12));
-  slices = computed<Slice[]>(() =>
-    this.bands().map((b) => ({ label: b.label, value: Math.abs(b.amount.amount) })));
 
   savingsRate = computed(() => {
     const h = this.headline();
@@ -168,24 +166,22 @@ export class ReportsPage {
     return ((h.income.amount - Math.abs(h.spend.amount)) / h.income.amount) * 100;
   });
 
-  /**
-   * Income on the left, the split it funded on the right.
-   *
-   * Band heights are shares of outflow, so a wide ribbon is a large share of
-   * what was spent rather than of what was earned.
-   */
-  flow = computed(() => {
-    const bands = this.topBands().slice(0, 7);
-    const total = bands.reduce((sum, b) => sum + Math.abs(b.amount.amount), 0) || 1;
-    const height = 240;
-    let cursor = 0;
-    return bands.map((b) => {
-      const span = (Math.abs(b.amount.amount) / total) * height;
-      const node = { ...b, y: cursor, height: Math.max(2, span) };
-      cursor += span;
-      return node;
-    });
+  /** Destinations for the flow diagram: the top bands, each with its share. */
+  incomeTotal = computed(() => Math.abs(this.headline()?.income.amount ?? 0));
+  savedDisplay = computed(() => {
+    const h = this.headline();
+    if (!h) return '';
+    const saved = Math.abs(h.income.amount) - Math.abs(h.spend.amount);
+    return this.money.transform({ amount: saved, currency: h.income.currency }, 'bare');
   });
+
+  flowNodes = computed<FlowNode[]>(() =>
+    this.topBands().slice(0, 8).map((b) => ({
+      label: b.label,
+      value: Math.abs(b.amount.amount),
+      display: this.money.transform(b.amount, 'bare'),
+      colour: b.colour,
+    })));
 
   drill(bucket: string): void {
     const key = this.splitBy();

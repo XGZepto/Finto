@@ -112,7 +112,7 @@
   padding: 28px 32px 72px;
 }
 
-.mobile-head, .mobile-nav, .mobile-sheet, .menu-scrim { display: none; }
+.mobile-head, .mobile-nav, .mobile-sheet, .menu-scrim, .status-scrim { display: none; }
 
 @media (max-width: 880px) {
   .shell { display: flex; flex-direction: column; grid-template-columns: none; }
@@ -142,7 +142,26 @@
   .mobile-brand .brand-logo { width: 30px; height: 30px; }
   .mobile-state { display: flex; align-items: center; gap: 9px; }
   .mobile-state .badge { color: var(--fg-3); border-color: var(--line); }
-  .content { flex: 1; min-height: 0; padding: 16px 12px 28px; }
+  /* The header carried the status-bar inset; with it gone the pane owns it,
+     so edge-to-edge does not put the first row under the system clock. */
+  .content {
+    flex: 1;
+    min-height: 0;
+    padding: calc(var(--s3) + env(safe-area-inset-top)) var(--s3) var(--s5);
+  }
+  .status-scrim {
+    display: block;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: calc(env(safe-area-inset-top) + var(--s2));
+    z-index: 40;
+    pointer-events: none;
+    background: linear-gradient(180deg, var(--bg) 42%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent);
+    mask-image: linear-gradient(180deg, #000 55%, transparent);
+  }
 
   .mobile-nav {
     display: grid;

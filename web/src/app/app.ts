@@ -56,6 +56,7 @@ import { NavIcon } from './shared/nav-icon';
         }
       </nav>
 
+      <div class="status-scrim" aria-hidden="true"></div>
       <main class="content">
         <router-outlet />
       </main>

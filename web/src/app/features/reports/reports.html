@@ -41,7 +41,6 @@
         <b>{{ savingsRate() === null ? '—' : savingsRate()!.toFixed(1) + '%' }}</b>
       </span>
     </div>
-    <finto-share-bar [slices]="slices()" [legend]="false" label="Outflow composition" />
   </section>
 }
 
@@ -50,29 +49,10 @@
 } @else if (!bands().length) {
   <div class="card"><div class="empty">Nothing to report for this filter</div></div>
 } @else {
-  <section class="card flow-card">
-    <div class="section-head"><h2>Where it went</h2></div>
-    <div class="flow-wrap">
-      <svg [attr.viewBox]="'0 0 520 260'" role="img"
-           [attr.aria-label]="'Outflow by ' + splitBy()">
-        <rect x="0" y="10" width="10" height="240" fill="var(--c2)" />
-        <text x="18" y="8" class="flow-label">Outflow</text>
-        @for (node of flow(); track node.label) {
-          <path [attr.d]="'M10,' + (node.y + 10) + ' C160,' + (node.y + 10)
-                          + ' 240,' + (node.y + 10) + ' 360,' + (node.y + 10)
-                          + ' L360,' + (node.y + node.height + 10)
-                          + ' C240,' + (node.y + node.height + 10)
-                          + ' 160,' + (node.y + node.height + 10)
-                          + ' 10,' + (node.y + node.height + 10) + ' Z'"
-                [attr.fill]="node.colour" opacity="0.22" />
-          <rect x="360" [attr.y]="node.y + 10" width="10" [attr.height]="node.height"
-                [attr.fill]="node.colour" />
-          <text x="378" [attr.y]="node.y + 10 + (node.height / 2) + 3" class="flow-node">
-            {{ node.label }}
-          </text>
-        }
-      </svg>
-    </div>
+  <section class="card">
+    <div class="section-head"><h2>Where the money went</h2></div>
+    <finto-flow [nodes]="flowNodes()" [income]="incomeTotal()"
+                [savedDisplay]="savedDisplay()" (pick)="drill($event)" />
   </section>
 
   <section class="card">
@@ -92,10 +72,5 @@
         </button>
       }
     </div>
-  </section>
-
-  <section class="card">
-    <div class="section-head"><h2>Share</h2></div>
-    <finto-donut [slices]="slices()" [label]="'Outflow by ' + splitBy()" />
   </section>
 }

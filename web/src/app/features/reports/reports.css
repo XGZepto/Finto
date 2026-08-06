@@ -36,13 +36,6 @@
   font-variant-numeric: tabular-nums; letter-spacing: -.01em;
 }
 
-.flow-wrap { overflow-x: auto; }
-.flow-wrap svg { display: block; min-width: 460px; width: 100%; height: auto; }
-.flow-label {
-  font-family: var(--mono); font-size: 9px; fill: var(--fg-4);
-  letter-spacing: .1em; text-transform: uppercase;
-}
-.flow-node { font-family: var(--mono); font-size: 9.5px; fill: var(--fg-2); }
 
 .rank-list { display: flex; flex-direction: column; }
 .rank-list button {
@@ -75,10 +68,4 @@
   .rank-list button { grid-template-columns: 8px minmax(0, 1fr) auto; row-gap: var(--s1); }
   .rank-list .bar-track { grid-column: 2 / -1; grid-row: 2; }
   .rank-list .share { display: none; }
-}
-
-/* The flow diagram needs width to label its nodes; below that the ranked list
-   and the donut carry the same split without a sideways scroll. */
-@media (max-width: 760px) {
-  .flow-card { display: none; }
 }

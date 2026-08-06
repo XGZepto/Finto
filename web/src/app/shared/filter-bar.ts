@@ -167,7 +167,7 @@ import { FintoDate } from './finto-date';
          same edge treatment as the rows so the two line up. */
       .filter-bar {
         position: sticky;
-        top: 0;
+        top: calc(-1 * var(--s3));
         z-index: 25;
         margin-inline: calc(-1 * var(--s3));
         padding: var(--s3);
