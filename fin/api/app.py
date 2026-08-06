@@ -464,8 +464,15 @@ def health() -> dict:
         conn.close()
 
 
-def _bounded_transfer_rebuild(conn, month: str, start_day: int, end_day: int) -> dict:
-    """Recompute automatic transfer links in a bounded monthly window."""
+def _bounded_transfer_rebuild(conn, month: str, start_day: int, end_day: int,
+                              pad: int = 10) -> dict:
+    """Recompute automatic transfer links in a bounded monthly window.
+
+    `pad` is the day context loaded on each side so a transfer whose legs
+    straddle the window's edge is still paired. A dense cluster makes the O(n²)
+    matcher blow past the request limit; a smaller pad narrows the load at the
+    cost of missing a transfer that settles more than `pad` days from its debit.
+    """
     from datetime import date, timedelta
 
     from .. import db as dbm
@@ -473,6 +480,8 @@ def _bounded_transfer_rebuild(conn, month: str, start_day: int, end_day: int) ->
 
     if not 1 <= start_day <= 31 or not 1 <= end_day <= 31 or start_day > end_day:
         raise HTTPException(422, "invalid day range")
+    if not 0 <= pad <= 31:
+        raise HTTPException(422, "invalid pad")
     try:
         start = date.fromisoformat(f"{month}-{start_day:02d}")
     except ValueError as error:
@@ -480,7 +489,7 @@ def _bounded_transfer_rebuild(conn, month: str, start_day: int, end_day: int) ->
     next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
     last_day = (next_month - timedelta(days=1)).day
     end = date.fromisoformat(f"{month}-{min(end_day, last_day):02d}")
-    window_start, window_end = start - timedelta(days=10), end + timedelta(days=10)
+    window_start, window_end = start - timedelta(days=pad), end + timedelta(days=pad)
     txns = dbm.load_txns(
         conn, include_duplicates=True,
         from_date=window_start, to_date=window_end,
@@ -536,7 +545,7 @@ def agent_ledger_transactions(request: Request, date_from: str, date_to: str,
 
 @app.post("/api/agent/ledger/rebuild-transfers")
 def agent_rebuild_transfers(request: Request, month: str, start_day: int = 1,
-                            end_day: int = 31) -> dict:
+                            end_day: int = 31, pad: int = 10) -> dict:
     """Run audited, bounded transfer maintenance with a user API key."""
     from .. import db as dbm
 
@@ -544,7 +553,7 @@ def agent_rebuild_transfers(request: Request, month: str, start_day: int = 1,
     conn = dbm.connect()
     try:
         dbm.apply_acl(conn, user_id)
-        result = _bounded_transfer_rebuild(conn, month, start_day, end_day)
+        result = _bounded_transfer_rebuild(conn, month, start_day, end_day, pad)
         conn.execute(
             "INSERT INTO agent_operation (id,subject,action,user_id,applied,result,created_at) "
             "VALUES (%s,%s,%s,%s,1,%s::jsonb,%s)",
