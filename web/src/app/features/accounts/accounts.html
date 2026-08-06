@@ -153,12 +153,14 @@
         <article class="card account-group">
           @if (g.children.length === 1) {
             <button class="single-account" (click)="open(g.children[0].account.id)">
+              <span class="issuer-mark"><finto-icon kind="issuer" [name]="g.institution" /></span>
               <span class="child-main"><span class="eyebrow mono">{{ humanize(g.institution) }}</span><strong>{{ g.name }}</strong><small>{{ humanize(g.children[0].account.account_type) }} @if (g.children[0].cards) { · {{ g.children[0].cards }} cards }</small></span>
               <span class="group-totals">@for (total of g.totals; track total.currency) { <span class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money: 'bare' }} <small>{{ total.currency }}</small></span> }</span>
               <span class="arrow">→</span>
             </button>
           } @else {
             <header>
+              <span class="issuer-mark"><finto-icon kind="issuer" [name]="g.institution" /></span>
               <div><span class="eyebrow mono">{{ humanize(g.institution) }}</span><h2>{{ g.name }}</h2></div>
               <div class="group-totals">@for (total of g.totals; track total.currency) { <span class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money: 'bare' }} <small>{{ total.currency }}</small></span> }</div>
             </header>

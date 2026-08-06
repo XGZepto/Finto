@@ -1,5 +1,6 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { FintoIcon } from '../../shared/finto-icon';
 import { Api } from '../../core/api.service';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { Account, Card, Flows, Position, SummaryRow, Txn } from '../../core/models';
@@ -14,7 +15,7 @@ interface AccountRow {
 
 @Component({
   selector: 'app-accounts',
-  imports: [MoneyPipe, ShortDatePipe],
+  imports: [FintoIcon, MoneyPipe, ShortDatePipe],
   templateUrl: './accounts.html',
   styleUrl: './accounts.css',
 })

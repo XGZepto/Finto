@@ -325,13 +325,17 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 
 /* Merchant monogram. Desktop keeps the text column dense, so it is mobile-only. */
 .glyph {
-  display: none;
+  display: grid;
   place-items: center;
   flex: none;
   width: 30px;
   height: 30px;
-  border: 1px solid var(--line-2);
+  overflow: hidden;
+  border: 1px solid var(--line);
   color: var(--fg-3);
   font-family: var(--mono);
   font-size: 11px;
 }
+.glyph finto-icon { width: 100%; height: 100%; }
+/* The desktop table keeps its dense text columns; the mark is a mobile-list affordance. */
+@media (min-width: 761px) { td.desc .glyph { display: none; } }

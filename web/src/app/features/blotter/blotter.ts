@@ -9,6 +9,7 @@ import { DetailKeyPipe, MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { Money, TotalRow, Txn } from '../../core/models';
 import { scrollPane } from '../../core/scroll';
 import { FilterBar } from '../../shared/filter-bar';
+import { FintoIcon } from '../../shared/finto-icon';
 import { FintoSelect } from '../../shared/finto-select';
 
 /**
@@ -23,7 +24,7 @@ import { FintoSelect } from '../../shared/finto-select';
  */
 @Component({
   selector: 'app-blotter',
-  imports: [FormsModule, MoneyPipe, ShortDatePipe, DetailKeyPipe, FilterBar, FintoSelect],
+  imports: [FormsModule, MoneyPipe, ShortDatePipe, DetailKeyPipe, FilterBar, FintoSelect, FintoIcon],
   templateUrl: './blotter.html',
   styleUrl: './blotter.css',
 })

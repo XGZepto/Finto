@@ -2,7 +2,7 @@
 .account-groups { columns: 2 360px; column-gap: 12px; margin-bottom: 12px; }
 .account-group { width: 100%; padding: 0; overflow: hidden; margin: 0 0 12px; break-inside: avoid; }
 .account-skeleton { height: 104px; margin-bottom: 12px; break-inside: avoid; }
-.single-account { width: 100%; min-height: 88px; display: grid; grid-template-columns: 1fr auto 20px; align-items: center; gap: 14px; padding: 14px 16px; border: 0; background: transparent; color: var(--fg); text-align: left; letter-spacing: 0; }
+.single-account { width: 100%; min-height: 88px; display: grid; grid-template-columns: 30px 1fr auto 20px; align-items: center; gap: 14px; padding: 14px 16px; border: 0; background: transparent; color: var(--fg); text-align: left; letter-spacing: 0; }
 .single-account:hover { background: var(--panel-2); }
 .single-account .child-main strong { font-family: var(--mono); font-size: 12px; letter-spacing: .07em; text-transform: uppercase; }
 .single-account .arrow { color: var(--fg-4); }
@@ -95,7 +95,7 @@
   .account-groups { columns: 1; }
   .account-group header { padding: 13px 12px; }
   .account-child { padding: 9px 12px; grid-template-columns: 1fr auto 14px; }
-  .single-account { min-height: 78px; padding: 12px; grid-template-columns: minmax(0, 1fr) auto 12px; }
+  .single-account { min-height: 78px; padding: 12px; grid-template-columns: 30px minmax(0, 1fr) auto 12px; }
   .sankey-frame::after { content: ''; position: absolute; z-index: 2; top: 30px; right: -12px; bottom: 0; width: 28px; pointer-events: none; background: linear-gradient(90deg, transparent, var(--panel)); }
   .pan-cue { display: block; margin: -4px 0 7px; color: var(--fg-4); font: 9px/1 var(--mono); letter-spacing: .08em; text-align: right; text-transform: uppercase; }
   .sankey-scroll { display: block; overflow-x: auto; margin-inline: -12px; padding-inline: 12px 30px; overscroll-behavior-x: contain; scrollbar-width: thin; }
@@ -120,3 +120,13 @@
   .child-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .group-totals { font-size: 10.5px; }
 }
+
+/* Issuer brand mark on each account group. */
+.issuer-mark {
+  display: grid; place-items: center; flex: none;
+  width: 30px; height: 30px; overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.account-group header { display: flex; align-items: center; gap: var(--s3); }
+.account-group header > div { flex: 1; }

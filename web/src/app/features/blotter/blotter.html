@@ -109,7 +109,14 @@
                 }
               </td>
               <td class="desc">
-                <span class="glyph" aria-hidden="true">{{ initials(t) }}</span>
+                <span class="glyph" aria-hidden="true">
+                  @if (gateway(t); as g) {
+                    <finto-icon kind="gateway" [name]="g" />
+                  } @else {
+                    <finto-icon kind="merchant" [name]="t.merchant || t.description"
+                                [fallbackCategory]="t.category || 'other'" />
+                  }
+                </span>
                 @if (merchantHidden(t)) {
                   <span class="primary dim">Merchant not disclosed</span>
                   <span class="muted small block">{{ t.description }}</span>
