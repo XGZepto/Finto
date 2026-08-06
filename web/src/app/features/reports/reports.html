@@ -44,6 +44,14 @@
   </section>
 }
 
+@if (monthlySpend().length > 1) {
+  <section class="card">
+    <div class="section-head"><h2>Spending over time</h2></div>
+    <finto-bars [data]="monthlySpend()" label="Outflow per month"
+                [meanLabel]="monthlyMean()" (pick)="drillMonth($event)" />
+  </section>
+}
+
 @if (loading()) {
   <div class="card"><div class="spinner">loading</div></div>
 } @else if (!bands().length) {

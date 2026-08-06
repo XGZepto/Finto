@@ -7,6 +7,7 @@ import { Money, SummaryRow } from '../../core/models';
 import { Preferences } from '../../core/preferences.service';
 import { FintoPills } from '../../shared/finto-pills';
 import { FintoSelect } from '../../shared/finto-select';
+import { FintoBars, Bar } from '../../shared/finto-bars';
 import { FintoFlow, FlowNode } from '../../shared/finto-flow';
 
 interface Band {
@@ -29,7 +30,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
  */
 @Component({
   selector: 'app-reports',
-  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoFlow],
+  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoFlow, FintoBars],
   templateUrl: './reports.html',
   styleUrl: './reports.css',
 })
@@ -52,6 +53,7 @@ export class ReportsPage {
   convertTo = this.preferences.baseCurrency;
   loading = signal(true);
   rows = signal<SummaryRow[]>([]);
+  monthRows = signal<SummaryRow[]>([]);
   headline = signal<{ net: Money; spend: Money; income: Money } | null>(null);
   priorHeadline = signal<{ net: Money; spend: Money; income: Money } | null>(null);
 
@@ -108,6 +110,11 @@ export class ReportsPage {
     this.api.summary('kind', this.scope(prior) as any, convert).subscribe({
       next: (res) => this.priorHeadline.set(res.normalised?.total ?? null),
       error: () => this.priorHeadline.set(null),
+    });
+
+    this.api.summary('month', this.scope(current) as any, convert).subscribe({
+      next: (res) => this.monthRows.set(res.rows),
+      error: () => this.monthRows.set([]),
     });
   }
 
@@ -182,6 +189,28 @@ export class ReportsPage {
       display: this.money.transform(b.amount, 'bare'),
       colour: b.colour,
     })));
+
+  monthlySpend = computed<Bar[]>(() => {
+    const byMonth = new Map<string, number>();
+    for (const r of this.monthRows()) {
+      const spend = r.spend_converted?.ok ? r.spend_converted.amount : null;
+      if (spend === null) continue;
+      byMonth.set(r.bucket, (byMonth.get(r.bucket) ?? 0) + Math.abs(spend));
+    }
+    return [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([label, value]) => ({ label, value }));
+  });
+
+  monthlyMean = computed(() => {
+    const rows = this.monthlySpend();
+    if (!rows.length) return '';
+    const mean = rows.reduce((s, r) => s + r.value, 0) / rows.length;
+    return this.money.transform({ amount: -mean, currency: this.convertTo() }, 'bare');
+  });
+
+  drillMonth(month: string): void {
+    this.router.navigate(['/blotter'], { queryParams: { from: month + '-01' } });
+  }
 
   drill(bucket: string): void {
     const key = this.splitBy();

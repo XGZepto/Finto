@@ -198,12 +198,18 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   }
   .table-wrap td.desc .glyph { display: grid; }
   .table-wrap td.num { grid-column: 2; grid-row: 1; text-align: right; white-space: nowrap; }
-  .table-wrap td.account { grid-column: 1; grid-row: 2; }
-  .table-wrap td.category { grid-column: 2; grid-row: 2; justify-self: end; max-width: 45vw; }
-  .table-wrap td.date { display: none; }
-  .table-wrap td.account, td.category { font-size: 11px; color: var(--fg-3); }
-  .table-wrap td.flags { grid-column: 1 / -1; grid-row: 3; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; }
-  .table-wrap td.flags:empty { display: none; }
+  /* One subtitle only — the category, indented to sit under the merchant, past
+     the glyph. Account and flags belong in the inspector, not on every row. */
+  .table-wrap td.category {
+    grid-column: 1; grid-row: 2;
+    padding-left: calc(30px + var(--s3));
+    font-size: 11px; color: var(--fg-4);
+  }
+  .table-wrap td.category .block { display: none; }
+  .table-wrap td.desc .row-tags { display: none; }
+  .table-wrap td.date,
+  .table-wrap td.account,
+  .table-wrap td.flags { display: none; }
 
   /* The band stays put while its own rows scroll under it, which is what lets
      the rows drop the date entirely. */
@@ -222,8 +228,6 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .table-wrap td.desc .primary { font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
   .table-wrap td.desc .block { line-height: 1.35; margin-top: 2px; }
   .table-wrap td.account .holder { display: inline; margin-left: 5px; }
-  .table-wrap td.category .block { display: inline; }
-  .table-wrap td.category .block::before { content: ' · '; }
   .flags .tag + .tag { margin-left: 0; }
 
   .drawer {
