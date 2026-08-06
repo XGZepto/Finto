@@ -47,15 +47,10 @@ from .routers import (
     transactions,
 )
 
-# Vercel routes only /api/* to this function; the spec and docs must live under
-# that prefix or they resolve to the SPA in production.
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
     version="0.2.7",
-    openapi_url="/api/openapi.json",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
 )
 
 
@@ -394,11 +389,9 @@ app.add_middleware(
 async def authenticated_api_context(request: Request, call_next):
     """Verify the database session and attach its user to every private API call."""
     path = request.url.path
-    public = path in {
-        "/api/auth/login", "/api/auth/logout", "/api/health", "/api/spec",
-        "/api/openapi.json", "/api/docs", "/api/redoc",
-    } or path.startswith("/api/agent/") or path.endswith(
-        ("/openapi.json", "/docs", "/redoc")
+    public = (
+        path in {"/api/auth/login", "/api/auth/logout", "/api/health"}
+        or path.startswith("/api/agent/")
     )
     if request.url.path.startswith("/api/") and not public:
         from .. import db as dbm
@@ -457,16 +450,6 @@ async def private_route_cache(request: Request, call_next):
 for router in (transactions, summary, accounts, imports, review, integrity,
                installments, investments, jobs, query):
     app.include_router(router.router, prefix="/api")
-
-
-@app.get("/api/spec", include_in_schema=False)
-def api_spec() -> dict:
-    """The OpenAPI document from an explicit route.
-
-    FastAPI's generated openapi_url is answered 401 behind the platform edge
-    while explicitly declared routes are not, so the schema is served here to
-    match the routes that reach the function."""
-    return app.openapi()
 
 
 @app.get("/api/health")

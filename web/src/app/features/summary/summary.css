@@ -249,8 +249,10 @@ tr:hover .bar-col .bar-fill { background: var(--fg-3); }
   .bar-col { display: none; }
   .page-head { margin-bottom: 12px; }
   .rank-list { grid-template-columns: 1fr; }
-  .rank-list button { grid-template-columns: 22px minmax(90px, 1fr) 60px 40px; }
-  .rank-list .bar-track { display: none; }
+  /* Amount takes the width it needs; the name truncates and the share drops —
+     the donut legend above already carries each share. */
+  .rank-list button { grid-template-columns: 22px minmax(0, 1fr) auto; }
+  .rank-list .bar-track, .rank-list .share { display: none; }
   .position-scale { margin-left: 110px; margin-right: 0; }
   .position-row { grid-template-columns: 100px minmax(60px, 1fr) 78px; gap: 8px; min-height: 39px; }
   .position-row strong { font-size: 9.5px; }

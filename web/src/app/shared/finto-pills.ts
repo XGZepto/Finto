@@ -9,7 +9,7 @@ import { Component, input, output } from '@angular/core';
 @Component({
   selector: 'finto-pills',
   template: `
-    <div class="pills" role="group" [attr.aria-label]="ariaLabel()">
+    <div class="pills" [class.stretch]="stretch()" role="group" [attr.aria-label]="ariaLabel()">
       @for (option of options(); track option) {
         <button type="button" class="pill" [class.on]="option === value()"
                 [attr.aria-pressed]="option === value()" (click)="pick.emit(option)">
@@ -20,6 +20,8 @@ import { Component, input, output } from '@angular/core';
   `,
   styles: [`
     .pills { display: inline-flex; border: 1px solid var(--line-2); }
+    .pills.stretch { display: flex; }
+    .pills.stretch .pill { flex: 1; text-align: center; }
     .pill {
       min-height: 0;
       padding: var(--s1) var(--s3);
@@ -39,5 +41,6 @@ export class FintoPills {
   options = input.required<string[]>();
   value = input.required<string>();
   ariaLabel = input('Options');
+  stretch = input(false);
   pick = output<string>();
 }
