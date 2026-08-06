@@ -53,6 +53,7 @@ export class FintoBars {
   data = input.required<Bar[]>();
   label = input('Values over time');
   meanLabel = input('');
+  selected = input<string | null>(null);
   pick = output<string>();
 
   bars = computed(() => {
@@ -63,7 +64,7 @@ export class FintoBars {
       label: r.label,
       short: r.label.replace(/^\d{2}(\d{2})-(\d{2})$/, '$2').replace(/^(\d{4})-(\d{2})$/, '$2'),
       pct: (Math.abs(r.value) / peak) * 100,
-      peak: Math.abs(r.value) === peakVal,
+      peak: this.selected() ? r.label === this.selected() : Math.abs(r.value) === peakVal,
       title: `${r.label}${r.sub ? ' · ' + r.sub : ''}`,
     }));
   });

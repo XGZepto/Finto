@@ -16,6 +16,7 @@ const ISSUER: Record<string, { domain: string; bg: string; fg: string; label: st
   hsbc: { domain: 'hsbc.com', bg: '#db0011', fg: '#fff', label: 'HSBC' },
   amex_hk: { domain: 'americanexpress.com', bg: '#006fcf', fg: '#fff', label: 'AMEX' },
   amex_us: { domain: 'americanexpress.com', bg: '#006fcf', fg: '#fff', label: 'AMEX' },
+  amex: { domain: 'americanexpress.com', bg: '#006fcf', fg: '#fff', label: 'AMEX' },
   mox: { domain: 'mox.com', bg: '#00d0b0', fg: '#03110f', label: 'mox' },
   wise: { domain: 'wise.com', bg: '#9fe870', fg: '#163300', label: 'wise' },
   chase: { domain: 'chase.com', bg: '#117aca', fg: '#fff', label: 'Chase' },
@@ -110,7 +111,8 @@ const MERCHANT_DOMAIN: Record<string, string> = {
     .logo {
       position: absolute; inset: 0;
       width: 100%; height: 100%; object-fit: cover;
-      transform: scale(1.16);
+      transform: scale(1.08);
+      background: #fff;
       opacity: 0; transition: opacity 120ms linear;
     }
     .logo.shown { opacity: 1; }
@@ -136,11 +138,17 @@ export class FintoIcon {
     effect(() => { this.logoUrl(); this.loaded.set(false); });
   }
 
-  private domain = computed<string | null>(() => {
+  /** hsbc_hk, amex_us … share one brand; drop the region suffix to match. */
+  private issuerKey = computed(() => {
     const k = this.key();
-    if (this.kind() === 'issuer') return ISSUER[k]?.domain ?? null;
-    if (this.kind() === 'gateway') return GATEWAY[k]?.domain ?? null;
+    return ISSUER[k] ? k : k.replace(/_(hk|us|uk|sg|cn|au|ca|jp)$/, '');
+  });
+
+  private domain = computed<string | null>(() => {
+    // Gateways keep their badge — payment-rail favicons are low-quality globes.
+    if (this.kind() === 'issuer') return ISSUER[this.issuerKey()]?.domain ?? null;
     if (this.kind() === 'merchant') {
+      const k = this.key();
       if (MERCHANT_DOMAIN[k]) return MERCHANT_DOMAIN[k];
       for (const [needle, dom] of Object.entries(MERCHANT_DOMAIN)) {
         if (k.includes(needle)) return dom;
@@ -151,15 +159,15 @@ export class FintoIcon {
 
   logoUrl = computed(() => {
     const d = this.domain();
-    return d ? `https://www.google.com/s2/favicons?sz=64&domain=${d}` : null;
+    return d ? `https://www.google.com/s2/favicons?sz=128&domain=${d}` : null;
   });
 
   badge = computed(() => {
     if (this.kind() === 'gateway') return GATEWAY[this.key()] ?? null;
     if (this.kind() === 'issuer') {
-      return ISSUER[this.key()] ?? {
-        bg: 'var(--panel-3)', fg: 'var(--fg-2)',
-        label: this.key().slice(0, 2).toUpperCase() || '—',
+      return ISSUER[this.issuerKey()] ?? {
+        domain: '', bg: 'var(--panel-3)', fg: 'var(--fg-2)',
+        label: this.issuerKey().slice(0, 2).toUpperCase() || '—',
       };
     }
     return null;

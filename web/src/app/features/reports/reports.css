@@ -75,3 +75,6 @@
   .rank-list .bar-track { grid-column: 2 / -1; grid-row: 2; }
   .rank-list .share { display: none; }
 }
+
+.focus-chip { color: var(--info); font-family: var(--mono); font-size: 11px; letter-spacing: .04em; }
+.focus-chip:hover { color: var(--fg); }

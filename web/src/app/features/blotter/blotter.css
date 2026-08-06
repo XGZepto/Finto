@@ -165,44 +165,39 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 
   /* A statement row on a phone is a list item: who, what, how much. The day
      band already carries the date, so the row does not repeat it. */
+  /* Glyph | text | amount, with two text rows. The glyph and amount span both
+     rows so they sit centred against the merchant-and-category block. */
   .table-wrap tr.clickable {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
     align-items: center;
-    gap: 2px var(--s3);
+    column-gap: var(--s3);
+    row-gap: 1px;
     min-height: 58px;
     padding: var(--s2) var(--s3);
     border-bottom: 1px solid var(--line);
   }
   .table-wrap td { border: none; padding: 0; }
+  .table-wrap td.desc { display: contents; }
   .blotter-skeleton { min-height: 640px; }
   .skeleton-row { grid-template-columns: 1fr 88px; min-height: 58px; gap: var(--s2) var(--s4); }
   .skeleton-row i:nth-child(3) { display: none; }
 
-  .table-wrap td.desc {
-    grid-column: 1; grid-row: 1; min-width: 0;
-    display: flex; align-items: center; gap: var(--s3);
+  .table-wrap td.desc .glyph { grid-column: 1; grid-row: 1 / 3; align-self: center; display: grid; }
+  .table-wrap td.desc .primary {
+    grid-column: 2; grid-row: 1; align-self: end;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  /* Every text cell truncates: a long merchant string must not push the amount
-     off the row or paint over the line below it. */
-  /* The raw statement line lives in the inspector on a phone; here it would
-     halve the width of the merchant name, which is what gets read. */
-  .table-wrap td.desc .block { display: none; }
-  .table-wrap td.desc .primary,
-  .table-wrap td.account,
-  .table-wrap td.category {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .table-wrap td.desc .block, .table-wrap td.desc .row-tags { display: none; }
+  .table-wrap td.num {
+    grid-column: 3; grid-row: 1 / 3; align-self: center;
+    text-align: right; white-space: nowrap;
   }
-  .table-wrap td.desc .glyph { display: grid; }
-  .table-wrap td.num { grid-column: 2; grid-row: 1; text-align: right; white-space: nowrap; }
-  /* One subtitle only — the category, indented to sit under the merchant, past
-     the glyph. Account and flags belong in the inspector, not on every row. */
+  /* One subtitle only — the category under the merchant. */
   .table-wrap td.category {
-    grid-column: 1; grid-row: 2;
-    padding-left: calc(30px + var(--s3));
+    grid-column: 2; grid-row: 2; align-self: start;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 11px; color: var(--fg-4);
   }
   .table-wrap td.category .block { display: none; }
@@ -216,7 +211,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .table-wrap tr.daygroup {
     display: flex;
     position: sticky;
-    top: var(--filter-h, 82px);
+    top: calc(var(--filter-h, 82px) - var(--s3));
     z-index: 5;
     justify-content: space-between;
     align-items: baseline;

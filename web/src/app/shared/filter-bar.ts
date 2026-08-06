@@ -167,7 +167,9 @@ import { FintoDate } from './finto-date';
          blotter measures into --filter-h. */
       .filter-bar {
         position: sticky;
-        top: 0;
+        /* Counteract the content pane's top padding so the bar pins flush under
+           the status bar with no gap above it. */
+        top: calc(-1 * var(--s3));
         z-index: 25;
         margin-inline: calc(-1 * var(--s3));
         padding: var(--s3);
