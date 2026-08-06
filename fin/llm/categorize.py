@@ -277,6 +277,59 @@ def apply_tags(
             "remaining_merchants": remaining}
 
 
+def apply_merchants(
+    conn, provider: LLMProvider, *, dry_run: bool = False,
+    max_merchants: int | None = None,
+) -> dict:
+    """Give a readable title to rows that have none.
+
+    Deterministic category rules set a category without a merchant, so a
+    rule-classified row still shows its raw statement string — card numbers,
+    location codes and all. The model already returns a cleaned merchant name;
+    this writes it wherever one is missing, categorised or not.
+    """
+    rows = list(conn.execute(
+        "SELECT t.id, t.description_norm, t.description_raw FROM txn t "
+        "WHERE t.merchant IS NULL AND t.duplicate_of_id IS NULL "
+        "AND t.kind NOT IN ('transfer','cc_payment','fx_conversion')"))
+    if not rows:
+        return {"transactions": 0, "distinct_merchants": 0, "named": 0}
+
+    by_desc: dict[str, list[str]] = defaultdict(list)
+    for r in rows:
+        by_desc[r["description_norm"] or r["description_raw"]].append(r["id"])
+
+    distinct = sorted(by_desc)
+    if dry_run:
+        return {"transactions": len(rows), "distinct_merchants": len(distinct),
+                "named": 0, "note": "dry run — no calls made"}
+
+    remaining = 0
+    if max_merchants is not None:
+        fresh = _undecided(conn, distinct)
+        remaining = max(len(fresh) - max_merchants, 0)
+        keep = set(distinct) - set(fresh[max_merchants:])
+        distinct = [d for d in distinct if d in keep]
+        by_desc = {d: by_desc[d] for d in distinct}
+
+    results = categorize_merchants(conn, provider, distinct)
+
+    named = 0
+    for desc, txn_ids in by_desc.items():
+        res = results.get(desc)
+        merchant = res and res.get("merchant")
+        if not merchant:
+            continue
+        for tid in txn_ids:
+            conn.execute(
+                "UPDATE txn SET merchant=%s WHERE id=%s AND merchant IS NULL",
+                (merchant, tid))
+            named += 1
+    conn.commit()
+    return {"transactions": len(rows), "distinct_merchants": len(distinct),
+            "named": named, "remaining_merchants": remaining}
+
+
 def promote_to_rules(conn, *, min_confidence: float = 0.9, min_occurrences: int = 3) -> int:
     """Promote frequent high-confidence classifications to exact rules."""
     import uuid

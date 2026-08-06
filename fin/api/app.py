@@ -173,7 +173,8 @@ def agent_ledger_categorize(request: Request, apply: bool = False,
     win; the model only sees what is left, its answers are cached and recorded
     source='llm', and low-confidence rows stay uncategorised."""
     from .. import db as dbm
-    from ..llm.categorize import apply_tags, apply_to_ledger, promote_to_rules
+    from ..llm.categorize import (
+        apply_merchants, apply_tags, apply_to_ledger, promote_to_rules)
     from ..llm.provider import AnthropicProvider, LLMUnavailable
 
     user_id, key_id = _api_key_owner(
@@ -191,6 +192,8 @@ def agent_ledger_categorize(request: Request, apply: bool = False,
     try:
         result = apply_to_ledger(conn, provider, dry_run=not apply,
                                  max_merchants=max_merchants)
+        result["merchants"] = apply_merchants(conn, provider, dry_run=not apply,
+                                              max_merchants=max_merchants)
         result["tags"] = apply_tags(conn, provider, dry_run=not apply,
                                     max_merchants=max_merchants)
         if apply and promote:
@@ -553,6 +556,36 @@ def agent_rebuild_transfers(request: Request, month: str, start_day: int = 1,
             "INSERT INTO agent_operation (id,subject,action,user_id,applied,result,created_at) "
             "VALUES (%s,%s,%s,%s,1,%s::jsonb,%s)",
             (str(uuid.uuid4()), f"api-key:{key_id}", "rebuild_transfers", user_id,
+             json.dumps(result), datetime.now(timezone.utc).isoformat()),
+        )
+        conn.commit()
+        return {"ok": True, "result": result}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/agent/ledger/redetect-installments")
+def agent_redetect_installments(request: Request) -> dict:
+    """Re-run instalment detection over the stored ledger with a user API key.
+
+    Detection runs at import; a ledger rebuilt from statements without that step
+    keeps no plans, so this replays it against the rows already in the ledger.
+    """
+    from .. import db as dbm
+    from ..installments import redetect
+
+    user_id, key_id = _api_key_owner(request, "ledger:write")
+    conn = dbm.connect()
+    try:
+        dbm.apply_acl(conn, user_id)
+        result = redetect(conn)
+        conn.execute(
+            "INSERT INTO agent_operation (id,subject,action,user_id,applied,result,created_at) "
+            "VALUES (%s,%s,%s,%s,1,%s::jsonb,%s)",
+            (str(uuid.uuid4()), f"api-key:{key_id}", "redetect_installments", user_id,
              json.dumps(result), datetime.now(timezone.utc).isoformat()),
         )
         conn.commit()

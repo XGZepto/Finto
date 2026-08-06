@@ -478,6 +478,42 @@ def _subject_tokens(t: Txn) -> set[str]:
 # Projection
 # ---------------------------------------------------------------------------
 
+def redetect(conn) -> dict:
+    """Re-run instalment detection over the stored ledger and persist plans.
+
+    Detection normally runs during import; a ledger rebuilt from statements
+    without replaying that step has no plans. This loads the live rows, finds
+    plans and assigns each charge its sequence, exactly as ingest does.
+    """
+    from . import db as dbm
+
+    live = dbm.load_txns(conn)
+    report = find_installments(live)
+    dbm.insert_installment_plans(conn, report.plans)
+    dbm.insert_installment_candidates(conn, report.candidates)
+
+    assigned = 0
+    now = _now_iso()
+    for txn in live:
+        assignment = report.assignments.get(txn.id)
+        if not assignment:
+            continue
+        plan_id, seq = assignment
+        conn.execute(
+            "UPDATE txn SET installment_plan_id=%s, installment_seq=%s, "
+            "kind='installment', updated_at=%s WHERE id=%s",
+            (plan_id, seq, now, txn.id))
+        assigned += 1
+    conn.commit()
+    return {"transactions": len(live), "plans": len(report.plans),
+            "candidates": len(report.candidates), "assigned": assigned}
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
 def outstanding(plan: InstallmentPlan, paid_count: int) -> Money:
     """What is still owed on a plan after `paid_count` instalments."""
     per = abs(plan.principal.amount) // plan.term_months
