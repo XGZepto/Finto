@@ -173,10 +173,12 @@ of occupying a privileged central tab.
 ### 3.13 Complete — comprehensive spacing, hierarchy, and account audit
 The critical follow-up audited mobile and desktop font tokens, padding, margins,
 label case, control alignment, row symmetry, brand marks, chart spacing, light
-and dark surfaces, sticky/transient blur, and scroll extremes. Amount conversion
-is now a compact **Amounts** control separate from Filters. Currency choices show
-one ISO code and one localized name. Settings rows no longer stretch to the
-height of an unrelated neighbor.
+and dark surfaces, sticky/transient blur, and scroll extremes. On compact
+screens, Converted/Native and reporting currency are tucked into the Blotter's
+**Options** sheet; desktop keeps them inline beside the totals. They stay
+separate from Filters because they change presentation, not the transaction
+set. Currency choices show one ISO code and one localized name. Settings rows
+no longer stretch to the height of an unrelated neighbor.
 
 Accounts now has three explicit levels: overview, multi-subaccount aggregate,
 and account/subaccount detail. Group and standalone overview rows share the same

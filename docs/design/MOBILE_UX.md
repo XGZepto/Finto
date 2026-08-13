@@ -36,8 +36,9 @@ while using hierarchy, surface, and progressive disclosure to reduce chrome.
   where useful, and keyboard dismissal.
 - A currency row contains two complementary facts: ISO code and localized name.
   The selected checkmark communicates state; the code is not repeated as
-  secondary copy. Reporting-currency choice is an **Amounts** option beside
-  Converted/Native, separate from transaction filters.
+  secondary copy. On mobile, Converted/Native and reporting currency live in a
+  compact **Options** sheet; on desktop they remain inline beside the totals.
+  Both stay separate from transaction filters.
 - The app has one vertical page scroller. Subviews never inherit the previous
   route's offset. Subtle scroll-edge fades communicate that content continues
   and disappear exactly at the top or bottom. Horizontal chart exploration is
@@ -92,9 +93,9 @@ These choices follow Apple's official guidance on [layout](https://developer.app
 |---|---|
 | ![Summary](mobile/summary-after.png) | ![Blotter](mobile/blotter-after.png) |
 
-| Currency selector | Filters |
+| Currency selector | Display options |
 |---|---|
-| ![Reporting currency sheet](mobile/summary-currency-sheet-after.png) | ![Filters](mobile/blotter-filters-after.png) |
+| ![Reporting currency sheet](mobile/summary-currency-sheet-after.png) | ![Display options](mobile/blotter-options-after.png) |
 
 | Transaction detail | Statement data and provenance |
 |---|---|

@@ -282,10 +282,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 .review-flag { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 5px; border: 1px solid var(--warn); color: var(--warn); font: 650 var(--t-micro)/1 var(--sans); vertical-align: 2px; }
 
 @media (max-width: 880px) {
-  .aggregation-controls { align-items: center; }
-  .aggregation-actions { min-width: 0; }
-  .aggregation-actions .seg { flex: 1; }
-  .aggregation-actions .seg button { flex: 1; padding-inline: 8px; }
+  .aggregation-controls { display: none; }
   .scope { display: block; padding: 0 12px 10px; }
   .scope-item { display: grid; grid-template-columns: 42px repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; padding: 8px 0 0; }
   .normalised-scope .scope-item { grid-template-columns: repeat(3, minmax(0, 1fr)); }

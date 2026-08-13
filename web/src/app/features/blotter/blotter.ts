@@ -77,6 +77,7 @@ export class BlotterPage implements OnDestroy {
   scopeTotals = signal<TotalRow[]>([]);
   normalised = signal<{ net: Money; spend: Money; income: Money; unconvertible_currencies: string[] } | null>(null);
   showNative = signal(false);
+  optionsOpen = signal(false);
   convertTo = signal('USD');
   currencies = signal<string[]>(['USD']);
   /* A phone shows ~8 rows, so 100 was 12 screens of scroll bought up front and
@@ -101,6 +102,12 @@ export class BlotterPage implements OnDestroy {
     if (value) setTimeout(() => value.nativeElement.focus());
   }
   private lastTrigger: HTMLElement | null = null;
+  private optionsTrigger: HTMLElement | null = null;
+  private amountOptions?: ElementRef<HTMLElement>;
+  @ViewChild('amountOptions') set amountOptionsElement(value: ElementRef<HTMLElement> | undefined) {
+    this.amountOptions = value;
+    if (value) setTimeout(() => value.nativeElement.focus());
+  }
   private inspectorHistoryActive = false;
   private afterClose: (() => void) | null = null;
   private scrollLockOffset = 0;
@@ -213,6 +220,33 @@ export class BlotterPage implements OnDestroy {
   setConvertTo(currency: string): void {
     this.convertTo.set(currency);
     this.load();
+  }
+
+  openOptions(event: Event): void {
+    this.optionsTrigger = event.currentTarget as HTMLElement;
+    this.optionsOpen.set(true);
+    this.lockScroll();
+  }
+
+  closeOptions(): void {
+    this.optionsOpen.set(false);
+    this.unlockScroll();
+    queueMicrotask(() => this.optionsTrigger?.focus());
+  }
+
+  trapOptionsFocus(event: KeyboardEvent): void {
+    if (event.key !== 'Tab' || !this.amountOptions) return;
+    const focusable = [...this.amountOptions.nativeElement.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )].filter((node) => node !== this.amountOptions?.nativeElement);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (document.activeElement === this.amountOptions.nativeElement || (event.shiftKey && document.activeElement === first)) {
+      event.preventDefault(); (event.shiftKey ? last : first).focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
   }
 
   sortBy(column: string): void {
@@ -404,6 +438,7 @@ export class BlotterPage implements OnDestroy {
   @HostListener('document:keydown.escape')
   closeOnEscape(): void {
     if (this.selected()) this.close();
+    else if (this.optionsOpen() && !this.host.nativeElement.querySelector('.amount-options finto-select.sheet-open')) this.closeOptions();
   }
 
   trapFocus(event: KeyboardEvent): void {

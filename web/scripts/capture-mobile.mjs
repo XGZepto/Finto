@@ -100,11 +100,38 @@ try {
   await visit('/blotter', '.ledger-card');
   const reviewChrome = await page.$('.review-progress, .review-value');
   if (reviewChrome) throw new Error('Ledger still exposes review-state chrome');
+  const compactAmountControls = await page.evaluate(() => ({
+    inline: getComputedStyle(document.querySelector('.aggregation-controls')).display,
+    options: getComputedStyle(document.querySelector('.amount-options-trigger')).display,
+  }));
+  if (compactAmountControls.inline !== 'none' || compactAmountControls.options === 'none') {
+    throw new Error(`Compact amount controls are not tucked into Options: ${JSON.stringify(compactAmountControls)}`);
+  }
   const navLabels = await page.$$eval('.mobile-nav a', (nodes) => nodes.map((node) => node.textContent?.trim()));
   if (navLabels.join('|') !== 'Summary|Blotter|Reports|Accounts|More') {
     throw new Error(`Unexpected mobile navigation: ${navLabels.join('|')}`);
   }
   await shot('blotter-after.png');
+
+  await page.click('.amount-options-trigger');
+  await settle('.amount-options');
+  const optionsSheet = await page.$eval('.amount-options', (node) => {
+    const box = node.getBoundingClientRect();
+    return { bottom: Math.round(innerHeight - box.bottom), hasMode: !!node.querySelector('.seg'), hasCurrency: !!node.querySelector('finto-select'), ownsFocus: node.contains(document.activeElement) };
+  });
+  if (Math.abs(optionsSheet.bottom) > 1 || !optionsSheet.hasMode || !optionsSheet.hasCurrency || !optionsSheet.ownsFocus) {
+    throw new Error(`Amount options sheet failed audit: ${JSON.stringify(optionsSheet)}`);
+  }
+  await shot('blotter-options-after.png');
+  await page.click('.amount-options finto-select .select-trigger');
+  await settle('.select-menu');
+  const nestedCurrencyBottom = await page.$eval('.select-menu', (node) => Math.round(innerHeight - node.getBoundingClientRect().bottom));
+  if (Math.abs(nestedCurrencyBottom) > 1) throw new Error(`Currency selector escaped its options sheet: ${nestedCurrencyBottom}px`);
+  await page.click('.select-menu .sheet-head button');
+  await page.click('.amount-options header button');
+  await settle('.ledger-card');
+  const optionsFocusRestored = await page.$eval('.amount-options-trigger', (node) => node === document.activeElement);
+  if (!optionsFocusRestored) throw new Error('Options did not restore focus to its trigger');
 
   const openedDetail = await page.$$eval('tr.clickable', (rows) => {
     const row = rows.find((item) => item.querySelector('td.num .muted')) ?? rows[0];
@@ -261,6 +288,15 @@ try {
     await settle(selector);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (overflow > 1) throw new Error(`${route}: desktop horizontal overflow of ${overflow}px`);
+    if (route === '/blotter') {
+      const desktopAmounts = await page.evaluate(() => ({
+        inline: getComputedStyle(document.querySelector('.aggregation-controls')).display,
+        options: getComputedStyle(document.querySelector('.amount-options-trigger')).display,
+      }));
+      if (desktopAmounts.inline === 'none' || desktopAmounts.options !== 'none') {
+        throw new Error(`Desktop amount controls lost their dense layout: ${JSON.stringify(desktopAmounts)}`);
+      }
+    }
     await shot(image);
   }
 

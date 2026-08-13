@@ -1,5 +1,6 @@
 <div class="page-head">
   <h1>Blotter</h1>
+  <button type="button" class="bare amount-options-trigger" (click)="openOptions($event)">Options</button>
 </div>
 
 <app-filter-bar #filterBar (changed)="load()" />
@@ -174,6 +175,32 @@
     }
   }
 </div>
+
+@if (optionsOpen()) {
+  <button type="button" class="amount-options-scrim" (click)="closeOptions()"
+          aria-label="Close display options"></button>
+  <section #amountOptions class="amount-options" role="dialog" aria-modal="true"
+           aria-labelledby="amount-options-title" tabindex="-1" (keydown)="trapOptionsFocus($event)">
+    <header>
+      <h2 id="amount-options-title">Display options</h2>
+      <button type="button" class="bare" (click)="closeOptions()" aria-label="Close">×</button>
+    </header>
+    <div class="amount-option-row">
+      <label>Amounts</label>
+      <div class="seg" aria-label="Amount display">
+        <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Converted</button>
+        <button [class.on]="showNative()" (click)="setAggregation('native')">Native</button>
+      </div>
+    </div>
+    @if (!showNative()) {
+      <div class="amount-option-row">
+        <label>Currency</label>
+        <finto-select ariaLabel="Display currency" [options]="currencies()"
+                      [ngModel]="convertTo()" (ngModelChange)="setConvertTo($event)" />
+      </div>
+    }
+  </section>
+}
 
 @if (picking(); as txn) {
   <button type="button" class="picker-scrim" (click)="picking.set(null)"
