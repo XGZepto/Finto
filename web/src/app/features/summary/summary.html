@@ -1,7 +1,6 @@
 <div class="page-head">
   <h1>Summary</h1>
   <finto-select class="currency-select" ariaLabel="Reporting currency"
-                helperText="Changes converted totals and comparisons"
                 [options]="reportingCurrencies" [ngModel]="convertTo()"
                 (ngModelChange)="setConvertTo($event)" />
 </div>

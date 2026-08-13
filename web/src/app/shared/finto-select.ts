@@ -22,7 +22,7 @@ let instances = 0;
         <button type="button" class="select-scrim" aria-label="Close {{ ariaLabel }}" (click)="close()"></button>
         <div class="select-menu" role="listbox" [id]="id + '-list'" [attr.aria-label]="ariaLabel">
           <div class="sheet-head">
-            <div><strong>{{ ariaLabel }}</strong>@if (helperText) { <small>{{ helperText }}</small> }</div>
+            <strong>{{ ariaLabel }}</strong>
             <button type="button" aria-label="Close" (click)="close()">×</button>
           </div>
           @if (options.length >= 8) {
@@ -106,9 +106,7 @@ let instances = 0;
       }
       .sheet-head { position: sticky; z-index: 2; top: 0; display: flex; justify-content: space-between; align-items: center; min-height: 68px; margin: 0 -14px; padding: 10px 14px 8px; border-bottom: 1px solid var(--line); background: var(--panel); }
       .sheet-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 32px; height: 3px; border-radius: 3px; background: var(--fg-4); transform: translateX(-50%); opacity: .6; }
-      .sheet-head > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
       .sheet-head strong { font: 600 var(--t-data)/1 var(--sans); }
-      .sheet-head small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-4); font: var(--t-label)/1.2 var(--sans); }
       .sheet-head button { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--fg-3); font-size: 24px; }
       .select-search { position: sticky; z-index: 1; top: 68px; margin: 10px 0 6px; background: var(--panel-2); }
       .select-search input { min-height: 44px; }
@@ -132,7 +130,6 @@ export class FintoSelect implements ControlValueAccessor {
   @Input() labelKey = '';
   @Input() placeholder = 'Select';
   @Input() ariaLabel = 'Select';
-  @Input() helperText = '';
 
   /* The active option is announced through the trigger, which never gives up
      focus, so both ends of that reference need a stable id. */

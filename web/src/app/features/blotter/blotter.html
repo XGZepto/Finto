@@ -14,7 +14,6 @@
       </div>
       @if (!showNative()) {
         <finto-select class="currency-select" ariaLabel="Display currency"
-                      helperText="Used for comparable totals"
                       [options]="currencies()" [ngModel]="convertTo()"
                       (ngModelChange)="setConvertTo($event)" />
       }
