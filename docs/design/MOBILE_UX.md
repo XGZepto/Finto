@@ -48,8 +48,14 @@ while using hierarchy, surface, and progressive disclosure to reduce chrome.
   up on compact screens. Spacing uses the shared scale; cards do not stretch to
   match unrelated grid neighbors or retain empty desktop height on mobile.
 - `--bg`, `--panel`, `--panel-2`, and hairlines express permanent hierarchy.
-  Blur is reserved for transient/sticky chrome — tab bar, sheet backdrop, and
-  scroll edge — so texture remains meaningful rather than decorative noise.
+  Translucency and backdrop blur are reserved for chrome that actually floats
+  over content — tab bar, menus, sheets, calendars, and drawers — and pair with
+  a scrim for an unambiguous z-axis. Ordinary cards remain opaque, so material
+  continues to mean elevation instead of becoming decorative noise.
+- Settings contains user-controlled preferences and account access, not system
+  diagnostics or duplicate task links. Destructive session actions stay with
+  identity; specialist API access is collapsed until requested. Copy names the
+  control or state and does not explain an obvious effect back to the user.
 - Merchant/issuer marks use a real brand asset when one exists and a consistent
   semantic fallback otherwise. Flags are not used for currencies: a currency is
   not reliably identical to a country.
@@ -64,6 +70,9 @@ These choices follow Apple's official guidance on [layout](https://developer.app
 [tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars),
 [scroll views](https://developer.apple.com/design/human-interface-guidelines/scroll-views),
 [sheets](https://developer.apple.com/design/human-interface-guidelines/sheets),
+[materials](https://developer.apple.com/design/human-interface-guidelines/materials),
+[settings](https://developer.apple.com/design/human-interface-guidelines/settings),
+[disclosure controls](https://developer.apple.com/design/human-interface-guidelines/disclosure-controls),
 [charts](https://developer.apple.com/design/human-interface-guidelines/charts),
 [motion](https://developer.apple.com/design/human-interface-guidelines/motion), and
 [accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility).
@@ -86,6 +95,8 @@ These choices follow Apple's official guidance on [layout](https://developer.app
 | Account symmetry | Standalone and grouped headers differ by no more than 1px; group, subaccount, and standalone detail pages are exercised |
 | Scroll feedback | Top/bottom edge state is asserted at both extremes |
 | Chart behavior | Below-fold chart waits for intersection, animates on entry, and becomes static under Reduced Motion |
+| Material hierarchy | Currency and Options sheets expose active backdrop blur; content surfaces remain opaque |
+| Settings relevance | No storage engine, connection status, workspace group, or duplicate Import link; API access starts collapsed |
 
 ## Current screens
 
@@ -112,6 +123,10 @@ These choices follow Apple's official guidance on [layout](https://developer.app
 | Reports chart entry | Settings |
 |---|---|
 | ![Reports flow](mobile/reports-flow-after.png) | ![Settings](mobile/settings-after.png) |
+
+| Advanced settings | Light settings |
+|---|---|
+| ![API access disclosure](mobile/settings-api-after.png) | ![Light settings](mobile/settings-light-after.png) |
 
 | Light mobile | Desktop accounts |
 |---|---|

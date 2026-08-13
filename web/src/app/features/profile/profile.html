@@ -1,8 +1,12 @@
 <div class="page-head"><h1>{{ t('Settings', '設定') }}</h1></div>
 <div class="settings-grid">
-  <section class="card identity"><div class="avatar">{{ preferences.user()?.username?.charAt(0)?.toUpperCase() || 'F' }}</div><div><h2>{{ preferences.user()?.username || t('Private workspace', '私人工作區') }}</h2>@if (preferences.user()?.email; as email) { <span>{{ email }}</span> }</div></section>
-  <section class="card">
-    <h2>{{ t('Display', '顯示') }}</h2>
+  <section class="card identity">
+    <div class="avatar">{{ preferences.user()?.username?.charAt(0)?.toUpperCase() || 'F' }}</div>
+    <div><h2>{{ preferences.user()?.username || t('Private workspace', '私人工作區') }}</h2>@if (preferences.user()?.email; as email) { <span>{{ email }}</span> }</div>
+    <button class="bare sign-out-action" (click)="logout()">{{ t('Sign out', '登出') }}</button>
+  </section>
+  <section class="card preferences">
+    <h2>{{ t('Preferences', '偏好設定') }}</h2>
     <div class="preference-row">
       <label for="theme">{{ t('Appearance', '外觀') }}</label>
       <finto-select id="theme" [options]="themeOptions()" valueKey="value" labelKey="label"
@@ -23,8 +27,10 @@
                     (ngModelChange)="setBaseCurrency($event)" />
     </div>
   </section>
-  <section class="card api-access">
-    <div class="section-head"><h2>API access</h2><button class="ghost" (click)="generateApiKey()">Generate key</button></div>
+  <details class="card api-access">
+    <summary><strong>API access</strong><i aria-hidden="true">⌄</i></summary>
+    <div class="api-content">
+    <div class="api-actions"><button class="ghost" (click)="generateApiKey()">Generate key</button></div>
     @if (newApiKey()) {
       <div class="key-reveal"><code>{{ newApiKey() }}</code><button class="primary" (click)="copyApiKey()">{{ copied() ? 'Copied' : 'Copy' }}</button></div>
     }
@@ -35,11 +41,6 @@
         <button class="danger" (click)="revokeApiKey(key.id)">Revoke</button>
       </div>
     } @empty { <div class="empty compact">No API keys</div> }
-  </section>
-  <section class="card workspace-settings">
-    <h2>{{ t('Workspace', '工作區') }}</h2>
-    <a routerLink="/import" class="setting-link"><span><strong>{{ t('Import statements', '匯入月結單') }}</strong><small>{{ t('Add or preview ledger data', '新增或預覽帳目資料') }}</small></span><i>›</i></a>
-    <div class="setting-link static"><span><strong>{{ t('Storage', '儲存') }}</strong><small>PostgreSQL</small></span><span class="status"><i class="dot ok"></i>{{ t('Connected', '已連線') }}</span></div>
-    <button class="setting-link sign-out" (click)="logout()"><span><strong>{{ t('Sign out', '登出') }}</strong><small>{{ t('End this session', '結束此工作階段') }}</small></span><i>›</i></button>
-  </section>
+    </div>
+  </details>
 </div>

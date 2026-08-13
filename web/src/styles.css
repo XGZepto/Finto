@@ -126,6 +126,12 @@
   --z-popover: 50;   /* a menu opened from inside an overlay */
   --z-auth: 100;     /* the sign-in screen covers everything */
 
+  /* Material is semantic, not decoration. Content stays opaque; only chrome
+     that floats over content uses translucency and blur to expose its depth. */
+  --glass-surface: color-mix(in srgb, var(--panel) 88%, transparent);
+  --glass-strong: color-mix(in srgb, var(--panel) 94%, transparent);
+  --glass-filter: blur(18px) saturate(1.12);
+
   color-scheme: dark;
 }
 
@@ -534,7 +540,8 @@ th.num, td.num {
   .amount-options {
     display: block; position: fixed; z-index: var(--z-overlay); inset: auto 0 0;
     padding: 0 var(--s3) calc(var(--s4) + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--line-2); background: var(--panel);
+    border-top: 1px solid var(--line-2); background: var(--glass-surface);
+    -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
     animation: options-sheet-in var(--motion) var(--ease-out) both;
   }
   .amount-options:has(finto-select.sheet-open) { transform: none; }

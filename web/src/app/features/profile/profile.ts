@@ -1,7 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { RouterLink } from '@angular/router';
 import { Api, ApiKeyMeta } from '../../core/api.service';
 import {
   LanguagePreference, Preferences, ThemePreference,
@@ -10,7 +9,7 @@ import { FintoSelect } from '../../shared/finto-select';
 
 @Component({
   selector: 'app-profile',
-  imports: [FormsModule, RouterLink, FintoSelect],
+  imports: [FormsModule, FintoSelect],
   templateUrl: './profile.html',
   styleUrl: './profile.css',
 })

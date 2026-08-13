@@ -96,7 +96,7 @@ export class ToolsPage {
     {
       label: 'Settings',
       items: [
-        { path: '/profile', icon: 'settings', name: 'Settings', note: 'Reporting currency, language, API keys, sign out' },
+        { path: '/profile', icon: 'settings', name: 'Settings', note: 'Preferences and account access' },
       ],
     },
   ];

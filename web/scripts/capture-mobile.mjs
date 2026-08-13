@@ -84,13 +84,14 @@ try {
   await settle('.select-menu');
   const sheet = await page.$eval('.select-menu', (node) => {
     const box = node.getBoundingClientRect();
+    const style = getComputedStyle(node);
     return { bottom: Math.round(box.bottom), viewport: innerHeight,
       ownsBottom: !!document.elementFromPoint(innerWidth / 2, innerHeight - 10)?.closest('.select-menu'),
       namedCurrencies: [...node.querySelectorAll('.option-copy strong')].some((item) => item.textContent?.includes('Dollar')),
-      hasSearch: !!node.querySelector('input[type="search"]') };
+      hasSearch: !!node.querySelector('input[type="search"]'), material: style.backdropFilter || style.webkitBackdropFilter };
   });
   if (Math.abs(sheet.viewport - sheet.bottom) > 1 || !sheet.ownsBottom) throw new Error('Select sheet is not above the tab bar at the viewport bottom');
-  if (!sheet.namedCurrencies || !sheet.hasSearch) throw new Error('Currency sheet lacks names or search');
+  if (!sheet.namedCurrencies || !sheet.hasSearch || !sheet.material || sheet.material === 'none') throw new Error(`Currency sheet lacks names, search, or raised material: ${JSON.stringify(sheet)}`);
   const selectedCurrencyCopy = await page.$eval('.select-menu .select-option.selected', (node) => node.textContent ?? '');
   if ((selectedCurrencyCopy.match(/USD/g) ?? []).length !== 1 || !selectedCurrencyCopy.includes('US Dollar')) {
     throw new Error(`Currency identity is repetitive or incomplete: ${selectedCurrencyCopy.trim()}`);
@@ -117,9 +118,10 @@ try {
   await settle('.amount-options');
   const optionsSheet = await page.$eval('.amount-options', (node) => {
     const box = node.getBoundingClientRect();
-    return { bottom: Math.round(innerHeight - box.bottom), hasMode: !!node.querySelector('.seg'), hasCurrency: !!node.querySelector('finto-select'), ownsFocus: node.contains(document.activeElement) };
+    const style = getComputedStyle(node);
+    return { bottom: Math.round(innerHeight - box.bottom), hasMode: !!node.querySelector('.seg'), hasCurrency: !!node.querySelector('finto-select'), ownsFocus: node.contains(document.activeElement), material: style.backdropFilter || style.webkitBackdropFilter };
   });
-  if (Math.abs(optionsSheet.bottom) > 1 || !optionsSheet.hasMode || !optionsSheet.hasCurrency || !optionsSheet.ownsFocus) {
+  if (Math.abs(optionsSheet.bottom) > 1 || !optionsSheet.hasMode || !optionsSheet.hasCurrency || !optionsSheet.ownsFocus || !optionsSheet.material || optionsSheet.material === 'none') {
     throw new Error(`Amount options sheet failed audit: ${JSON.stringify(optionsSheet)}`);
   }
   await shot('blotter-options-after.png');
@@ -234,7 +236,19 @@ try {
   await visit('/tools', '.tool-grid');
   await shot('more-after.png');
   await visit('/profile', '.settings-grid');
+  const settingsAudit = await page.evaluate(() => ({
+    text: document.querySelector('.settings-grid')?.textContent ?? '',
+    apiCollapsed: !document.querySelector('.api-access')?.hasAttribute('open'),
+    hasSignOut: !!document.querySelector('.identity .sign-out-action'),
+  }));
+  if (/PostgreSQL|Connected|Workspace|Import statements/.test(settingsAudit.text) || !settingsAudit.apiCollapsed || !settingsAudit.hasSignOut) {
+    throw new Error(`Settings exposes implementation or redundant navigation: ${JSON.stringify(settingsAudit)}`);
+  }
   await shot('settings-after.png');
+  await page.click('.api-access > summary');
+  await settle('.api-content');
+  await assertMobileBasics('/profile#api-access');
+  await shot('settings-api-after.png');
 
   // Light surfaces are checked independently; dark-only polish is not enough.
   for (const [route, selector, image] of [

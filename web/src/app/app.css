@@ -142,8 +142,9 @@
     min-height: calc(64px + env(safe-area-inset-bottom));
     padding: 6px 6px env(safe-area-inset-bottom);
     border-top: 1px solid var(--line-2);
-    background: color-mix(in srgb, var(--panel) 94%, transparent);
-    backdrop-filter: blur(18px);
+    background: var(--glass-strong);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
     isolation: isolate;
     overscroll-behavior: contain;
   }

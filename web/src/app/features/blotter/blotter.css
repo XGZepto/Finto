@@ -23,13 +23,15 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
   width: min(470px, 100vw);
   overflow-y: auto;
   padding: 20px;
-  background: var(--panel);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   border-left: 1px solid var(--line-2);
   overscroll-behavior: contain;
   animation: inspector-slide-in var(--motion) var(--ease-out);
 }
 .drawer:focus { outline: none; }
-.drawer header { display: grid; position: sticky; z-index: 2; top: -20px; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; margin: -20px -20px 14px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(14px); }
+.drawer header { display: grid; position: sticky; z-index: 2; top: -20px; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; margin: -20px -20px 14px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
 .bar-title { color: var(--fg); font: 600 var(--t-data)/1 var(--sans); }
 .bar-action { min-width: 44px; min-height: 44px; color: var(--info); font: 550 var(--t-meta)/1 var(--sans); }
 .mobile-back { display: none; }
@@ -433,7 +435,9 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   max-height: 72vh;
   overflow-y: auto;
   padding: var(--s4) var(--s3) calc(var(--s5) + env(safe-area-inset-bottom));
-  background: var(--panel);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   border-top: 1px solid var(--line-strong);
   animation: picker-in var(--motion) var(--ease-out);
 }

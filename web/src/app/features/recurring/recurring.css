@@ -78,7 +78,9 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: var(--s5);
-  background: var(--panel);
+  background: var(--glass-surface);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   border-left: 1px solid var(--line-2);
 }
 .drawer header {

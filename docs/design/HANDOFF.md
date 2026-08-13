@@ -190,8 +190,12 @@ tables to one compact ledger-activity message.
 
 The shell owns vertical scrolling, resets it on every real route change, and
 shows subtle top/bottom edge feedback. Charts reveal on entry; navigation and
-sticky chrome use blur, while permanent content hierarchy uses the panel surface
-scale. `capture-mobile.mjs` makes these constraints executable.
+floating chrome use the shared translucent material, while permanent content
+hierarchy uses opaque panel surfaces. The Settings audit removed the storage
+engine and connection status, duplicate Import navigation, and filler session
+copy. Identity now owns Sign out, preferences stand alone, and specialist API
+access starts behind a disclosure. `capture-mobile.mjs` makes the material and
+settings relevance constraints executable.
 
 ---
 
