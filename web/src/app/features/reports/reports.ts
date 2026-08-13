@@ -1,10 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { MoneyPipe } from '../../core/money.pipe';
-import { Money, SummaryRow } from '../../core/models';
+import { LedgerFilter, Money, SummaryRow } from '../../core/models';
 import { Preferences } from '../../core/preferences.service';
+import { FilterState } from '../../core/filter-state';
 import { FintoPills } from '../../shared/finto-pills';
 import { FintoSelect } from '../../shared/finto-select';
 import { FintoBars, Bar } from '../../shared/finto-bars';
@@ -36,7 +36,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
 })
 export class ReportsPage {
   private api = inject(Api);
-  private router = inject(Router);
+  private filters = inject(FilterState);
   private preferences = inject(Preferences);
   readonly money = new MoneyPipe();
 
@@ -103,10 +103,10 @@ export class ReportsPage {
     return this.monthRange(d.toISOString().slice(0, 7));
   }
 
-  private scope(range: { from: string; to: string }): Record<string, unknown> {
-    const filter: Record<string, unknown> = { ...range };
+  private scope(range: { from: string; to: string }): LedgerFilter {
+    const filter: LedgerFilter = { ...range };
     const chosen = this.accounts().find((a) => a.display_name === this.accountId());
-    if (chosen) filter['accounts'] = [chosen.id];
+    if (chosen) filter.accounts = [chosen.id];
     return filter;
   }
 
@@ -258,15 +258,10 @@ export class ReportsPage {
   comparisonLabel = computed(() =>
     this.focusMonth() ? 'vs prior month' : `vs prior ${this.period()}`);
 
+  /** The blotter, scoped to the same window and accounts this figure came from. */
   drill(bucket: string): void {
-    const key = this.splitBy();
-    const params: Record<string, string> = {};
-    if (key === 'category') params['categories'] = bucket;
-    else if (key === 'tag') params['tags'] = bucket;
-    else if (key === 'merchant') params['q'] = bucket;
-    else if (key === 'account') params['accounts'] = bucket;
-    else if (key === 'cardholder') params['cardholders'] = bucket;
-    else if (key === 'kind') params['kinds'] = bucket;
-    this.router.navigate(['/blotter'], { queryParams: params });
+    const focus = this.focusMonth();
+    const range = focus ? this.monthRange(focus) : this.windows().current;
+    this.filters.drillInto(this.splitBy(), bucket, this.scope(range));
   }
 }

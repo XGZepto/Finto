@@ -46,18 +46,18 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
     .open .date-trigger { border-color: var(--fg-3); background: var(--panel-2); }
     .calendar { position: absolute; z-index: 82; top: calc(100% + 4px); left: 0; width: 264px; padding: 9px; border: 1px solid var(--line-2); background: var(--panel); box-shadow: 0 8px 22px #0005; }
     header { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; margin-bottom: 7px; }
-    header strong { color: var(--fg-2); font: 500 10.5px/1 var(--mono); letter-spacing: .08em; text-align: center; text-transform: uppercase; }
-    .month-step { min-height: 32px; padding: 0; border: 0; background: transparent; }
+    header strong { color: var(--fg-2); font: 500 var(--t-label)/1 var(--mono); letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+    .month-step { padding: 0; border: 0; background: transparent; }
     .weekdays, .days { display: grid; grid-template-columns: repeat(7, 1fr); }
-    .weekdays span { padding: 4px 0; color: var(--fg-4); font: 9px/1 var(--mono); text-align: center; }
-    .days button { min-height: 32px; padding: 0; border-color: transparent; background: transparent; color: var(--fg-2); font-size: 10.5px; letter-spacing: 0; }
+    .weekdays span { padding: 4px 0; color: var(--fg-4); font: var(--t-micro)/1 var(--mono); text-align: center; }
+    .days button { min-height: 34px; padding: 0; border-color: transparent; background: transparent; color: var(--fg-2); font-size: var(--t-label); letter-spacing: 0; }
     .days button:hover { border-color: var(--line-2); }
     .days button.outside { color: var(--fg-4); opacity: .55; }
     .days button.today { border-color: var(--fg-3); }
     .days button.selected { border-color: var(--fg); background: var(--fg); color: var(--bg); }
     footer { display: flex; justify-content: space-between; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--line); }
-    footer button { min-height: 30px; font-size: 10px; text-transform: uppercase; }
-    @media (max-width: 700px) { .date-trigger { min-height: 40px; } .calendar { position: fixed; left: 12px; right: 12px; top: 50%; width: auto; transform: translateY(-50%); padding: 12px; box-shadow: 0 0 0 100vmax #0009, 0 12px 32px #0008; } .days button { min-height: 40px; } }
+    footer button { font-size: var(--t-label); text-transform: uppercase; }
+    @media (max-width: 880px) { .date-trigger { min-height: 40px; } .calendar { position: fixed; left: 12px; right: 12px; top: 50%; width: auto; transform: translateY(-50%); padding: 12px; box-shadow: 0 0 0 100vmax #0009, 0 12px 32px #0008; } .days button { min-height: 40px; } }
   `],
   providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => FintoDate), multi: true }],
 })

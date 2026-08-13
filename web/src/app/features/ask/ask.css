@@ -8,23 +8,23 @@
   border: 1px solid var(--line-2);
 }
 .prompt:focus-within { border-color: var(--fg-3); }
-.prompt .caret { color: var(--fg-3); font-size: 14px; }
+.prompt .caret { color: var(--fg-3); font-size: var(--t-body); }
 .prompt input {
   flex: 1;
   min-width: 0;
   padding: 2px 0;
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: var(--t-body);
 }
 .prompt input:focus { background: transparent; }
 
 .suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-.suggestions button { font-family: var(--sans); font-size: 12px; letter-spacing: 0; color: var(--fg-3); }
+.suggestions button { font-family: var(--sans); font-size: var(--t-data); letter-spacing: 0; color: var(--fg-3); }
 
 .history { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .history label { margin: 0; }
-.history button { font-size: 11.5px; }
+.history button { font-size: var(--t-meta); }
 
 section.card { margin-bottom: 12px; }
 
@@ -34,37 +34,34 @@ section.card { margin-bottom: 12px; }
   margin: 0;
   max-width: 76ch;
   white-space: pre-wrap;
-  font-size: 15px;
+  font-size: var(--t-lede);
   line-height: 1.65;
 }
 
 .plan .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.plan .explanation { margin: 12px 0 0; font-size: 12.5px; color: var(--fg-2); max-width: 76ch; }
 .plan .banner { margin-top: 10px; }
 .tag.high { border-color: var(--pos); color: var(--pos); }
-.tag.mid { border-color: var(--warn); color: var(--warn); }
-.tag.low { border-color: var(--bad); color: var(--bad); }
 .tool-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .tool {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: var(--fg-2);
-  font-size: 11px;
+  font-size: var(--t-meta);
 }
 .tool-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--pos); }
 
 .answer { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .total h3 { margin-bottom: 8px; }
-.total .figure { font-family: var(--mono); font-size: 24px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.total .figure { font-family: var(--mono); font-size: var(--t-figure); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .total .split { display: flex; gap: 18px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 .total .split label { margin-bottom: 1px; }
-.total .split span span { font-size: 12px; font-variant-numeric: tabular-nums; }
+.total .split span span { font-size: var(--t-data); font-variant-numeric: tabular-nums; }
 
 .note { margin: 10px 0 0; }
-.note button { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; }
+.note button { font-family: var(--mono); font-size: var(--t-meta); letter-spacing: 0.06em; }
 
-@media (max-width: 600px) {
+@media (max-width: 880px) {
   .prompt {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;

@@ -3,7 +3,7 @@
 </div>
 
 @if (loading()) {
-  <div class="card"><div class="spinner">checking </div></div>
+  <div class="card"><finto-skeleton [rows]="5" label="Checking statements" /></div>
 } @else if (report(); as r) {
   <div class="verdict" [class.bad]="!r.healthy">
     <span class="dot" [class.ok]="r.healthy" [class.bad]="!r.healthy"></span>

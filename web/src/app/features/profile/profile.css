@@ -3,14 +3,14 @@
 .settings-grid h2 { margin-bottom: 14px; }
 .identity { display: flex; align-items: center; gap: 14px; }
 .identity h2, .identity p { margin: 0; }
-.avatar { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid var(--line-2); color: var(--fg); font: 600 18px/1 var(--mono); }
+.avatar { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid var(--line-2); color: var(--fg); font: 600 var(--t-fig-sm)/1 var(--mono); }
 .setting-row { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 16px; }
 .setting-row p { margin: 4px 0 0; }
 .preference-row { display: grid; grid-template-columns: 1fr minmax(130px, 45%); align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid var(--line); }
 .preference-row label { margin: 0; color: var(--fg-2); }
 .preference-row finto-select { width: 100%; }
 .key-reveal { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-bottom: 12px; padding: 9px; border: 1px solid var(--pos); background: var(--pos-wash); }
-.key-reveal code { overflow-x: auto; padding: 6px; color: var(--fg); font: 11px/1.4 var(--mono); white-space: nowrap; }
+.key-reveal code { overflow-x: auto; padding: 6px; color: var(--fg); font: var(--t-meta)/1.4 var(--mono); white-space: nowrap; }
 .api-key-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; min-height: 44px; border-top: 1px solid var(--line); }
 .api-key-row > span:first-child { display: flex; flex-direction: column; min-width: 0; }
 .api-key-row small { color: var(--fg-4); }

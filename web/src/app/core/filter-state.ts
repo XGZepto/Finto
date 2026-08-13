@@ -20,6 +20,31 @@ const BOOL_KEYS = [
 ] as const;
 const NUM_KEYS = ['minAmount', 'maxAmount'] as const;
 
+type ListKey = 'accounts' | 'cards' | 'cardholders' | 'institutions' | 'categories' | 'kinds' | 'tags';
+
+/** Where each groupable dimension lands in a filter. */
+const DIMENSION_KEYS: Record<string, ListKey> = {
+  account: 'accounts', institution: 'institutions', category: 'categories',
+  card: 'cards', cardholder: 'cardholders', kind: 'kinds', tag: 'tags',
+};
+
+/** Dimensions whose bucket is a date range rather than a value. */
+export function bucketRange(dimension: string, bucket: string): { from: string; to: string } | null {
+  const day = (y: number, m: number) => new Date(y, m, 0).getDate();
+  const [a, b] = bucket.split(/-Q|-/).map(Number);
+  switch (dimension) {
+    case 'day': return { from: bucket, to: bucket };
+    case 'month': return { from: `${bucket}-01`, to: `${bucket}-${day(a, b)}` };
+    case 'quarter': {
+      const first = (b - 1) * 3 + 1;
+      return { from: `${a}-${String(first).padStart(2, '0')}-01`,
+               to: `${a}-${String(first + 2).padStart(2, '0')}-${day(a, first + 2)}` };
+    }
+    case 'year': return { from: `${bucket}-01-01`, to: `${bucket}-12-31` };
+    default: return null;
+  }
+}
+
 export function filterFromParams(params: Params): LedgerFilter {
   const f: LedgerFilter = {};
   if (params['from']) f.from = params['from'];
@@ -128,30 +153,24 @@ export class FilterState {
     this.set(next);
   }
 
-  /** Add a dimension value — this is what a summary row click does. */
-  drillInto(dimension: string, value: string): void {
-    const map: Record<string, keyof LedgerFilter> = {
-      account: 'accounts', institution: 'institutions', category: 'categories',
-      card: 'cards', kind: 'kinds',
-    };
-    if (dimension === 'month' || dimension === 'day') {
-      const from = dimension === 'month' ? `${value}-01` : value;
-      const to = dimension === 'month' ? monthEnd(value) : value;
-      this.router.navigate(['/blotter'], {
-        queryParams: { ...filterToParams({ ...this.filter(), from, to }) },
-      });
-      return;
-    }
-    if (dimension === 'currency') {
-      this.router.navigate(['/blotter'], {
-        queryParams: filterToParams({ ...this.filter(), currency: value }),
-      });
-      return;
-    }
-    const key = map[dimension];
-    if (!key) return;
-    const existing = ((this.filter() as any)[key] as string[]) ?? [];
-    const next = { ...this.filter(), [key]: [...new Set([...existing, value])] };
+  /**
+   * Open the blotter on one value of one dimension — what a summary row click
+   * does, from every page that has summary rows.
+   *
+   * `scope` is the period and account the clicked figure was computed under.
+   * Without it the blotter answers a wider question than the one asked, and the
+   * total on screen no longer matches the figure that was clicked.
+   */
+  drillInto(dimension: string, value: string, scope: LedgerFilter = {}): void {
+    const range = bucketRange(dimension, value);
+    const key = DIMENSION_KEYS[dimension];
+    const next: LedgerFilter = { ...scope, ...range };
+
+    if (key) next[key] = [...new Set([...(scope[key] ?? []), value])];
+    else if (dimension === 'currency') next.currency = value;
+    // No field of their own: merchant and subcategory are searchable text only.
+    else if (!range) next.q = value;
+
     this.router.navigate(['/blotter'], { queryParams: filterToParams(next) });
   }
 
@@ -165,8 +184,3 @@ export class FilterState {
   }
 }
 
-function monthEnd(yyyymm: string): string {
-  const [y, m] = yyyymm.split('-').map(Number);
-  const last = new Date(y, m, 0).getDate();
-  return `${yyyymm}-${String(last).padStart(2, '0')}`;
-}

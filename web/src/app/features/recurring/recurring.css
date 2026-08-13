@@ -31,9 +31,8 @@
   font-size: var(--t-hero); letter-spacing: -.02em; line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
-.hero-meta { display: flex; gap: var(--s4); flex-wrap: wrap; color: var(--fg-3); font-size: 12.5px; }
+.hero-meta { display: flex; gap: var(--s4); flex-wrap: wrap; color: var(--fg-3); font-size: var(--t-data); }
 .hero-meta .note { color: var(--fg-4); }
-.hero-meta .warn { color: var(--warn); }
 
 .list-card { padding-bottom: var(--s2); }
 .rows { display: flex; flex-direction: column; }
@@ -60,13 +59,13 @@
 }
 .who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .who .name {
-  font-family: var(--sans); font-size: 13px; color: var(--fg);
+  font-family: var(--sans); font-size: var(--t-data); color: var(--fg);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.who .meta { display: flex; align-items: center; gap: var(--s2); font-size: 10.5px; color: var(--fg-4); }
+.who .meta { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-label); color: var(--fg-4); }
 .cost { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; white-space: nowrap; }
-.cost .each { font-size: 13px; font-variant-numeric: tabular-nums; }
-.cost .permo { font-size: 10.5px; color: var(--fg-4); font-variant-numeric: tabular-nums; }
+.cost .each { font-size: var(--t-data); font-variant-numeric: tabular-nums; }
+.cost .permo { font-size: var(--t-label); color: var(--fg-4); font-variant-numeric: tabular-nums; }
 
 /* Drawer ------------------------------------------------------------------ */
 
@@ -88,12 +87,12 @@
   margin-bottom: var(--s4); padding-bottom: var(--s3); border-bottom: 1px solid var(--line);
 }
 .drawer header h2 { overflow-wrap: anywhere; }
-.drawer .close { min-width: 40px; min-height: 40px; margin: -8px -8px 0 0; font-size: 22px; line-height: 1; }
+.drawer .close { min-width: 40px; min-height: 40px; margin: -8px -8px 0 0; font-size: var(--t-figure); line-height: 1; }
 
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0; background: var(--line); border: 1px solid var(--line); }
 .facts > div { padding: var(--s2) var(--s3); background: var(--panel-2); }
-.facts dt { color: var(--fg-4); font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
-.facts dd { margin: 3px 0 0; font-size: 12.5px; color: var(--fg-2); font-variant-numeric: tabular-nums; }
+.facts dt { color: var(--fg-4); font-family: var(--mono); font-size: var(--t-micro); letter-spacing: .12em; text-transform: uppercase; }
+.facts dd { margin: 3px 0 0; font-size: var(--t-data); color: var(--fg-2); font-variant-numeric: tabular-nums; }
 
 .drawer section { margin-top: var(--s5); }
 .history { display: flex; flex-direction: column; }
@@ -101,13 +100,13 @@
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--s3); align-items: baseline;
   padding: var(--s2) 0; border-bottom: 1px solid var(--line);
-  font-size: 12px; font-variant-numeric: tabular-nums;
+  font-size: var(--t-data); font-variant-numeric: tabular-nums;
 }
 .hrow:last-child { border-bottom: 0; }
 .hrow .acct { color: var(--fg-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn.wide { width: 100%; margin-top: var(--s5); }
 
-@media (max-width: 700px) {
+@media (max-width: 880px) {
   .controls-bar { gap: var(--s3); padding: var(--s3); }
   /* Search and the pill group take a row each; the two selects pair up, so the
      controls do not push the list off the first screen. */
@@ -117,6 +116,6 @@
   .control:nth-child(4) { order: 3; }
   .control:nth-child(3) { order: 4; flex-basis: 100%; }
   .control:nth-child(3) finto-pills, .control:nth-child(3) .pills { width: 100%; }
-  .hero .figure { font-size: 27px; }
+  .hero .figure { font-size: var(--t-fig-lg); }
   .drawer { width: 100vw; padding: var(--s4); }
 }

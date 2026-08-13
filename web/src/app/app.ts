@@ -45,19 +45,15 @@ import { NavIcon } from './shared/nav-icon';
         <div class="spacer"></div>
         <div class="nav nav-settings">
           <a routerLink="/tools" routerLinkActive="active">
-            <span class="idx"><finto-nav-icon name="settings" /></span><span class="label">{{ preferences.text('Tools', '工具') }}</span>
+            <span class="idx"><finto-nav-icon name="more" /></span><span class="label">{{ preferences.text('More', '更多') }}</span>
           </a>
         </div>
-        @if (!online()) {
-          <div class="status">
-            <span class="dot bad"></span>
-            <span>{{ preferences.text('api unreachable', '無法連接 API') }}</span>
-          </div>
-        }
       </nav>
 
-      <div class="status-scrim" aria-hidden="true"></div>
       <main class="content">
+        @if (offline()) {
+          <p class="offline" role="status">{{ preferences.text('offline', '離線') }}</p>
+        }
         <router-outlet />
       </main>
 
@@ -104,22 +100,20 @@ export class App {
   ];
 
   reviewCount = signal(0);
-  online = signal(true);
+  /** Live, not a boot-time probe: connectivity is only worth showing while it changes. */
+  offline = signal(!navigator.onLine);
   navigating = signal(false);
-  pendingPath = signal<string | null>(null);
   private lastPath = '';
 
   constructor() {
     this.preferences.loadUser();
-    this.api.health().subscribe({
-      next: () => this.online.set(true),
-      error: () => this.online.set(false),
-    });
+    for (const event of ['online', 'offline']) {
+      window.addEventListener(event, () => this.offline.set(!navigator.onLine));
+    }
     this.router.events.subscribe((event) => {
       if (event instanceof NavigationStart) this.navigating.set(true);
       if (event instanceof NavigationEnd || event instanceof NavigationCancel || event instanceof NavigationError) {
         this.navigating.set(false);
-        this.pendingPath.set(null);
       }
       if (event instanceof NavigationEnd) this.scrollOnPathChange(event.urlAfterRedirects);
     });
@@ -145,10 +139,5 @@ export class App {
     if (path === this.lastPath) return;
     this.lastPath = path;
     scrollPane()?.scrollTo(0, 0);
-  }
-
-
-  isActive(path: string): boolean {
-    return this.router.url === path || this.router.url.startsWith(`${path}/`) || this.router.url.startsWith(`${path}?`);
   }
 }

@@ -1,5 +1,6 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { Api } from '../../core/api.service';
+import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { Money } from '../../core/models';
 
@@ -8,7 +9,7 @@ type Queue = 'duplicates' | 'transfers' | 'installments';
 /** Review queues with J/K navigation and A/R decisions. */
 @Component({
   selector: 'app-review',
-  imports: [MoneyPipe, ShortDatePipe],
+  imports: [FintoSkeleton, MoneyPipe, ShortDatePipe],
   templateUrl: './review.html',
   styleUrl: './review.css',
 })

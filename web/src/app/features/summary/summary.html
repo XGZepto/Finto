@@ -109,6 +109,11 @@
           </button>
         }
       </div>
+      @if (unranked().length) {
+        <p class="banner warn excluded">
+          No {{ convertTo() }} rate for {{ unranked().join(', ') }} — those rows are not in this ranking.
+        </p>
+      }
     }
   }
 </section>

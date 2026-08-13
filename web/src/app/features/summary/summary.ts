@@ -10,6 +10,7 @@ import { FintoStat } from '../../shared/finto-stat';
 import { FintoTimeseries, SeriesPoint } from '../../shared/finto-timeseries';
 import { FintoDonut, FintoShareBar, Slice } from '../../shared/finto-viz';
 import { Preferences } from '../../core/preferences.service';
+import { FilterState } from '../../core/filter-state';
 
 /**
  * Summary.
@@ -33,6 +34,7 @@ import { Preferences } from '../../core/preferences.service';
 export class SummaryPage {
   private api = inject(Api);
   private router = inject(Router);
+  private filters = inject(FilterState);
   private preferences = inject(Preferences);
   readonly money = new MoneyPipe();
 
@@ -336,7 +338,7 @@ export class SummaryPage {
   }
 
   drillAccount(id: string): void {
-    this.router.navigate(['/blotter'], { queryParams: { accounts: id } });
+    this.filters.drillInto('account', id, this.periodFilter());
   }
 
   setGroupBy(value: string): void {
@@ -360,33 +362,9 @@ export class SummaryPage {
     return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
-  /** Drill into the blotter, filtered to the clicked dimension value. */
+  /** Drill into the blotter, under the same period the figure was computed for. */
   drill(bucket: string): void {
-    const dimension = this.groupBy();
-    const queryParams: Record<string, string> = {};
-    if (dimension === 'day') queryParams['from'] = queryParams['to'] = bucket;
-    else if (dimension === 'month') {
-      queryParams['from'] = `${bucket}-01`;
-      const [year, month] = bucket.split('-').map(Number);
-      queryParams['to'] = `${bucket}-${new Date(year, month, 0).getDate()}`;
-    } else if (dimension === 'quarter') {
-      const [year, q] = bucket.split('-Q').map(Number);
-      const first = (q - 1) * 3 + 1;
-      const last = first + 2;
-      queryParams['from'] = `${year}-${String(first).padStart(2, '0')}-01`;
-      queryParams['to'] = `${year}-${String(last).padStart(2, '0')}-${new Date(year, last, 0).getDate()}`;
-    } else if (dimension === 'year') {
-      queryParams['from'] = `${bucket}-01-01`; queryParams['to'] = `${bucket}-12-31`;
-    } else {
-      const map: Record<string, string> = {
-        account: 'accounts', institution: 'institutions', category: 'categories',
-        card: 'cards', cardholder: 'cardholders', kind: 'kinds', currency: 'currency',
-      };
-      const key = map[dimension];
-      if (key) queryParams[key] = bucket;
-      else if (dimension === 'merchant' || dimension === 'subcategory') queryParams['q'] = bucket;
-    }
-    this.router.navigate(['/blotter'], { queryParams });
+    this.filters.drillInto(this.groupBy(), bucket, this.periodFilter());
   }
 
   /** Tooltip for a trend column. Goes through MoneyPipe like every other figure. */

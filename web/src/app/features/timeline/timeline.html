@@ -13,7 +13,7 @@
 </div>
 
 @if (loading()) {
-  <div class="spinner">loading </div>
+  <finto-skeleton [rows]="6" label="Loading composition" />
 } @else if (comp(); as c) {
   <div class="card">
     @if (c.unconvertible_currencies.length) {

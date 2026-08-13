@@ -4,8 +4,10 @@ const LOGO_HOSTS = ['www.google.com'];
 const SHELL = ['/index.html', '/manifest.webmanifest', '/favicon.svg?v=3', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
+  /* No skipWaiting: every route is a lazy chunk, and activating while a tab is
+     open deletes the cache that tab still resolves chunks from. The new worker
+     takes over on the next cold load instead. */
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

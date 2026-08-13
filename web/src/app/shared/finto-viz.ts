@@ -36,7 +36,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
     .share { display: flex; height: 8px; width: 100%; overflow: hidden; background: var(--panel-3); }
     .share span { display: block; height: 100%; }
     .legend { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s3); }
-    .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: 12.5px; }
+    .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-data); }
     .dot { width: 8px; height: 8px; flex: none; }
     .name { flex: 1; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .amount { font-variant-numeric: tabular-nums; color: var(--fg); }
@@ -90,7 +90,7 @@ export class FintoShareBar {
     .donut-wrap { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; }
     svg { width: 116px; height: 116px; flex: none; }
     .legend { display: flex; flex-direction: column; gap: var(--s2); flex: 1; min-width: 140px; }
-    .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: 12.5px; }
+    .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-data); }
     .dot { width: 8px; height: 8px; flex: none; }
     .name { flex: 1; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pct { font-variant-numeric: tabular-nums; color: var(--fg-3); }

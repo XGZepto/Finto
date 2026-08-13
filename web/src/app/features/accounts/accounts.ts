@@ -2,6 +2,7 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FintoIcon } from '../../shared/finto-icon';
 import { Api } from '../../core/api.service';
+import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { Account, Card, Flows, Position, SummaryRow, Txn } from '../../core/models';
 import { forkJoin } from 'rxjs';
@@ -15,7 +16,7 @@ interface AccountRow {
 
 @Component({
   selector: 'app-accounts',
-  imports: [FintoIcon, MoneyPipe, ShortDatePipe],
+  imports: [FintoSkeleton, FintoIcon, MoneyPipe, ShortDatePipe],
   templateUrl: './accounts.html',
   styleUrl: './accounts.css',
 })
@@ -225,6 +226,10 @@ export class AccountsPage {
   }
 
   private savedView(key: string): 'chart' | 'list' {
-    return sessionStorage.getItem(key) === 'list' ? 'list' : 'chart';
+    const saved = sessionStorage.getItem(key);
+    if (saved === 'chart' || saved === 'list') return saved;
+    // A 1000px flow diagram on a phone is a pan-and-scan puzzle. The list says
+    // the same thing in one column, so that is the default where it has to fit.
+    return matchMedia('(max-width: 880px)').matches ? 'list' : 'chart';
   }
 }

@@ -20,7 +20,7 @@ import { Money } from '../core/models';
       align-items: center;
       gap: var(--s2);
       font-family: var(--mono);
-      font-size: 12.5px;
+      font-size: var(--t-data);
       font-variant-numeric: tabular-nums;
     }
     .period { color: var(--fg-4); }
@@ -74,7 +74,7 @@ export class FintoDelta {
       letter-spacing: -.02em;
       line-height: 1.1;
     }
-    @media (max-width: 700px) { .stat-figure { font-size: 27px; } }
+    @media (max-width: 880px) { .stat-figure { font-size: var(--t-fig-lg); } }
   `],
 })
 export class FintoStat {

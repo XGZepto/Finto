@@ -4,6 +4,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Api } from '../../core/api.service';
+import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { FilterState } from '../../core/filter-state';
 import { DetailKeyPipe, MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { Money, TotalRow, Txn } from '../../core/models';
@@ -24,7 +25,7 @@ import { FintoSelect } from '../../shared/finto-select';
  */
 @Component({
   selector: 'app-blotter',
-  imports: [FormsModule, MoneyPipe, ShortDatePipe, DetailKeyPipe, FilterBar, FintoSelect, FintoIcon],
+  imports: [FintoSkeleton, FormsModule, MoneyPipe, ShortDatePipe, DetailKeyPipe, FilterBar, FintoSelect, FintoIcon],
   templateUrl: './blotter.html',
   styleUrl: './blotter.css',
 })

@@ -16,17 +16,16 @@
   letter-spacing: .1em; text-transform: uppercase;
 }
 .totals-row em {
-  font-style: normal; font-family: var(--mono); font-size: 11px;
+  font-style: normal; font-family: var(--mono); font-size: var(--t-meta);
   font-variant-numeric: tabular-nums;
 }
 .totals-row .vs { color: var(--fg-4); }
 
-@media (max-width: 700px) {
+@media (max-width: 880px) {
   .controls-bar { gap: var(--s3); padding: var(--s3); }
   /* Period gets its own row so all five spans fit; account and split share the next. */
   .control-pair:first-child { flex-basis: 100%; }
-  .control-pair:first-child finto-pills, .control-pair:first-child .pills { width: 100%; }
-  .control-pair:first-child .pill { flex: 1; }
+  .control-pair:first-child finto-pills { width: 100%; }
   .control-pair { flex: 1; min-width: 130px; }
 }
 
@@ -60,7 +59,7 @@
 .rank-list button:hover { background: var(--panel-2); }
 .rank-list .dot { width: 8px; height: 8px; }
 .rank-list .name {
-  color: var(--fg); font-family: var(--sans); font-size: 13px; letter-spacing: 0;
+  color: var(--fg); font-family: var(--sans); font-size: var(--t-data); letter-spacing: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .bar-track { height: 6px; background: var(--panel-3); }
@@ -68,13 +67,13 @@
 .rank-list .amount { font-variant-numeric: tabular-nums; }
 .rank-list .share { color: var(--fg-4); text-align: right; font-variant-numeric: tabular-nums; }
 
-@media (max-width: 700px) {
+@media (max-width: 880px) {
   .totals-row { gap: var(--s4) var(--s5); }
-  .totals-row b { font-size: 17px; }
+  .totals-row b { font-size: var(--t-fig-sm); }
   .rank-list button { grid-template-columns: 8px minmax(0, 1fr) auto; row-gap: var(--s1); }
   .rank-list .bar-track { grid-column: 2 / -1; grid-row: 2; }
   .rank-list .share { display: none; }
 }
 
-.focus-chip { color: var(--info); font-family: var(--mono); font-size: 11px; letter-spacing: .04em; }
+.focus-chip { color: var(--info); font-family: var(--mono); font-size: var(--t-meta); letter-spacing: .04em; }
 .focus-chip:hover { color: var(--fg); }

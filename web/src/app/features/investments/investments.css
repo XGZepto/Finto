@@ -8,7 +8,7 @@
   padding: 6px 0 2px;
 }
 .total-hero .figure {
-  font-size: 30px;
+  font-size: var(--t-fig-lg);
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
@@ -28,7 +28,7 @@ td.fund .fund-name { position: relative; }
 .empty-state { padding: 20px; }
 .empty-state p { margin: 0 0 6px; }
 
-@media (max-width: 700px) {
+@media (max-width: 880px) {
   .toolbar { align-items: stretch; }
   .toolbar finto-select { width: 100%; }
   .total-hero { display: grid; gap: 5px; }
@@ -39,7 +39,7 @@ td.fund .fund-name { position: relative; }
   tr { padding: 11px 0; border-bottom: 1px solid var(--line); }
   tbody tr:last-child { border-bottom: 0; }
   td, td.num { display: grid; grid-template-columns: minmax(84px, 38%) minmax(0, 1fr); gap: 12px; padding: 3px 0; border: 0; text-align: right; white-space: normal; }
-  td::before { content: attr(data-label); color: var(--fg-4); font: 10px/1.5 var(--mono); letter-spacing: .08em; text-align: left; text-transform: uppercase; }
+  td::before { content: attr(data-label); color: var(--fg-4); font: var(--t-label)/1.5 var(--mono); letter-spacing: .08em; text-align: left; text-transform: uppercase; }
   td.fund { display: block; padding: 0 0 7px; text-align: left; font-weight: 600; }
   td.fund::before { display: none; }
   td.fund .bar { inset: -2px 0 4px; }

@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api } from '../../core/api.service';
+import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { InstallmentPlan, Money } from '../../core/models';
 
@@ -29,7 +30,7 @@ interface ScheduleRow {
  */
 @Component({
   selector: 'app-installments',
-  imports: [FormsModule, MoneyPipe, ShortDatePipe],
+  imports: [FintoSkeleton, FormsModule, MoneyPipe, ShortDatePipe],
   templateUrl: './installments.html',
   styleUrl: './installments.css',
 })

@@ -18,9 +18,6 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
 .block { display: block; }
 .flags { white-space: nowrap; }
 .flags .tag + .tag { margin-left: 3px; }
-.blotter-skeleton { min-height: 470px; }
-.skeleton-row { display: grid; grid-template-columns: 90px 1fr 120px; gap: 18px; align-items: center; min-height: 58px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
-.skeleton-row i { display: block; height: 10px; }
 
 /* Drawer ------------------------------------------------------------------ */
 
@@ -42,22 +39,22 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
 .drawer:focus { outline: none; }
 .drawer header { display: flex; position: sticky; z-index: 2; top: -20px; justify-content: space-between; align-items: flex-start; gap: 12px; margin: -20px -20px 14px; padding: 20px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(14px); }
 .drawer .head-text { min-width: 0; }
-.drawer header h2 { font-size: 12px; overflow-wrap: anywhere; color: var(--fg); }
+.drawer header h2 { font-size: var(--t-data); overflow-wrap: anywhere; color: var(--fg); }
 .drawer header p { margin: 3px 0 0; }
-.close { display: grid; place-items: center; min-width: 44px; min-height: 44px; margin: -10px -10px 0 0; font-size: 22px; line-height: 1; touch-action: manipulation; }
-.drawer-loading { margin: -4px 0 10px; color: var(--fg-4); font: 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.close { display: grid; place-items: center; min-width: 44px; min-height: 44px; margin: -10px -10px 0 0; font-size: var(--t-figure); line-height: 1; touch-action: manipulation; }
+.drawer-loading { margin: -4px 0 10px; color: var(--fg-4); font: var(--t-label)/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 
 .amount-hero {
   font-family: var(--mono);
-  font-size: 26px;
+  font-size: var(--t-fig-lg);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
 .drawer-overview { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 16px 0 0; background: var(--line); border: 1px solid var(--line); }
 .drawer-overview > div { min-width: 0; padding: 9px 10px; background: var(--panel-2); }
 .drawer-overview > .wide { grid-column: 1 / -1; }
-.drawer-overview dt { color: var(--fg-4); font: 9px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
-.drawer-overview dd { margin: 4px 0 0; overflow-wrap: anywhere; color: var(--fg-2); font-size: 11.5px; }
+.drawer-overview dt { color: var(--fg-4); font: var(--t-micro)/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.drawer-overview dd { margin: 4px 0 0; overflow-wrap: anywhere; color: var(--fg-2); font-size: var(--t-meta); }
 .drawer-overview dd .tag + .tag { margin-left: 4px; }
 
 .drawer-flags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
@@ -82,11 +79,11 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
   grid-template-columns: minmax(104px, auto) 1fr;
   gap: 3px 12px;
   margin: 0;
-  font-size: 11.5px;
+  font-size: var(--t-meta);
 }
 .details dt {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--t-label);
   letter-spacing: 0.06em;
   color: var(--fg-4);
   overflow-wrap: anywhere;
@@ -107,7 +104,7 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
   background: var(--panel-2);
   text-align: left;
   font-family: var(--sans);
-  font-size: 11.5px;
+  font-size: var(--t-meta);
   letter-spacing: 0;
 }
 .leg:hover { border-color: var(--fg-3); }
@@ -138,7 +135,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 
 /* Narrow screens: the table becomes a list. A six-column grid pushes the
    amount off-screen, and the amount is the number you came for. */
-@media (max-width: 760px) {
+@media (max-width: 880px) {
   /* Separators run to the screen edge; content keeps the page gutter, so a row
      label sits on the same line as every other page's first character. */
   .ledger-card {
@@ -180,10 +177,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   }
   .table-wrap td { border: none; padding: 0; }
   .table-wrap td.desc { display: contents; }
-  .blotter-skeleton { min-height: 640px; }
-  .skeleton-row { grid-template-columns: 1fr 88px; min-height: 58px; gap: var(--s2) var(--s4); }
-  .skeleton-row i:nth-child(3) { display: none; }
-
+    
   .table-wrap td.desc .glyph { grid-column: 1; grid-row: 1 / 3; align-self: center; display: grid; }
   .table-wrap td.desc .primary {
     grid-column: 2; grid-row: 1; align-self: end;
@@ -198,7 +192,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .table-wrap td.category {
     grid-column: 2; grid-row: 2; align-self: start;
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font-size: 11px; color: var(--fg-4);
+    font-size: var(--t-meta); color: var(--fg-4);
   }
   .table-wrap td.category .block { display: none; }
   .table-wrap td.desc .row-tags { display: none; }
@@ -223,7 +217,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
     backdrop-filter: blur(10px);
   }
   .table-wrap tr.daygroup td { display: block; }
-  .table-wrap td.desc .primary { font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+  .table-wrap td.desc .primary { font-size: var(--t-data); line-height: 1.35; overflow-wrap: anywhere; }
   .table-wrap td.desc .block { line-height: 1.35; margin-top: 2px; }
   .table-wrap td.account .holder { display: inline; margin-left: 5px; }
   .flags .tag + .tag { margin-left: 0; }
@@ -254,23 +248,23 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   background: var(--panel-2);
 }
 .aggregation-controls { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
-.aggregation-label { color: var(--fg-3); font: 500 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.aggregation-label { color: var(--fg-3); font: 500 var(--t-label)/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
 .aggregation-actions { display: flex; align-items: center; gap: 8px; }
 .aggregation-controls .currency-select { width: 78px; }
 .normalised-scope { border-top: 0; }
-.scope-item { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
-.scope-item .ccy { color: var(--fg-4); font-size: 10px; letter-spacing: 0.1em; }
+.scope-item { display: flex; align-items: baseline; gap: 8px; font-size: var(--t-data); }
+.scope-item .ccy { color: var(--fg-4); font-size: var(--t-label); letter-spacing: 0.1em; }
 /* The normalised total's currency is already named in the selector above, so
    the leading code here is a dangling repeat. */
 .normalised-scope .ccy { display: none; }
 .scope-item .metric { display: flex; align-items: baseline; gap: 5px; }
-.scope-item .metric small { color: var(--fg-4); font: 9px/1 var(--mono); text-transform: uppercase; }
+.scope-item .metric small { color: var(--fg-4); font: var(--t-micro)/1 var(--mono); text-transform: uppercase; }
 .scope-item .metric b { font-weight: 500; }
 .scope-item .out b { color: var(--neg); }
 .scope-item .in b { color: var(--pos); }
 .scope-item .net { border-left: 1px solid var(--line); padding-left: 8px; }
 
-@media (max-width: 760px) {
+@media (max-width: 880px) {
   .aggregation-controls { align-items: stretch; }
   .aggregation-actions { min-width: 0; }
   .aggregation-actions .seg { flex: 1; }
@@ -291,15 +285,15 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 .tag.tagchip {
   border-color: var(--c4, var(--info));
   color: var(--c4, var(--info));
-  font-size: 10px;
+  font-size: var(--t-label);
 }
 .tag-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .tag.removable { display: inline-flex; align-items: center; gap: 4px; }
-.tag.removable .x { color: var(--fg-3); font-size: 13px; line-height: 1; }
+.tag.removable .x { color: var(--fg-3); font-size: var(--t-data); line-height: 1; }
 .tag.removable .x:hover { color: var(--neg); }
 .tag-input {
   width: 100px;
-  font-size: 11px;
+  font-size: var(--t-meta);
   padding: 2px 6px;
   background: var(--panel-2);
   border: 1px dashed var(--line-2, var(--line));
@@ -319,7 +313,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   background: var(--panel-2);
   border-bottom: 1px solid var(--line-2);
   color: var(--fg-3);
-  font-size: 11px;
+  font-size: var(--t-meta);
   letter-spacing: .1em;
   text-transform: uppercase;
 }
@@ -336,8 +330,8 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   border: 1px solid var(--line);
   color: var(--fg-3);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--t-meta);
 }
 .glyph finto-icon { width: 100%; height: 100%; }
 /* The desktop table keeps its dense text columns; the mark is a mobile-list affordance. */
-@media (min-width: 761px) { td.desc .glyph { display: none; } }
+@media (min-width: 881px) { td.desc .glyph { display: none; } }

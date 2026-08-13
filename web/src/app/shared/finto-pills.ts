@@ -20,20 +20,19 @@ import { Component, input, output } from '@angular/core';
   `,
   styles: [`
     :host { display: inline-flex; }
-    .pills { display: inline-flex; min-height: 34px; border: 1px solid var(--line-2); }
+    .pills { display: inline-flex; border: 1px solid var(--line-strong); }
     .pills.stretch { display: flex; width: 100%; }
     .pills.stretch .pill { flex: 1; text-align: center; }
     .pill {
       display: grid;
       place-items: center;
-      min-height: 0;
       padding: var(--s1) var(--s3);
       border: 0;
-      border-right: 1px solid var(--line-2);
+      border-right: 1px solid var(--line-strong);
       background: none;
       color: var(--fg-3);
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: var(--t-meta);
       letter-spacing: .08em;
     }
     .pill:last-child { border-right: 0; }

@@ -64,10 +64,10 @@ export interface FlowNode {
     .row:not(.static):hover { background: var(--panel-2); }
     .row.static { cursor: default; }
     .dot { width: 10px; height: 10px; }
-    .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--fg); }
-    .pct { font-size: 11px; color: var(--fg-4); font-variant-numeric: tabular-nums; text-align: right; min-width: 44px; }
-    .val { font-size: 12px; color: var(--fg-2); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
-    @media (min-width: 720px) {
+    .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-data); color: var(--fg); }
+    .pct { font-size: var(--t-meta); color: var(--fg-4); font-variant-numeric: tabular-nums; text-align: right; min-width: 44px; }
+    .val { font-size: var(--t-data); color: var(--fg-2); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+    @media (min-width: 881px) {
       .row { grid-template-columns: 10px minmax(0, 1fr) 64px 120px; }
     }
   `],

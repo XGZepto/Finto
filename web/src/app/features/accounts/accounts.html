@@ -144,9 +144,7 @@
   </div>
 
   @if (loading()) {
-    <section class="account-groups account-skeletons" aria-label="Loading accounts">
-      @for (row of [1,2,3,4,5,6]; track row) { <div class="card skeleton account-skeleton"></div> }
-    </section>
+    <div class="card"><finto-skeleton [rows]="6" label="Loading accounts" /></div>
   } @else {
     <section class="account-groups">
       @for (g of groups(); track g.key) {

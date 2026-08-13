@@ -3,7 +3,7 @@
 </div>
 
 @if (loading()) {
-  <div class="spinner">loading </div>
+  <finto-skeleton [rows]="6" label="Loading holdings" />
 } @else if (!current()) {
   <div class="card empty-state">
     <p class="muted">No snapshots imported.</p>

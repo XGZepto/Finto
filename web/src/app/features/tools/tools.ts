@@ -57,8 +57,8 @@ import { NavIcon } from '../../shared/nav-icon';
       border: 1px solid var(--line-2); color: var(--fg-3);
     }
     .tool-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .tool-name { display: flex; align-items: center; gap: var(--s2); color: var(--fg); font-size: 14px; font-weight: 600; }
-    .tool-note { color: var(--fg-3); font-size: 12.5px; }
+    .tool-name { display: flex; align-items: center; gap: var(--s2); color: var(--fg); font-size: var(--t-body); font-weight: 600; }
+    .tool-note { color: var(--fg-3); font-size: var(--t-data); }
   `],
 })
 export class ToolsPage {

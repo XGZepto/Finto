@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
+import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { IntegrityReport } from '../../core/models';
 
@@ -18,7 +19,7 @@ import { IntegrityReport } from '../../core/models';
  */
 @Component({
   selector: 'app-integrity',
-  imports: [MoneyPipe, ShortDatePipe],
+  imports: [FintoSkeleton, MoneyPipe, ShortDatePipe],
   templateUrl: './integrity.html',
   styleUrl: './integrity.css',
 })

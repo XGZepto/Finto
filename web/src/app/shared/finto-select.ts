@@ -3,6 +3,8 @@ import {
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
+let instances = 0;
+
 @Component({
   selector: 'finto-select',
   template: `
@@ -10,13 +12,15 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
       <button type="button" class="select-trigger" role="combobox"
               [disabled]="disabled()" [attr.aria-label]="ariaLabel"
               [attr.aria-expanded]="open()" aria-haspopup="listbox"
+              [attr.aria-controls]="id + '-list'"
+              [attr.aria-activedescendant]="open() ? id + '-opt-' + activeIndex() : null"
               (click)="toggle()" (keydown)="onKeydown($event)">
         <span>{{ selectedLabel() }}</span><i aria-hidden="true"></i>
       </button>
       @if (open()) {
-        <div class="select-menu" role="listbox" [attr.aria-label]="ariaLabel">
+        <div class="select-menu" role="listbox" [id]="id + '-list'" [attr.aria-label]="ariaLabel">
           @for (option of options; track optionValue(option); let index = $index) {
-            <button type="button" role="option" class="select-option"
+            <button type="button" role="option" class="select-option" [id]="id + '-opt-' + index"
                     [class.active]="index === activeIndex()"
                     [class.selected]="optionValue(option) === value()"
                     [attr.aria-selected]="optionValue(option) === value()"
@@ -35,7 +39,7 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
     .select-trigger {
       display: grid; grid-template-columns: minmax(0, 1fr) 12px; align-items: center;
       gap: 10px; width: 100%; min-height: 34px; padding: 6px 9px;
-      background: var(--bg); border: 1px solid var(--line); color: var(--fg);
+      background: var(--bg); border: 1px solid var(--line-strong); color: var(--fg);
       text-align: left; letter-spacing: 0;
     }
     .select-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -60,7 +64,7 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
     .select-option.active { background: var(--panel-3); color: var(--fg); }
     .select-option.selected { color: var(--fg); }
     .select-option b { color: var(--pos); font-weight: 500; }
-    @media (max-width: 700px) { .select-trigger, .select-option { min-height: 40px; } }
+    @media (max-width: 880px) { .select-trigger, .select-option { min-height: 40px; } }
     @media (prefers-reduced-motion: reduce) { .select-trigger i { transition: none; } }
   `],
   providers: [{
@@ -76,6 +80,10 @@ export class FintoSelect implements ControlValueAccessor {
   @Input() labelKey = '';
   @Input() placeholder = 'Select';
   @Input() ariaLabel = 'Select';
+
+  /* The active option is announced through the trigger, which never gives up
+     focus, so both ends of that reference need a stable id. */
+  readonly id = `finto-select-${++instances}`;
 
   value = signal('');
   open = signal(false);

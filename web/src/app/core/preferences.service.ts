@@ -19,6 +19,9 @@ export class Preferences {
   constructor() {
     this.applyTheme(this.theme());
     this.applyLanguage(this.language());
+    // On 'system' the resolved theme still changes under us.
+    matchMedia('(prefers-color-scheme: dark)')
+      .addEventListener('change', () => this.applyTheme(this.theme()));
   }
 
   setTheme(theme: ThemePreference): void {
@@ -92,8 +95,13 @@ export class Preferences {
   }
 
   private applyTheme(theme: ThemePreference): void {
-    if (theme === 'system') document.documentElement.removeAttribute('data-theme');
-    else document.documentElement.dataset['theme'] = theme;
+    const root = document.documentElement;
+    if (theme === 'system') root.removeAttribute('data-theme');
+    else root.dataset['theme'] = theme;
+    // Read the surface back rather than restating its hex here, so the browser
+    // chrome cannot drift from the palette it is supposed to continue.
+    const bg = getComputedStyle(root).getPropertyValue('--bg').trim();
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
   }
 
   private applyLanguage(language: LanguagePreference): void {

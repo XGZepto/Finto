@@ -87,10 +87,6 @@ export class Api {
 
   me(): Observable<AuthUser> { return this.http.get<AuthUser>(`${this.base}/auth/me`); }
 
-  health(): Observable<{ status: string; storage: string }> {
-    return this.http.get<{ status: string; storage: string }>(`${this.base}/health`);
-  }
-
   updatePreferences(preferences: Partial<UserPreferences>): Observable<AuthUser> {
     return this.http.patch<AuthUser>(`${this.base}/auth/preferences`, preferences);
   }

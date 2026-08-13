@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output, inject, signal } from '@angular/core';
+import { Component, EventEmitter, HostListener, Output, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api } from '../core/api.service';
 import { FilterState } from '../core/filter-state';
@@ -37,6 +37,11 @@ import { FintoDate } from './finto-date';
           Filters @if (filters.chips().length) { <span class="count">{{ filters.chips().length }}</span> }
         </button>
       </div>
+
+      @if (expanded()) {
+        <button type="button" class="sheet-scrim" (click)="expanded.set(false)"
+                aria-label="Close filters"></button>
+      }
 
       <div class="advanced" [class.open]="expanded()">
         <div class="advanced-inner">
@@ -116,7 +121,7 @@ import { FintoDate } from './finto-date';
     .filter-primary { display: flex; align-items: end; gap: 10px; }
     .filter-primary .search { flex: 1; }
     .filter-primary input { width: 100%; }
-    .filter-toggle { display: block; min-width: 92px; height: 31px; }
+    .filter-toggle { display: block; min-width: 92px; }
     .filter-toggle .chev {
       display: inline-block;
       margin-right: 6px;
@@ -126,7 +131,7 @@ import { FintoDate } from './finto-date';
     .filter-toggle.on .chev { transform: rotate(90deg); color: var(--fg-2); }
     .filter-toggle .count {
       display: inline-grid; place-items: center; min-width: 16px; height: 16px;
-      margin-left: 4px; background: var(--fg); color: var(--bg); font-size: 9px;
+      margin-left: 4px; background: var(--fg); color: var(--bg); font-size: var(--t-micro);
     }
     /* Filters stay folded until asked for; the chips below keep active
        state visible, so nothing is hidden that is currently in effect. */
@@ -150,19 +155,21 @@ import { FintoDate } from './finto-date';
     }
     .check {
       display: flex; align-items: center; gap: 6px; margin: 0;
-      font-family: var(--sans); font-size: 11.5px; letter-spacing: 0;
+      font-family: var(--sans); font-size: var(--t-meta); letter-spacing: 0;
       text-transform: none; color: var(--fg-2); cursor: pointer;
     }
     .check input { width: auto; }
-    .check small { font-size: 10.5px; }
+    .check small { font-size: var(--t-label); }
     .chips {
       display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
       margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
     }
+    /* Inline on desktop, so nothing to dim. */
+    .sheet-scrim { display: none; }
     @media (prefers-reduced-motion: reduce) {
       .advanced, .filter-toggle .chev { transition: none; }
     }
-    @media (max-width: 700px) {
+    @media (max-width: 880px) {
       /* Sticky search; the day headers pin below it using the height the
          blotter measures into --filter-h. */
       .filter-bar {
@@ -194,6 +201,18 @@ import { FintoDate } from './finto-date';
         transition: transform 260ms cubic-bezier(.4, 0, .2, 1), opacity 160ms linear;
       }
       .advanced.open { transform: translateY(0); margin-top: 0; }
+      /* A sheet over the ledger has to take the taps the ledger would have got,
+         and be dismissable by the gesture people already use for a sheet. */
+      .sheet-scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 39;
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        background: #0009;
+      }
       .advanced-inner { overflow: visible; }
       .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .field.narrow { max-width: none; }
@@ -211,6 +230,9 @@ export class FilterBar {
   @Output() changed = new EventEmitter<void>();
 
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  @HostListener('document:keydown.escape')
+  collapse(): void { this.expanded.set(false); }
 
   constructor() {
     this.api.facets().subscribe({ next: (f) => this.facets.set(f) });

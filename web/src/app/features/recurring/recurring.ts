@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
+import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { InstallmentPlan, Money, Txn } from '../../core/models';
 import { Preferences } from '../../core/preferences.service';
@@ -70,7 +71,7 @@ function daysBetween(a: string, b: string): number {
  */
 @Component({
   selector: 'app-recurring',
-  imports: [FormsModule, MoneyPipe, ShortDatePipe, FintoIcon, FintoPills, FintoSelect],
+  imports: [FintoSkeleton, FormsModule, MoneyPipe, ShortDatePipe, FintoIcon, FintoPills, FintoSelect],
   templateUrl: './recurring.html',
   styleUrl: './recurring.css',
 })

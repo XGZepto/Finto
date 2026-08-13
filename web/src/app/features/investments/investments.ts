@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Api } from '../../core/api.service';
+import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { InvestmentDetail, InvestmentSnapshot } from '../../core/models';
 import { FormsModule } from '@angular/forms';
@@ -14,7 +15,7 @@ import { FintoSelect } from '../../shared/finto-select';
  */
 @Component({
   selector: 'app-investments',
-  imports: [FormsModule, MoneyPipe, ShortDatePipe, FintoSelect],
+  imports: [FintoSkeleton, FormsModule, MoneyPipe, ShortDatePipe, FintoSelect],
   templateUrl: './investments.html',
   styleUrl: './investments.css',
 })

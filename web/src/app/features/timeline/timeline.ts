@@ -1,9 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
+import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe } from '../../core/money.pipe';
 import { Composition, Coverage } from '../../core/models';
+import { FilterState, bucketRange } from '../../core/filter-state';
 import { FintoSelect } from '../../shared/finto-select';
 
 /** A band's colour, cycling through the categorical ramp. */
@@ -11,13 +12,13 @@ const RAMP = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--info', '--warn'
 
 @Component({
   selector: 'app-timeline',
-  imports: [FormsModule, MoneyPipe, FintoSelect],
+  imports: [FintoSkeleton, FormsModule, MoneyPipe, FintoSelect],
   templateUrl: './timeline.html',
   styleUrl: './timeline.css',
 })
 export class TimelinePage {
   private api = inject(Api);
-  private router = inject(Router);
+  private filters = inject(FilterState);
 
   loading = signal(true);
   comp = signal<Composition | null>(null);
@@ -97,12 +98,8 @@ export class TimelinePage {
     })),
   );
 
+  /** A cell is a dimension value inside one month, so the drill carries both. */
   drill(month: string, bucket: string): void {
-    const from = `${month}-01`;
-    const [y, m] = month.split('-').map(Number);
-    const to = `${month}-${new Date(y, m, 0).getDate()}`;
-    const key = this.dimension() === 'category' ? 'categories'
-      : this.dimension() === 'merchant' ? 'q' : 'categories';
-    this.router.navigate(['/blotter'], { queryParams: { from, to, [key]: bucket } });
+    this.filters.drillInto(this.dimension(), bucket, bucketRange('month', month) ?? {});
   }
 }

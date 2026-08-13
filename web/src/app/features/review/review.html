@@ -19,7 +19,7 @@
 </div>
 
 @if (loading()) {
-  <div class="card"><div class="spinner">loading </div></div>
+  <div class="card"><finto-skeleton [rows]="5" label="Loading queue" /></div>
 } @else if (!items().length) {
   <div class="card">
     <div class="empty">Queue clear</div>

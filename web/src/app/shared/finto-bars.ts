@@ -45,8 +45,8 @@ export interface Bar {
     .fill.peak { background: var(--info); }
     .col:hover .fill { background: var(--fg-2); }
     .col:hover .fill.peak { background: var(--info); }
-    .x { font-size: 9px; color: var(--fg-4); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mean { display: flex; align-items: baseline; gap: var(--s2); font-size: 10px; color: var(--fg-4); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+    .x { font-size: var(--t-micro); color: var(--fg-4); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mean { display: flex; align-items: baseline; gap: var(--s2); font-size: var(--t-label); color: var(--fg-4); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; }
     .mean b { color: var(--fg-3); font-variant-numeric: tabular-nums; }
   `],
 })

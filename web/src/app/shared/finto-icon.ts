@@ -119,9 +119,9 @@ const MERCHANT_DOMAIN: Record<string, string> = {
     svg { width: 62%; height: 62%; }
     .badge {
       display: grid; place-items: center; width: 100%; height: 100%;
-      font-family: var(--sans); font-weight: 700; font-size: 12px; line-height: 1;
+      font-family: var(--sans); font-weight: 700; font-size: var(--t-data); line-height: 1;
     }
-    .badge.wordmark { font-size: 8px; letter-spacing: -.02em; }
+    .badge.wordmark { font-size: var(--t-micro); letter-spacing: -.02em; }
   `],
 })
 export class FintoIcon {

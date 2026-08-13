@@ -43,7 +43,7 @@
 </section>
 
 @if (loading() && !commitments().length) {
-  <div class="card"><div class="spinner">loading</div></div>
+  <div class="card"><finto-skeleton [rows]="6" label="Loading commitments" /></div>
 } @else {
   @if (visibleSubs().length) {
     <section class="card list-card">
@@ -96,7 +96,7 @@
             <span class="who">
               <span class="name">{{ p.merchant || p.description }}</span>
               <span class="meta">
-                <span class="tag">{{ p.paid_count ?? 0 }} of {{ p.term_months }}</span>
+                <span class="tag">{{ p.paid_count }} of {{ p.term_months }}</span>
                 <span class="mono">{{ p.outstanding | money: 'bare' }} left</span>
               </span>
             </span>

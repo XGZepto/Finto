@@ -17,6 +17,14 @@
    mono is a chore to read. That split is the whole typographic system.
 --------------------------------------------------------------------------- */
 
+/* Breakpoints. Two, and only two.
+   - compact  ≤ 880px : the sidebar becomes a tab bar and every layout below it
+                        switches to its one-column form. Nothing else may split
+                        the range, or a size exists that is neither layout.
+   - narrow   ≤ 520px : refinements *inside* compact, never a third layout.
+   CSS has no variables in media queries, so these live as literals. Grep for
+   `880px` before adding a width. */
+
 :root {
   --bg: #08090a;
   --panel: #0d0e10;
@@ -24,11 +32,18 @@
   --panel-3: #1a1d21;
   --line: #232629;
   --line-2: #31353a;
+  /* Boundary of anything clickable. WCAG 1.4.11 wants 3:1 against both the
+     control's own fill and the surface behind it; --line and --line-2 are
+     hairlines for decoration and cannot carry that. */
+  --line-strong: #5f656c;
 
+  /* Four steps, each ≥4.5:1 on bg, panel and panel-2, each ~1.3:1 from its
+     neighbour. --fg-4 carries every uppercase label and table header in the
+     app, so it is the one that decides whether the labelling reads at all. */
   --fg: #e9eaec;
-  --fg-2: #9ba0a6;
-  --fg-3: #7d838a;
-  --fg-4: #5d6268;
+  --fg-2: #a4aab1;
+  --fg-3: #8d939a;
+  --fg-4: #7b8188;
 
   /* Semantic. Money out, money in, needs attention, broken, informational. */
   --neg: #f0736c;
@@ -71,13 +86,19 @@
   --s7: 48px;
 
   /* Type scale. A ledger has a headline figure and supporting detail; rendering
-     both at one size leaves the ranking to the reader. */
-  --t-hero: 34px;
-  --t-figure: 22px;
-  --t-body: 14px;
-  --t-data: 13px;
-  --t-label: 10.5px;
-  --t-micro: 9.5px;
+     both at one size leaves the ranking to the reader. Ten steps, and a literal
+     px font-size anywhere else is a bug — that is what let eleven sizes
+     accumulate between 8px and 13.5px. */
+  --t-micro: 9.5px;   /* uppercase micro labels, chart ticks */
+  --t-label: 10.5px;  /* uppercase labels, table headers, tags */
+  --t-meta: 11.5px;   /* supporting text under a primary line */
+  --t-data: 12.5px;   /* mono figures in rows and tables */
+  --t-body: 14px;     /* prose and form values */
+  --t-lede: 15px;     /* section headings, generated prose */
+  --t-fig-sm: 18px;   /* figure inside a dense panel */
+  --t-figure: 22px;   /* panel figure, h1 */
+  --t-fig-lg: 27px;   /* drawer and detail figure */
+  --t-hero: 34px;     /* the one number a page is about */
 
   color-scheme: dark;
 }
@@ -92,11 +113,12 @@
     --panel-3: #eeeeec;
     --line: #dcdcd8;
     --line-2: #c4c4bf;
+    --line-strong: #888c92;
 
     --fg: #17181a;
-    --fg-2: #55585c;
-    --fg-3: #686c70;
-    --fg-4: #85898d;
+    --fg-2: #494c50;
+    --fg-3: #5a5e62;
+    --fg-4: #6b6f75;
 
     --neg: #c0392f;
     --pos: #1f7a4d;
@@ -129,10 +151,11 @@
   --panel-3: #eeeeec;
   --line: #dcdcd8;
   --line-2: #c4c4bf;
+  --line-strong: #888c92;
   --fg: #17181a;
-  --fg-2: #55585c;
-  --fg-3: #686c70;
-  --fg-4: #85898d;
+  --fg-2: #494c50;
+  --fg-3: #5a5e62;
+  --fg-4: #6b6f75;
   --neg: #c0392f;
   --pos: #1f7a4d;
   --warn: #8a6510;
@@ -155,12 +178,13 @@
 
 :root[data-theme='dark'] { color-scheme: dark; }
 
-@media (max-width: 700px) {
-  body { font-size: 13.5px; }
+@media (max-width: 880px) {
   .page-head { align-items: center; justify-content: space-between; }
   .card { padding: var(--s3); }
-  input, select, textarea { min-height: 40px; font-size: 13px; }
-  button, .btn { min-height: 40px; }
+  /* 44px is the smallest target Apple's HIG accepts and the size a thumb
+     actually hits; 40px cleared WCAG 2.5.8 and little else. */
+  input, select, textarea, button, .btn { min-height: 44px; }
+  input, select, textarea { font-size: var(--t-data); }
   .section-head { align-items: flex-start; }
   .section-head > .row { width: 100%; }
   .table-wrap { margin-inline: calc(-1 * var(--s3)); border-left: 0; border-right: 0; }
@@ -175,7 +199,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: var(--t-body);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -197,21 +221,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 h1, h2, h3 { font-family: var(--sans); margin: 0; text-wrap: balance; }
 
 h1 {
-  font-size: 23px;
+  font-size: var(--t-figure);
   font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--fg);
 }
 
 h2 {
-  font-size: 15px;
+  font-size: var(--t-lede);
   font-weight: 600;
   letter-spacing: -0.005em;
   color: var(--fg);
 }
 
 h3 {
-  font-size: 13px;
+  font-size: var(--t-data);
   font-weight: 600;
   color: var(--fg-2);
 }
@@ -231,13 +255,13 @@ a { color: var(--fg); }
 .page-head .sub {
   margin: 0;
   color: var(--fg-3);
-  font-size: 12px;
+  font-size: var(--t-data);
   max-width: 68ch;
 }
 
 .mono { font-family: var(--mono); }
 .muted { color: var(--fg-3); }
-.small { font-size: 12px; }
+.small { font-size: var(--t-data); }
 .dim { color: var(--fg-4); }
 .nowrap { white-space: nowrap; }
 
@@ -268,12 +292,12 @@ a { color: var(--fg); }
 button, .btn {
   min-height: 34px;
   padding: var(--s1) var(--s3);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line-strong);
   border-radius: 0;
   background: var(--panel-2);
   color: var(--fg-2);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--t-data);
   letter-spacing: 0.06em;
   cursor: pointer;
   transition: color 80ms linear, border-color 80ms linear, background 80ms linear;
@@ -282,7 +306,7 @@ button:hover:not(:disabled), .btn:hover { color: var(--fg); border-color: var(--
 button:disabled { opacity: 0.35; cursor: not-allowed; }
 button.primary { background: var(--fg); border-color: var(--fg); color: var(--bg); font-weight: 500; }
 button.primary:hover:not(:disabled) { background: #fff; border-color: #fff; color: var(--bg); }
-button.ghost { background: transparent; border-color: var(--line); }
+button.ghost { background: transparent; border-color: var(--line-strong); }
 button.danger:hover:not(:disabled) { color: var(--neg); border-color: var(--neg); }
 button.bare { background: none; border: none; padding: 0; color: var(--fg-3); }
 button.bare:hover { color: var(--fg); }
@@ -290,12 +314,12 @@ button.bare:hover { color: var(--fg); }
 input, select, textarea {
   min-height: 34px;
   padding: var(--s1) var(--s2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 0;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--t-data);
 }
 input::placeholder, textarea::placeholder { color: var(--fg-4); }
 input:focus, select:focus, textarea:focus {
@@ -306,7 +330,7 @@ input:focus, select:focus, textarea:focus {
 input[type='checkbox'] { accent-color: var(--fg-2); }
 input[type='checkbox'] {
   appearance: none; display: inline-grid; place-content: center; width: 16px; height: 16px;
-  min-height: 16px; padding: 0; border: 1px solid var(--line-2); background: var(--bg);
+  min-height: 16px; padding: 0; border: 1px solid var(--line-strong); background: var(--bg);
 }
 input[type='checkbox']::before { content: ''; width: 8px; height: 8px; background: var(--fg); transform: scale(0); transition: transform 80ms linear; }
 input[type='checkbox']:checked::before { transform: scale(1); }
@@ -319,17 +343,17 @@ label {
   display: block;
   margin-bottom: var(--s1);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: var(--t-label);
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--fg-4);
 }
 
 /* Segmented control — the terminal answer to a tab bar. */
-.seg { display: inline-flex; border: 1px solid var(--line); }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); }
 .seg button {
   border: none;
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--line-strong);
   background: transparent;
   padding: var(--s1) var(--s3);
 }
@@ -340,7 +364,7 @@ label {
 /* --- Tables -------------------------------------------------------------- */
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--panel); }
-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table { width: 100%; border-collapse: collapse; font-size: var(--t-data); }
 
 th {
   position: sticky;
@@ -351,7 +375,7 @@ th {
   background: var(--panel-2);
   border-bottom: 1px solid var(--line);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: var(--t-label);
   font-weight: 500;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -382,11 +406,11 @@ th.num, td.num {
   background: var(--panel-3);
   border: 1px solid var(--line-2);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--t-meta);
   color: var(--fg-2);
   white-space: nowrap;
 }
-.chip button { padding: 0; border: none; background: none; color: var(--fg-4); font-size: 12px; line-height: 1; }
+.chip button { padding: 0; border: none; background: none; color: var(--fg-3); font-size: var(--t-data); line-height: 1; }
 .chip button:hover { color: var(--fg); border: none; }
 .chip.accent { border-color: var(--fg-3); color: var(--fg); }
 
@@ -397,7 +421,7 @@ th.num, td.num {
   padding: 0 var(--s1);
   border: 1px solid var(--line-2);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--t-label);
   line-height: 16px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -426,7 +450,7 @@ th.num, td.num {
   border-bottom-width: 2px;
   background: var(--panel-2);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--t-label);
   line-height: 15px;
   text-align: center;
   color: var(--fg-3);
@@ -439,7 +463,7 @@ th.num, td.num {
   border: 1px solid var(--line);
   border-left-width: 3px;
   background: var(--panel-2);
-  font-size: 12px;
+  font-size: var(--t-data);
 }
 .banner.error { border-color: var(--bad); background: var(--neg-wash); color: var(--bad); }
 .banner.warn { border-color: var(--warn); background: var(--warn-wash); }
@@ -454,19 +478,23 @@ th.num, td.num {
 .empty {
   padding: var(--s7) var(--s5);
   text-align: center;
-  color: var(--fg-4);
+  color: var(--fg-3);
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--t-meta);
   letter-spacing: 0.08em;
 }
 
-/* Not a spinner — a terminal blinks. */
+/* Two waiting states, and which one to use is not a preference:
+   .skeleton  when the shape of what is coming is known (list rows, cards) — it
+              holds the layout, so nothing jumps when the data lands.
+   .spinner   when it is not (a single panel, a computed figure).
+   Not a spinner — a terminal blinks. */
 .spinner {
   padding: var(--s6) var(--s5);
   text-align: center;
   color: var(--fg-3);
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--t-meta);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -496,9 +524,4 @@ th.num, td.num {
   .spinner::after { animation: none; }
   .skeleton::after { animation: none; }
   * { transition: none !important; }
-}
-
-@media (max-width: 700px) {
-  body { font-size: 13.5px; }
-  input, select, textarea, button, .btn { min-height: 40px; }
 }

@@ -29,8 +29,8 @@
        (dragover)="onDragOver($event)" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
   <input type="file" multiple hidden
          [attr.accept]="acceptAttribute()" (change)="onPick($event)" />
-  <span class="cue">Drop statements here</span>
-  <span class="hint">or click to browse · {{ acceptedLabel() }}</span>
+  <span class="cue">Choose statements</span>
+  <span class="hint">or drop them here · {{ acceptedLabel() }}</span>
 </label>
 
 @if (capabilities(); as support) {
@@ -238,10 +238,19 @@
       </span>
     }
   </div>
-  <div class="row">
-    <button (click)="runReconcile()">Reconcile ledger</button>
-    <button (click)="runReattribute()">Re-attribute cards</button>
-    <button (click)="runHarvestFx()">Harvest FX rates</button>
+  <div class="jobs">
+    <div class="job">
+      <button (click)="runReconcile()">Reconcile ledger</button>
+      <small>Re-links transfers, refunds and instalments across every account.</small>
+    </div>
+    <div class="job">
+      <button (click)="runReattribute()">Re-attribute cards</button>
+      <small>Reassigns transactions to the cardholder who held the card that day.</small>
+    </div>
+    <div class="job">
+      <button (click)="runHarvestFx()">Harvest FX rates</button>
+      <small>Fetches missing daily rates so converted totals can be computed.</small>
+    </div>
   </div>
   @if (maintenance()?.status === 'done') {
     <div class="changes">
@@ -260,7 +269,7 @@
   }
 </section>
 
-<section class="card">
+<section class="card history">
   <div class="section-head"><h2>Imported files</h2></div>
   <div class="table-wrap">
     <table>
