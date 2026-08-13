@@ -2,36 +2,25 @@
   <h1>Blotter</h1>
 </div>
 
-<app-filter-bar #filterBar (changed)="load()" />
-
-<div class="card ledger-card">
-  <div class="toolbar">
-    <span class="small muted mono" role="status">
-      @if (total()) {
-        {{ pageStart() }}–{{ pageEnd() }} / {{ total() }}
-      } @else { no matching rows }
-    </span>
-    <div class="row">
-      <button class="ghost" [disabled]="!hasPrev()" (click)="page(-1)">← Prev</button>
-      <button class="ghost" [disabled]="!hasNext()" (click)="page(1)">Next →</button>
+<app-filter-bar #filterBar (changed)="load()">
+  <div filterExtras class="aggregation-controls">
+    <span class="aggregation-label">Totals</span>
+    <div class="aggregation-actions">
+      <div class="seg" aria-label="Aggregation currency mode">
+        <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Normalised</button>
+        <button [class.on]="showNative()" (click)="setAggregation('native')">Native</button>
+      </div>
+      @if (!showNative()) {
+        <finto-select class="currency-select" ariaLabel="Aggregation currency"
+                      [options]="currencies()" [ngModel]="convertTo()"
+                      (ngModelChange)="setConvertTo($event)" />
+      }
     </div>
   </div>
+</app-filter-bar>
 
+<div class="card ledger-card">
   @if (scopeTotals().length) {
-    <div class="aggregation-controls">
-      <span class="aggregation-label">Totals</span>
-      <div class="aggregation-actions">
-        <div class="seg" aria-label="Aggregation currency mode">
-          <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Normalised</button>
-          <button [class.on]="showNative()" (click)="setAggregation('native')">Native</button>
-        </div>
-        @if (!showNative()) {
-          <finto-select class="currency-select" ariaLabel="Aggregation currency"
-                        [options]="currencies()" [ngModel]="convertTo()"
-                        (ngModelChange)="setConvertTo($event)" />
-        }
-      </div>
-    </div>
     @if (!showNative() && normalised(); as total) {
       <div class="scope normalised-scope">
         <div class="scope-item">
@@ -89,7 +78,12 @@
             @for (t of band.rows; track t.id) {
             <tr (click)="openFromRow($event, t)" (keydown.enter)="openFromKeyboard($event, t)"
                 (keydown.space)="openFromKeyboard($event, t)"
-                class="clickable" [class.on]="selected()?.id === t.id" tabindex="0"
+                (touchstart)="onRowTouchStart($event, t)" (touchmove)="onRowTouchMove($event, t)"
+                (touchend)="onRowTouchEnd()" (touchcancel)="onRowTouchEnd()"
+                class="clickable" [class.on]="selected()?.id === t.id"
+                [class.swiping]="swipeId() === t.id"
+                [style.--swipe.px]="swipeId() === t.id ? -swipeX() : 0"
+                tabindex="0"
                 role="button" [attr.aria-expanded]="selected()?.id === t.id"
                 [attr.aria-label]="(t.merchant || t.description) + ', ' + (t.booked | money)">
               <td class="date mono small nowrap">{{ t.date | shortDate }}</td>
@@ -154,6 +148,12 @@
                   <span class="muted small block">{{ t.native | money }}</span>
                 }
               </td>
+              <td class="swipe-action">
+                <button type="button" (click)="pick(t)"
+                        [attr.aria-label]="'Categorise ' + (t.merchant || t.description)">
+                  Categorise
+                </button>
+              </td>
             </tr>
             }
           } @empty {
@@ -162,8 +162,34 @@
         </tbody>
       </table>
     </div>
+
+    <!-- The sentinel sits one screen short of the end, so the next page is
+         already arriving by the time the last row is reached. -->
+    @if (hasMore()) {
+      <div #sentinel class="sentinel" role="status" aria-label="Loading more transactions">
+        <span class="mono">loading</span>
+      </div>
+    } @else if (total()) {
+      <p class="list-end mono">{{ total() }} transaction{{ total() === 1 ? '' : 's' }}</p>
+    }
   }
 </div>
+
+@if (picking(); as txn) {
+  <button type="button" class="picker-scrim" (click)="picking.set(null)"
+          aria-label="Cancel"></button>
+  <div class="picker" role="dialog" aria-modal="true" aria-label="Choose a category">
+    <p class="picker-head">
+      <span>{{ txn.merchant || txn.description }}</span>
+      <b class="mono" [class.neg]="txn.booked.amount < 0">{{ txn.booked | money: 'bare' }}</b>
+    </p>
+    <div class="picker-grid">
+      @for (c of categories(); track c) {
+        <button type="button" [class.on]="c === txn.category" (click)="applyCategory(c)">{{ c }}</button>
+      }
+    </div>
+  </div>
+}
 
 <!-- Detail drawer. Provenance is the point: every number here traces to a line
      in a file you downloaded, and you can read that line. -->

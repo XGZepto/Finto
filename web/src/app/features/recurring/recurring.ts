@@ -1,7 +1,8 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
+import { Refresh } from '../../core/refresh.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { InstallmentPlan, Money, Txn } from '../../core/models';
@@ -77,6 +78,7 @@ function daysBetween(a: string, b: string): number {
 })
 export class RecurringPage {
   private api = inject(Api);
+  private refreshes = inject(Refresh);
   private router = inject(Router);
   private preferences = inject(Preferences);
 
@@ -94,6 +96,8 @@ export class RecurringPage {
   selected = signal<Commitment | null>(null);
 
   constructor() {
+    // Token starts at 0, so this arms the reload without firing one now.
+    effect(() => { if (this.refreshes.token()) this.load(); });
     this.load();
   }
 

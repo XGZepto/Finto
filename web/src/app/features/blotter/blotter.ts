@@ -1,9 +1,8 @@
-import {
-  Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, inject, signal,
-} from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Api } from '../../core/api.service';
+import { Refresh } from '../../core/refresh.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { FilterState } from '../../core/filter-state';
 import { DetailKeyPipe, MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
@@ -31,6 +30,7 @@ import { FintoSelect } from '../../shared/finto-select';
 })
 export class BlotterPage implements OnDestroy {
   private api = inject(Api);
+  private refreshes = inject(Refresh);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private host = inject(ElementRef<HTMLElement>);
@@ -53,6 +53,24 @@ export class BlotterPage implements OnDestroy {
   }
   private filterObserver?: ResizeObserver;
 
+  /**
+   * Append when the tail comes into view.
+   *
+   * The scroll pane is the shell's content element, not the document, so the
+   * observer has to be told that — with the default root it would compare
+   * against the viewport, which never scrolls, and fire once forever.
+   */
+  @ViewChild('sentinel') set sentinel(el: ElementRef<HTMLElement> | undefined) {
+    this.tailObserver?.disconnect();
+    if (!el) return;
+    this.tailObserver = new IntersectionObserver(
+      (entries) => { if (entries.some((e) => e.isIntersecting)) this.loadMore(); },
+      { root: scrollPane(), rootMargin: '600px 0px' },
+    );
+    this.tailObserver.observe(el.nativeElement);
+  }
+  private tailObserver?: IntersectionObserver;
+
   loading = signal(true);
   rows = signal<Txn[]>([]);
   total = signal(0);
@@ -61,8 +79,12 @@ export class BlotterPage implements OnDestroy {
   showNative = signal(false);
   convertTo = signal('USD');
   currencies = signal<string[]>(['USD']);
-  limit = signal(100);
+  /* A phone shows ~8 rows, so 100 was 12 screens of scroll bought up front and
+     paid for on every filter change. 50 keeps the first paint quick and the
+     sentinel does the rest. */
+  limit = signal(50);
   offset = signal(0);
+  loadingMore = signal(false);
   sort = signal('date');
   direction = signal<'asc' | 'desc'>('desc');
 
@@ -110,14 +132,29 @@ export class BlotterPage implements OnDestroy {
     return bands;
   });
 
-  pageStart = computed(() => (this.total() ? this.offset() + 1 : 0));
-  pageEnd = computed(() => Math.min(this.offset() + this.limit(), this.total()));
-  hasPrev = computed(() => this.offset() > 0);
-  hasNext = computed(() => this.offset() + this.limit() < this.total());
+  hasMore = computed(() => this.rows().length < this.total());
+
+  /* Swipe-to-categorise ---------------------------------------------------
+     Correcting a category was: tap row, scroll the drawer past four blocks of
+     forensic detail, tap Edit, type, Save. On a phone that is the one thing you
+     actually do routinely, so it gets a gesture. */
+  swipeId = signal<string | null>(null);
+  swipeX = signal(0);
+  picking = signal<Txn | null>(null);
+  categories = signal<string[]>([]);
+  private touch = { x: 0, y: 0, axis: '' as '' | 'x' | 'y', moved: false };
+
+  /** Reveal width; the action button is exactly this wide. */
+  private readonly REVEAL = 96;
 
   constructor() {
+    // Token starts at 0, so this arms the reload without firing one now.
+    effect(() => { if (this.refreshes.token()) this.load(); });
     this.api.facets().subscribe({
-      next: (facets) => this.currencies.set([...new Set(['USD', ...facets.currencies])]),
+      next: (facets) => {
+        this.currencies.set([...new Set(['USD', ...facets.currencies])]);
+        this.categories.set(facets.categories ?? []);
+      },
     });
     this.route.queryParams.subscribe((params) => {
       this.filters.hydrate(params);
@@ -126,8 +163,22 @@ export class BlotterPage implements OnDestroy {
     });
   }
 
+  /** Start again from the top — a filter, sort or currency change. */
   load(): void {
+    this.offset.set(0);
     this.loading.set(true);
+    this.fetch(true);
+  }
+
+  /** Append the next page. Driven by the sentinel, never by a button. */
+  loadMore(): void {
+    if (this.loading() || this.loadingMore() || !this.hasMore()) return;
+    this.offset.set(this.rows().length);
+    this.loadingMore.set(true);
+    this.fetch(false);
+  }
+
+  private fetch(reset: boolean): void {
     this.api
       .transactions(this.filters.filter(), {
         limit: this.limit(),
@@ -138,13 +189,17 @@ export class BlotterPage implements OnDestroy {
       })
       .subscribe({
         next: (page) => {
-          this.rows.set(page.items);
+          this.rows.update((rows) => (reset ? page.items : [...rows, ...page.items]));
           this.total.set(page.total);
           this.scopeTotals.set(page.totals ?? []);
           this.normalised.set(page.normalised ?? null);
           this.loading.set(false);
+          this.loadingMore.set(false);
         },
-        error: () => this.loading.set(false),
+        error: () => {
+          this.loading.set(false);
+          this.loadingMore.set(false);
+        },
       });
   }
 
@@ -168,17 +223,66 @@ export class BlotterPage implements OnDestroy {
     this.load();
   }
 
-  page(delta: number): void {
-    const next = this.offset() + delta * this.limit();
-    if (next < 0 || next >= this.total()) return;
-    this.offset.set(next);
-    this.load();
-  }
-
   openFromRow(event: MouseEvent, txn: Txn): void {
     const target = event.target as HTMLElement;
     if (target.closest('button, a, input, select, textarea')) return;
+    // A swipe ends with a click event; opening the drawer on it would fight
+    // the gesture the user just made.
+    if (this.touch.moved) { this.touch.moved = false; return; }
+    if (this.swipeId()) { this.closeSwipe(); return; }
     this.open(txn, event.currentTarget as HTMLElement);
+  }
+
+  onRowTouchStart(event: TouchEvent, txn: Txn): void {
+    if (this.swipeId() && this.swipeId() !== txn.id) this.closeSwipe();
+    this.touch = { x: event.touches[0].clientX, y: event.touches[0].clientY, axis: '', moved: false };
+  }
+
+  onRowTouchMove(event: TouchEvent, txn: Txn): void {
+    const dx = event.touches[0].clientX - this.touch.x;
+    const dy = event.touches[0].clientY - this.touch.y;
+    // Decide the axis once, on the first movement that clears the noise floor,
+    // and stay on it — re-deciding mid-gesture is what makes a list feel like
+    // it is fighting your thumb.
+    if (!this.touch.axis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      this.touch.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    if (this.touch.axis !== 'x') return;
+    event.preventDefault();
+    this.touch.moved = true;
+    this.swipeId.set(txn.id);
+    // Leftward only, and it stiffens past the reveal so it cannot be flung.
+    const open = Math.max(0, -dx);
+    this.swipeX.set(open <= this.REVEAL ? open : this.REVEAL + (open - this.REVEAL) * 0.2);
+  }
+
+  onRowTouchEnd(): void {
+    if (this.touch.axis !== 'x') return;
+    this.swipeX.set(this.swipeX() > this.REVEAL / 2 ? this.REVEAL : 0);
+    if (!this.swipeX()) this.swipeId.set(null);
+  }
+
+  closeSwipe(): void {
+    this.swipeX.set(0);
+    this.swipeId.set(null);
+  }
+
+  /** Open the picker for the swiped row. */
+  pick(txn: Txn): void {
+    this.closeSwipe();
+    this.picking.set(txn);
+  }
+
+  /** Apply a category straight from the picker — no drawer, no edit mode. */
+  applyCategory(category: string): void {
+    const txn = this.picking();
+    if (!txn) return;
+    this.picking.set(null);
+    this.api.patchTransaction(txn.id, { category } as Partial<Txn>).subscribe({
+      next: (updated) => this.rows.update((rows) =>
+        rows.map((r) => (r.id === updated.id ? updated : r))),
+    });
   }
 
   openFromKeyboard(event: Event, txn: Txn): void {
@@ -298,6 +402,7 @@ export class BlotterPage implements OnDestroy {
 
   ngOnDestroy(): void {
     this.filterObserver?.disconnect();
+    this.tailObserver?.disconnect();
     const pane = scrollPane();
     if (pane) pane.style.overflowY = '';
     this.afterClose = null;

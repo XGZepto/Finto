@@ -44,7 +44,7 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
     .date-trigger .placeholder { color: var(--fg-4); }
     .date-trigger svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.2; }
     .open .date-trigger { border-color: var(--fg-3); background: var(--panel-2); }
-    .calendar { position: absolute; z-index: 82; top: calc(100% + 4px); left: 0; width: 264px; padding: 9px; border: 1px solid var(--line-2); background: var(--panel); box-shadow: 0 8px 22px #0005; }
+    .calendar { position: absolute; z-index: var(--z-popover); top: calc(100% + 4px); left: 0; width: 264px; padding: 9px; border: 1px solid var(--line-2); background: var(--panel); box-shadow: 0 8px 22px #0005; }
     header { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; margin-bottom: 7px; }
     header strong { color: var(--fg-2); font: 500 var(--t-label)/1 var(--mono); letter-spacing: .08em; text-align: center; text-transform: uppercase; }
     .month-step { padding: 0; border: 0; background: transparent; }

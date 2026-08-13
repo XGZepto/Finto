@@ -100,7 +100,48 @@
   --t-fig-lg: 27px;   /* drawer and detail figure */
   --t-hero: 34px;     /* the one number a page is about */
 
+  /* Motion. Three durations, two curves, and nothing else — a transition that
+     invents its own timing is what makes one panel feel unlike the next.
+     Entering uses --ease-out so it decelerates into place; anything that both
+     enters and leaves uses --ease so it is symmetric. */
+  --motion-fast: 120ms;  /* state: press, hover, colour */
+  --motion: 220ms;       /* position: sheets, drawers, disclosure */
+  --motion-slow: 320ms;  /* a full-height surface crossing the screen */
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease: cubic-bezier(.4, 0, .2, 1);
+
+  /* Layers, in the order they sit. Every z-index in the app comes from here.
+     Picking numbers per component is what put the filter sheet under the tab
+     bar and the refresh indicator under the search field: both were "high"
+     numbers that happened to lose. Note that a value only competes inside its
+     stacking context — an overlay nested in a positioned ancestor needs that
+     ancestor raised too, which is what --z-overlay is for. */
+  --z-band: 15;      /* day bands, pinned under a sticky bar */
+  --z-sticky: 20;    /* in-page sticky chrome: the filter bar */
+  --z-status: 25;    /* offline notice */
+  --z-pull: 30;      /* pull-to-refresh indicator */
+  --z-nav: 35;       /* the tab bar */
+  --z-scrim: 40;     /* dims whatever a sheet or drawer covers */
+  --z-overlay: 45;   /* the sheet or drawer itself, and its host */
+  --z-popover: 50;   /* a menu opened from inside an overlay */
+  --z-auth: 100;     /* the sign-in screen covers everything */
+
   color-scheme: dark;
+}
+
+/* Phone viewing distance is about half a desk monitor's, and the scale above is
+   drawn for the monitor. Every reading size moves up one notch on compact; the
+   figure sizes do not, because those are already large enough to read and
+   growing them would cost rows. */
+@media (max-width: 880px) {
+  :root {
+    --t-micro: 10px;
+    --t-label: 11px;
+    --t-meta: 12.5px;
+    --t-data: 13.5px;
+    --t-body: 15px;
+    --t-lede: 16px;
+  }
 }
 
 /* A paper terminal: same structure, inverted. Colours are darkened rather than
@@ -178,18 +219,6 @@
 
 :root[data-theme='dark'] { color-scheme: dark; }
 
-@media (max-width: 880px) {
-  .page-head { align-items: center; justify-content: space-between; }
-  .card { padding: var(--s3); }
-  /* 44px is the smallest target Apple's HIG accepts and the size a thumb
-     actually hits; 40px cleared WCAG 2.5.8 and little else. */
-  input, select, textarea, button, .btn { min-height: 44px; }
-  input, select, textarea { font-size: var(--t-data); }
-  .section-head { align-items: flex-start; }
-  .section-head > .row { width: 100%; }
-  .table-wrap { margin-inline: calc(-1 * var(--s3)); border-left: 0; border-right: 0; }
-  th, td { padding-inline: var(--s2); }
-}
 
 * { box-sizing: border-box; }
 
@@ -300,9 +329,16 @@ button, .btn {
   font-size: var(--t-data);
   letter-spacing: 0.06em;
   cursor: pointer;
-  transition: color 80ms linear, border-color 80ms linear, background 80ms linear;
+  transition: color var(--motion-fast) linear, border-color var(--motion-fast) linear, background var(--motion-fast) linear;
 }
-button:hover:not(:disabled), .btn:hover { color: var(--fg); border-color: var(--fg-3); }
+@media (hover: hover) {
+  button:hover:not(:disabled), .btn:hover { color: var(--fg); border-color: var(--fg-3); }
+}
+/* A touch screen has no hover to tell you a thing is live, and no cursor to
+   show the press landed. Without this a tap is silent until the next paint. */
+button:active:not(:disabled), .btn:active, [role='button']:active, a.tappable:active {
+  background: var(--panel-3);
+}
 button:disabled { opacity: 0.35; cursor: not-allowed; }
 button.primary { background: var(--fg); border-color: var(--fg); color: var(--bg); font-weight: 500; }
 button.primary:hover:not(:disabled) { background: #fff; border-color: #fff; color: var(--bg); }
@@ -332,7 +368,7 @@ input[type='checkbox'] {
   appearance: none; display: inline-grid; place-content: center; width: 16px; height: 16px;
   min-height: 16px; padding: 0; border: 1px solid var(--line-strong); background: var(--bg);
 }
-input[type='checkbox']::before { content: ''; width: 8px; height: 8px; background: var(--fg); transform: scale(0); transition: transform 80ms linear; }
+input[type='checkbox']::before { content: ''; width: 8px; height: 8px; background: var(--fg); transform: scale(0); transition: transform var(--motion-fast) linear; }
 input[type='checkbox']:checked::before { transform: scale(1); }
 input[type='date'] { color-scheme: inherit; }
 input[type='date']::-webkit-calendar-picker-indicator { opacity: .55; filter: grayscale(1); }
@@ -384,7 +420,7 @@ th {
 }
 td { padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); vertical-align: top; }
 tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover { background: var(--panel-2); }
+@media (hover: hover) { tbody tr:hover { background: var(--panel-2); } }
 
 th.num, td.num {
   text-align: right;
@@ -516,7 +552,7 @@ th.num, td.num {
   inset: 0;
   transform: translateX(-100%);
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fg) 5%, transparent), transparent);
-  animation: skeleton-scan 1.3s ease-in-out infinite;
+  animation: skeleton-scan 1.3s var(--ease) infinite;
 }
 @keyframes skeleton-scan { to { transform: translateX(100%); } }
 
@@ -524,4 +560,33 @@ th.num, td.num {
   .spinner::after { animation: none; }
   .skeleton::after { animation: none; }
   * { transition: none !important; }
+}
+
+/* --- Compact overrides ---------------------------------------------------
+   Last in the file on purpose. These override base rules, and CSS resolves a
+   tie on source order — sitting above the rules they target, every one of
+   them silently lost, including the 44px touch targets. */
+
+@media (max-width: 880px) {
+  /* A masthead with a rule under it costs ~130px of an 812px screen to repeat
+     what the tab bar already says. It becomes a header line: enough to orient
+     someone who deep-linked here, not enough to push content under the fold. */
+  .page-head {
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s2);
+    padding-bottom: 0;
+    margin-bottom: var(--s3);
+    border-bottom: 0;
+  }
+  .page-head h1 { font-size: var(--t-fig-sm); }
+  .card { padding: var(--s3); }
+  /* 44px is the smallest target Apple's HIG accepts and the size a thumb
+     actually hits; 40px cleared WCAG 2.5.8 and little else. */
+  input, select, textarea, button, .btn { min-height: 44px; }
+  input, select, textarea { font-size: var(--t-data); }
+  .section-head { align-items: flex-start; }
+  .section-head > .row { width: 100%; }
+  .table-wrap { margin-inline: calc(-1 * var(--s3)); border-left: 0; border-right: 0; }
+  th, td { padding-inline: var(--s2); }
 }

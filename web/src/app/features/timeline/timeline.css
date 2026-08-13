@@ -11,7 +11,7 @@
   left: 0;
   right: 0;
   cursor: pointer;
-  transition: opacity 80ms linear;
+  transition: opacity var(--motion-fast) linear;
 }
 .band:hover { opacity: 0.8; }
 

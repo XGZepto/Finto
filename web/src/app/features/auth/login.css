@@ -1,4 +1,4 @@
-.login-screen { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; overflow: hidden; padding: 22px; background: var(--bg); color: var(--fg); }
+.login-screen { position: fixed; z-index: var(--z-auth); inset: 0; display: grid; place-items: center; overflow: hidden; padding: 22px; background: var(--bg); color: var(--fg); }
 .ambient { position: absolute; inset: -40%; opacity: .14; pointer-events: none; }
 .grid-a { background-image: linear-gradient(var(--info-wash) 1px, transparent 1px), linear-gradient(90deg, var(--info-wash) 1px, transparent 1px); background-size: 48px 48px; transform: perspective(700px) rotateX(66deg) translateY(20%); mask-image: radial-gradient(circle, black, transparent 62%); }
 .grid-b { background: radial-gradient(circle at 50% 50%, var(--info-wash), transparent 40%); }
