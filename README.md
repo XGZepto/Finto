@@ -136,6 +136,14 @@ fallback.
 See [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for user administration,
 backups, maintenance, and deployment.
 
+The compact interaction and visual rules, QA matrix, and screenshot gallery are
+in [`docs/design/MOBILE_UX.md`](docs/design/MOBILE_UX.md). With the populated
+local app running, refresh the gallery and run responsive checks with:
+
+```bash
+npm --prefix web run capture:mobile
+```
+
 ## Taxonomy maintenance
 
 Categories, tags, merchants, and their aliases are stored in managed taxonomy

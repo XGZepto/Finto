@@ -2,8 +2,17 @@
 
 ## Unreleased
 
+- Complete the compact mobile uplift with surface-led cards, a stronger ledger
+  row hierarchy, human date bands, and exception-only currency labels.
+- Lead Summary with month-to-date spend versus the same elapsed period last
+  month; move net worth and its asset/liability context to Accounts.
+- Add confidence-gated category suggestions, one-tap confirmation, review-state
+  indicators, and a filtered review-progress denominator.
+- Present compact selects and calendars as bottom sheets with 44px targets.
+- Animate first-reveal charts and route changes while honoring reduced motion.
+- Add repeatable 390×844 screenshot capture plus compact/desktop UI checks.
 - Add a spacing and type scale, and draw component padding and rhythm from it.
-- Lead Summary with net worth and its movement over a selectable window.
+- Place net worth with its asset/liability context on Accounts.
 - Add a net-worth-over-time series evaluated through the positions rollup.
 - Show asset and liability composition with amounts, replacing the Positions card.
 - Band blotter rows by day, each carrying its own total.

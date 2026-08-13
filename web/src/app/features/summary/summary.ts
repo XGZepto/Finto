@@ -7,11 +7,10 @@ import { MoneyPipe } from '../../core/money.pipe';
 import { Money, StatementFreshness, SummaryRow, TotalRow } from '../../core/models';
 import { FintoSelect } from '../../shared/finto-select';
 import { FintoPills } from '../../shared/finto-pills';
-import { FintoStat } from '../../shared/finto-stat';
-import { FintoTimeseries, SeriesPoint } from '../../shared/finto-timeseries';
-import { FintoDonut, FintoShareBar, Slice } from '../../shared/finto-viz';
+import { FintoDonut, Slice } from '../../shared/finto-viz';
 import { Preferences } from '../../core/preferences.service';
 import { FilterState } from '../../core/filter-state';
+import { forkJoin } from 'rxjs';
 
 /**
  * Summary.
@@ -27,8 +26,7 @@ import { FilterState } from '../../core/filter-state';
  */
 @Component({
   selector: 'app-summary',
-  imports: [FormsModule, MoneyPipe, FintoSelect, FintoStat, FintoShareBar, FintoDonut,
-            FintoTimeseries, FintoPills],
+  imports: [FormsModule, MoneyPipe, FintoSelect, FintoDonut, FintoPills],
   templateUrl: './summary.html',
   styleUrl: './summary.css',
 })
@@ -57,21 +55,10 @@ export class SummaryPage {
   rows = signal<SummaryRow[]>([]);
   monthRows = signal<SummaryRow[]>([]);
   totals = signal<TotalRow[]>([]);
-  netWorth = signal<Money | null>(null);
-  positionTypes = signal<Array<{ account_type: string; balance: Money }>>([]);
-  headline = signal<{ net: Money; spend: Money; income: Money } | null>(null);
+  monthToDate = signal<{ net: Money; spend: Money; income: Money } | null>(null);
+  previousMonthToDate = signal<{ net: Money; spend: Money; income: Money } | null>(null);
   freshness = signal<StatementFreshness | null>(null);
   readonly reportingCurrencies = ['USD', 'HKD', 'GBP', 'EUR', 'JPY', 'CNY', 'SGD', 'AUD', 'CAD'];
-
-  positionChart = computed(() => {
-    const rows = this.positionTypes().filter((row) => row.balance.amount !== 0);
-    const peak = Math.max(1, ...rows.map((row) => Math.abs(row.balance.amount)));
-    return rows
-      .map((row) => ({ ...row, label: this.humanize(row.account_type),
-        width: `${Math.max(1.5, Math.abs(row.balance.amount) / peak * 50)}%` }))
-      .sort((a, b) => Math.abs(b.balance.amount) - Math.abs(a.balance.amount));
-  });
-
 
   /**
    * The same buckets collapsed into one currency and ranked by spend.
@@ -122,31 +109,11 @@ export class SummaryPage {
     currency: this.convertTo(),
   }));
 
-  /** How far back the net worth chart reaches, in months per pill. */
+  /** How far back the cash-flow chart reaches, in months per pill. */
   readonly rangeOptions = ['3M', '6M', '1Y', '2Y'];
   readonly rangeMonths: Record<string, number> = { '3M': 3, '6M': 6, '1Y': 12, '2Y': 24 };
   range = signal(sessionStorage.getItem('finto.summary.range') ?? '1Y');
   seriesMonths = computed(() => this.rangeMonths[this.range()] ?? 12);
-  netWorthPoints = signal<Array<{ bucket: string; as_of: string; balance: Money }>>([]);
-
-  series = computed<SeriesPoint[]>(() =>
-    this.netWorthPoints().map((p) => ({ label: p.bucket, value: p.balance.amount })));
-
-  /** Movement across the charted window, which is what the pills select. */
-  netWorthChange = computed<Money | null>(() => {
-    const pts = this.netWorthPoints();
-    if (pts.length < 2) return null;
-    const first = pts[0].balance;
-    const last = pts[pts.length - 1].balance;
-    return { amount: last.amount - first.amount, currency: last.currency };
-  });
-
-  netWorthPercent = computed<number | null>(() => {
-    const pts = this.netWorthPoints();
-    if (pts.length < 2 || !pts[0].balance.amount) return null;
-    const first = pts[0].balance.amount;
-    return ((pts[pts.length - 1].balance.amount - first) / Math.abs(first)) * 100;
-  });
 
   setRange(value: string): void {
     this.range.set(value);
@@ -159,29 +126,9 @@ export class SummaryPage {
     const start = new Date();
     start.setMonth(start.getMonth() - this.seriesMonths() + 1);
     start.setDate(1);
-    return { from: start.toISOString().slice(0, 10) };
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return { from: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-01` };
   }
-
-  /** What the net worth is made of, largest holding first. */
-  assetSlices = computed<Slice[]>(() =>
-    this.positionTypes()
-      .filter((row) => row.balance.amount > 0)
-      .map((row) => ({
-        label: this.humanize(row.account_type),
-        value: row.balance.amount,
-        display: this.money.transform(row.balance, 'bare'),
-      }))
-      .sort((a, b) => b.value - a.value));
-
-  liabilitySlices = computed<Slice[]>(() =>
-    this.positionTypes()
-      .filter((row) => row.balance.amount < 0)
-      .map((row) => ({
-        label: this.humanize(row.account_type),
-        value: -row.balance.amount,
-        display: this.money.transform(row.balance, 'bare'),
-      }))
-      .sort((a, b) => b.value - a.value));
 
   /** Where the money went, on whichever dimension is selected. */
   spendSlices = computed<Slice[]>(() =>
@@ -189,9 +136,21 @@ export class SummaryPage {
 
   /** Kept out of the ledger as a stored figure: it is a ratio of two others. */
   savingsRate = computed(() => {
-    const h = this.headline();
+    const h = this.monthToDate();
     if (!h || h.income.amount <= 0) return null;
     return ((h.income.amount - Math.abs(h.spend.amount)) / h.income.amount) * 100;
+  });
+
+  spendComparison = computed(() => {
+    const current = this.monthToDate();
+    const previous = this.previousMonthToDate();
+    if (!current) return null;
+    const spent = Math.abs(current.spend.amount);
+    const before = Math.abs(previous?.spend.amount ?? 0);
+    return {
+      spend: { amount: spent, currency: current.spend.currency },
+      percent: before ? ((spent - before) / before) * 100 : null,
+    };
   });
 
 
@@ -257,17 +216,10 @@ export class SummaryPage {
 
   /** The scale the bars are drawn against. */
   trendPeak = computed(() => {
-    if (this.convertTo()) {
-      return { amount: Math.max(0, ...this.trend().map(
-        (item) => Math.max(Math.abs(item.row.spend.amount), item.row.income.amount))),
-        currency: this.convertTo() };
-    }
-    const ccy = this.shownCurrency();
-    const rows = this.rows().filter((r) => r.currency === ccy);
     return {
-      amount: Math.max(0, ...rows.map(
-        (r) => Math.max(Math.abs(r.spend.amount), r.income.amount))),
-      currency: ccy,
+      amount: Math.max(0, ...this.trend().map(
+        (item) => Math.max(Math.abs(item.row.spend.amount), item.row.income.amount))),
+      currency: this.convertTo() || this.shownCurrency(),
     };
   });
 
@@ -322,23 +274,38 @@ export class SummaryPage {
     this.api.summary('month', period, convert).subscribe({
       next: (res) => {
         this.monthRows.set(res.rows);
-        this.headline.set(res.normalised?.total ?? null);
       },
     });
 
-    this.api.positions(convert).subscribe({
-      next: (res) => {
-        this.netWorth.set(res.normalised?.net_worth ?? null);
-        this.positionTypes.set(res.normalised?.by_type ?? []);
+    const comparison = this.comparisonFilters();
+    forkJoin({
+      current: this.api.summary('month', comparison.current, convert),
+      previous: this.api.summary('month', comparison.previous, convert),
+    }).subscribe({
+      next: ({ current, previous }) => {
+        this.monthToDate.set(current.normalised?.total ?? null);
+        this.previousMonthToDate.set(previous.normalised?.total ?? null);
       },
     });
+  }
 
-    if (convert) {
-      this.api.netWorthSeries(convert, this.seriesMonths()).subscribe({
-        next: (res) => this.netWorthPoints.set(res.points),
-        error: () => this.netWorthPoints.set([]),
-      });
-    }
+  private comparisonFilters(): {
+    current: { from: string; to: string };
+    previous: { from: string; to: string };
+  } {
+    const today = new Date();
+    const currentStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const previousStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const previousEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+    previousEnd.setDate(Math.min(today.getDate(), previousEnd.getDate()));
+    const iso = (date: Date) => {
+      const pad = (value: number) => String(value).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    };
+    return {
+      current: { from: iso(currentStart), to: iso(today) },
+      previous: { from: iso(previousStart), to: iso(previousEnd) },
+    };
   }
 
   drillAccount(id: string): void {

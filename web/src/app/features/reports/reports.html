@@ -32,7 +32,7 @@
       <span><label>In</label><b class="pos">{{ h.income | money }}</b></span>
       <span>
         <label>Out</label>
-        <b class="neg">{{ h.spend | money }}</b>
+        <b>{{ h.spend | money }}</b>
         @if (spendDelta(); as d) {
           <em class="delta" [class.neg]="d.amount.amount > 0" [class.pos]="d.amount.amount < 0">
             {{ d.amount.amount > 0 ? '↑' : '↓' }}{{ d.percent < 0 ? -d.percent.toFixed(1) : d.percent.toFixed(1) }}%
@@ -89,7 +89,7 @@
           <span class="name">{{ band.label }}</span>
           <span class="bar-track"><span class="bar-fill" [style.width]="band.width"
                                         [style.background]="band.colour"></span></span>
-          <span class="amount mono neg">{{ band.amount | money: 'bare' }}</span>
+          <span class="amount mono">{{ band.amount | money: 'bare' }}</span>
           <span class="share mono">{{ (band.share * 100).toFixed(1) }}%</span>
         </button>
       }

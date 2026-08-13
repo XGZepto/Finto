@@ -211,6 +211,11 @@ import { FintoDate } from './finto-date';
         transition: transform var(--motion-slow) var(--ease), opacity var(--motion-fast) linear;
       }
       .advanced.open { transform: translateY(0); margin-top: 0; }
+      /* A nested control becomes the active sheet. Dropping the transform
+         restores the viewport as its fixed-position containing block, and
+         visible overflow keeps the nested header and scrim intact. */
+      .advanced.open:has(finto-date.sheet-open),
+      .advanced.open:has(finto-select.sheet-open) { transform: none; overflow: visible; }
       /* A sheet over the ledger has to take the taps the ledger would have got,
          and be dismissable by the gesture people already use for a sheet. */
       .sheet-scrim {

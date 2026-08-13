@@ -6,7 +6,7 @@
   <div class="card block">
     <h3>Outstanding</h3>
     @for (o of outstanding(); track o.currency) {
-      <div class="figure neg">{{ o | money }}</div>
+      <div class="figure">{{ o | money }}</div>
     } @empty {
       <div class="figure none">nothing owed</div>
     }
@@ -15,7 +15,7 @@
   <div class="card block">
     <h3>Committed monthly</h3>
     @for (m of monthly(); track m.currency) {
-      <div class="figure neg">{{ m | money }}</div>
+      <div class="figure">{{ m | money }}</div>
     } @empty {
       <div class="figure none">—</div>
     }
@@ -75,8 +75,8 @@
                   {{ p.settled_early ? 'settled ' + p.paid_count + '/' + p.term_months : p.paid_count + '/' + p.term_months }}
                 </span>
               </td>
-              <td data-label="Per month" class="num neg">{{ p.per_installment | money: 'bare' }}</td>
-              <td data-label="Outstanding" class="num neg">{{ p.outstanding | money: 'bare' }}</td>
+              <td data-label="Per month" class="num">{{ p.per_installment | money: 'bare' }}</td>
+              <td data-label="Outstanding" class="num">{{ p.outstanding | money: 'bare' }}</td>
               <td data-label="Status">
                 <span class="tag" [class.good]="p.status === 'completed'">{{ p.status }}</span>
               </td>
@@ -98,7 +98,7 @@
                           <li [class.due]="!s.paid">
                             <span class="seq mono">{{ s.settlement ? '↳' : s.seq }}</span>
                             <span class="date mono">{{ s.date | shortDate }}</span>
-                            <span class="amt mono" [class.neg]="s.paid">{{ s.amount | money: 'bare' }}</span>
+                            <span class="amt mono">{{ s.amount | money: 'bare' }}</span>
                             <span class="state">{{ s.settlement ? 'settled' : (s.paid ? 'charged' : 'projected') }}</span>
                           </li>
                         }

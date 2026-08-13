@@ -6,7 +6,7 @@ import { Refresh } from '../../core/refresh.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { FilterState } from '../../core/filter-state';
 import { DetailKeyPipe, MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { Money, TotalRow, Txn } from '../../core/models';
+import { CategorySuggestion, Money, TotalRow, Txn } from '../../core/models';
 import { scrollPane } from '../../core/scroll';
 import { FilterBar } from '../../shared/filter-bar';
 import { FintoIcon } from '../../shared/finto-icon';
@@ -75,6 +75,7 @@ export class BlotterPage implements OnDestroy {
   rows = signal<Txn[]>([]);
   total = signal(0);
   scopeTotals = signal<TotalRow[]>([]);
+  reviewProgress = signal({ total: 0, unreviewed: 0, confirmed: 0, flagged: 0 });
   normalised = signal<{ net: Money; spend: Money; income: Money; unconvertible_currencies: string[] } | null>(null);
   showNative = signal(false);
   convertTo = signal('USD');
@@ -123,7 +124,7 @@ export class BlotterPage implements OnDestroy {
     }
     for (const band of bands) {
       const currencies = new Set(band.rows.map((r) => r.booked.currency));
-      if (currencies.size !== 1) continue;
+      if (band.rows.length < 2 || currencies.size !== 1) continue;
       band.total = {
         amount: band.rows.reduce((sum, r) => sum + r.booked.amount, 0),
         currency: band.rows[0].booked.currency,
@@ -141,6 +142,8 @@ export class BlotterPage implements OnDestroy {
   swipeId = signal<string | null>(null);
   swipeX = signal(0);
   picking = signal<Txn | null>(null);
+  suggestion = signal<CategorySuggestion | null>(null);
+  suggestionLoading = signal(false);
   categories = signal<string[]>([]);
   private touch = { x: 0, y: 0, axis: '' as '' | 'x' | 'y', moved: false };
 
@@ -192,6 +195,7 @@ export class BlotterPage implements OnDestroy {
           this.rows.update((rows) => (reset ? page.items : [...rows, ...page.items]));
           this.total.set(page.total);
           this.scopeTotals.set(page.totals ?? []);
+          this.reviewProgress.set(page.review ?? { total: 0, unreviewed: 0, confirmed: 0, flagged: 0 });
           this.normalised.set(page.normalised ?? null);
           this.loading.set(false);
           this.loadingMore.set(false);
@@ -272,16 +276,43 @@ export class BlotterPage implements OnDestroy {
   pick(txn: Txn): void {
     this.closeSwipe();
     this.picking.set(txn);
+    this.suggestion.set(null);
+    this.suggestionLoading.set(true);
+    this.api.categorySuggestion(txn.id).subscribe({
+      next: (result) => {
+        if (this.picking()?.id === txn.id) this.suggestion.set(result.suggestion);
+        this.suggestionLoading.set(false);
+      },
+      error: () => this.suggestionLoading.set(false),
+    });
   }
 
   /** Apply a category straight from the picker — no drawer, no edit mode. */
-  applyCategory(category: string): void {
+  applyCategory(category: string, subcategory?: string, merchant?: string | null): void {
     const txn = this.picking();
     if (!txn) return;
     this.picking.set(null);
-    this.api.patchTransaction(txn.id, { category } as Partial<Txn>).subscribe({
-      next: (updated) => this.rows.update((rows) =>
-        rows.map((r) => (r.id === updated.id ? updated : r))),
+    this.api.patchTransaction(txn.id, {
+      category,
+      subcategory: subcategory ?? undefined,
+      merchant: merchant ?? undefined,
+      review_state: 'confirmed',
+    } as Partial<Txn>).subscribe({
+      next: (updated) => {
+        const leavesQueue = !!this.filters.filter().uncategorisedOnly;
+        this.rows.update((rows) => leavesQueue
+          ? rows.filter((r) => r.id !== updated.id)
+          : rows.map((r) => (r.id === updated.id ? updated : r)));
+        if (leavesQueue) this.total.update((total) => Math.max(0, total - 1));
+        if (txn.review_state === 'unreviewed') {
+          this.reviewProgress.update((review) => ({
+            ...review,
+            total: leavesQueue ? Math.max(0, review.total - 1) : review.total,
+            unreviewed: Math.max(0, review.unreviewed - 1),
+            confirmed: leavesQueue ? review.confirmed : review.confirmed + 1,
+          }));
+        }
+      },
     });
   }
 

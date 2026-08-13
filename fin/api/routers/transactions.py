@@ -76,6 +76,28 @@ def get_transaction(txn_id: str, conn=Depends(get_conn)) -> dict:
     return found
 
 
+@router.get("/transactions/{txn_id}/category-suggestion")
+def category_suggestion(txn_id: str, conn=Depends(get_conn)) -> dict:
+    """Return one cached or model-assisted guess without applying it."""
+    row = conn.execute(
+        "SELECT description_norm,description_raw FROM txn WHERE id=%s", (txn_id,)
+    ).fetchone()
+    if row is None:
+        raise HTTPException(404, "no such transaction")
+
+    from ...llm.categorize import CONFIDENCE_FLOOR, categorize_merchants
+    from ...llm.provider import build_provider
+
+    description = row["description_norm"] or row["description_raw"]
+    provider = build_provider(conn)
+    result = categorize_merchants(conn, provider, [description]).get(description)
+    suggestion = result if result and result.get("confidence", 0) >= CONFIDENCE_FLOOR else None
+    return {
+        "available": provider.name != "null" or suggestion is not None,
+        "suggestion": suggestion,
+    }
+
+
 @router.patch("/transactions/{txn_id}")
 def patch_transaction(txn_id: str, patch: TransactionPatch,
                       conn=Depends(get_conn)) -> dict:

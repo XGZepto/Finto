@@ -57,6 +57,7 @@ export interface Txn {
   posted_date: string | null;
   account_id: string;
   account_name: string;
+  account_currency: string;
   institution_id: string;
   card_id: string | null;
   cardholder_name: string | null;
@@ -117,9 +118,18 @@ export interface Page<T> {
     income: Money;
     unconvertible_currencies: string[];
   };
+  review?: { total: number; unreviewed: number; confirmed: number; flagged: number };
   limit: number;
   offset: number;
   items: T[];
+}
+
+export interface CategorySuggestion {
+  category: string;
+  subcategory: string;
+  merchant: string | null;
+  tags: string[];
+  confidence: number;
 }
 
 export interface SummaryRow {

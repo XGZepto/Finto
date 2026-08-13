@@ -766,6 +766,7 @@ def transactions(conn, *, filters: dict | None = None, limit: int = 100,
 
     sql = f"""
         SELECT t.*, a.display_name AS account_name, a.institution_id,
+               a.primary_currency AS account_currency,
                c.cardholder_name, c.last4
         FROM txn t
         JOIN account a ON a.id = t.account_id
@@ -797,7 +798,23 @@ def transactions(conn, *, filters: dict | None = None, limit: int = 100,
         # The filtered set, not the page: the question a filter asks is what
         # the matching rows come to.
         "totals": totals(conn, filters=filters),
+        "review": review_totals(conn, filters=filters),
     }
+
+
+def review_totals(conn, *, filters: dict | None = None) -> dict:
+    """Review-state denominator for the same rows the ledger is showing."""
+    where, params = build_where(filters)
+    row = conn.execute(
+        f"""SELECT COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE t.review_state='unreviewed') AS unreviewed,
+                   COUNT(*) FILTER (WHERE t.review_state='confirmed') AS confirmed,
+                   COUNT(*) FILTER (WHERE t.review_state='flagged') AS flagged
+              FROM txn t JOIN account a ON a.id=t.account_id
+             WHERE {where}""",
+        params,
+    ).fetchone()
+    return {key: int(row[key] or 0) for key in ("total", "unreviewed", "confirmed", "flagged")}
 
 
 def _txn_dict(r, details: dict[str, str], tags: list[str] | None = None) -> dict:
@@ -807,6 +824,7 @@ def _txn_dict(r, details: dict[str, str], tags: list[str] | None = None) -> dict
         "posted_date": r["posted_date"],
         "account_id": r["account_id"],
         "account_name": r["account_name"],
+        "account_currency": r["account_currency"],
         "institution_id": r["institution_id"],
         "card_id": r["card_id"],
         "cardholder_name": r["cardholder_name"],
@@ -843,6 +861,7 @@ def transaction_detail(conn, txn_id: str) -> dict | None:
     """One transaction plus its provenance — the raw source row it came from."""
     r = conn.execute(
         "SELECT t.*, a.display_name AS account_name, a.institution_id, "
+        "       a.primary_currency AS account_currency, "
         "       c.cardholder_name, c.last4 "
         "FROM txn t JOIN account a ON a.id=t.account_id "
         "LEFT JOIN card c ON c.id=t.card_id WHERE t.id=%s", (txn_id,)).fetchone()

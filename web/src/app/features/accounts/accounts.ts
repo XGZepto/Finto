@@ -4,7 +4,7 @@ import { FintoIcon } from '../../shared/finto-icon';
 import { Api } from '../../core/api.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { Account, Card, Flows, Position, SummaryRow, Txn } from '../../core/models';
+import { Account, Card, Flows, Money, Position, SummaryRow, Txn } from '../../core/models';
 import { forkJoin } from 'rxjs';
 import { Preferences } from '../../core/preferences.service';
 
@@ -30,6 +30,9 @@ export class AccountsPage {
   accounts = signal<Account[]>([]);
   cards = signal<Card[]>([]);
   positions = signal<Position[]>([]);
+  netWorth = signal<Money | null>(null);
+  positionTypes = signal<Array<{ account_type: string; balance: Money }>>([]);
+  unconvertible = signal<string[]>([]);
   flows = signal<Flows>({ internal: [], external: [], external_accounts: [], normalised: { currency: 'USD', unconvertible_currencies: [], external_accounts: [], internal: [], external_nodes: [] } });
   selected = signal<string | null>(null);
   detailLoading = signal(false);
@@ -49,15 +52,36 @@ export class AccountsPage {
     this.api.accounts().subscribe({ next: (r) => this.accounts.set(r.accounts) });
     this.api.cards().subscribe({ next: (r) => this.cards.set(r.cards) });
     effect(() => {
-      this.api.flows({}, this.preferences.baseCurrency()).subscribe({
+      const currency = this.preferences.baseCurrency();
+      this.api.flows({}, currency).subscribe({
         next: (r) => this.flows.set(r),
       });
-    });
-    this.api.positions().subscribe({
-      next: (r) => { this.positions.set(r.positions); this.loading.set(false); },
-      error: () => this.loading.set(false),
+      this.api.positions(currency).subscribe({
+        next: (r) => {
+          this.positions.set(r.positions);
+          this.netWorth.set(r.normalised?.net_worth ?? null);
+          this.positionTypes.set(r.normalised?.by_type ?? []);
+          this.unconvertible.set(r.normalised?.unconvertible_currencies ?? []);
+          this.loading.set(false);
+        },
+        error: () => this.loading.set(false),
+      });
     });
   }
+
+  assets = computed<Money | null>(() => {
+    const worth = this.netWorth();
+    if (!worth) return null;
+    return { amount: this.positionTypes().filter((row) => row.balance.amount > 0)
+      .reduce((sum, row) => sum + row.balance.amount, 0), currency: worth.currency };
+  });
+
+  liabilities = computed<Money | null>(() => {
+    const worth = this.netWorth();
+    if (!worth) return null;
+    return { amount: this.positionTypes().filter((row) => row.balance.amount < 0)
+      .reduce((sum, row) => sum + row.balance.amount, 0), currency: worth.currency };
+  });
 
   rows = computed<AccountRow[]>(() => {
     const held = new Map<string, Position[]>();

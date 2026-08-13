@@ -67,8 +67,7 @@
                   <span class="tag">{{ side.role }}</span>
                   <span class="mono small muted">{{ side.account }}</span>
                 </div>
-                <div class="pane-amount mono"
-                     [class.neg]="side.amount.amount < 0" [class.pos]="side.amount.amount > 0">
+                <div class="pane-amount mono" [class.pos]="side.amount.amount > 0">
                   {{ side.amount | money }}
                 </div>
                 <div class="pane-date mono small">{{ side.date | shortDate }}</div>
@@ -94,7 +93,7 @@
                   <tr>
                     <td class="mono">{{ t.txn_date | shortDate }}</td>
                     <td>{{ t.description_raw }}</td>
-                    <td class="num neg">
+                    <td class="num">
                       {{ asMoney(t.amount_booked, t.currency_booked) | money: 'bare' }}
                     </td>
                   </tr>

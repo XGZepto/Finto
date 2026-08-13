@@ -7,6 +7,7 @@ let instances = 0;
 
 @Component({
   selector: 'finto-select',
+  host: { '[class.sheet-open]': 'open()' },
   template: `
     <div class="select-root" [class.open]="open()" [class.up]="dropUp()">
       <button type="button" class="select-trigger" role="combobox"
@@ -18,7 +19,9 @@ let instances = 0;
         <span>{{ selectedLabel() }}</span><i aria-hidden="true"></i>
       </button>
       @if (open()) {
+        <button type="button" class="select-scrim" aria-label="Close {{ ariaLabel }}" (click)="close()"></button>
         <div class="select-menu" role="listbox" [id]="id + '-list'" [attr.aria-label]="ariaLabel">
+          <div class="sheet-head"><strong>{{ ariaLabel }}</strong><button type="button" aria-label="Close" (click)="close()">×</button></div>
           @for (option of options; track optionValue(option); let index = $index) {
             <button type="button" role="option" class="select-option" [id]="id + '-opt-' + index"
                     [class.active]="index === activeIndex()"
@@ -52,6 +55,7 @@ let instances = 0;
       padding: 4px; border: 1px solid var(--line-2); background: var(--panel);
       box-shadow: 0 8px 22px #0005;
     }
+    .select-scrim, .sheet-head { display: none; }
     /* Opens upward near the foot of the screen, so it never lands under the
        fixed mobile nav (which reads as the nav vanishing behind it). */
     .up .select-menu { top: auto; bottom: calc(100% + 4px); }
@@ -64,8 +68,25 @@ let instances = 0;
     .select-option.active { background: var(--panel-3); color: var(--fg); }
     .select-option.selected { color: var(--fg); }
     .select-option b { color: var(--pos); font-weight: 500; }
-    @media (max-width: 880px) { .select-trigger, .select-option { min-height: 40px; } }
-    @media (prefers-reduced-motion: reduce) { .select-trigger i { transition: none; } }
+    @media (max-width: 880px) {
+      .select-trigger, .select-option { min-height: 44px; }
+      .select-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: #000a; animation: sheet-fade var(--motion-fast) var(--ease-out) both; }
+      .select-menu, .up .select-menu {
+        position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; width: 100%; max-width: none;
+        max-height: min(70dvh, 620px); padding: 0 12px calc(12px + env(safe-area-inset-bottom));
+        border: 0; border-top: 1px solid var(--line-2); background: var(--panel);
+        box-shadow: 0 -16px 42px #0008; animation: sheet-up var(--motion-base) var(--ease-out) both;
+      }
+      .sheet-head { position: sticky; z-index: 1; top: 0; display: flex; justify-content: space-between; align-items: center; min-height: 54px; margin: 0 -12px 4px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+      .sheet-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 32px; height: 3px; border-radius: 3px; background: var(--fg-4); transform: translateX(-50%); opacity: .6; }
+      .sheet-head strong { font: 550 var(--t-data)/1 var(--sans); }
+      .sheet-head button { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--fg-3); font-size: 24px; }
+      .select-option { padding-inline: 4px; border-bottom: 1px solid var(--line); }
+      .select-option:last-child { border-bottom: 0; }
+      @keyframes sheet-up { from { transform: translateY(100%); } }
+      @keyframes sheet-fade { from { opacity: 0; } }
+    }
+    @media (prefers-reduced-motion: reduce) { .select-trigger i { transition: none; } .select-menu, .select-scrim { animation: none; } }
   `],
   providers: [{
     provide: NG_VALUE_ACCESSOR,
@@ -138,6 +159,8 @@ export class FintoSelect implements ControlValueAccessor {
     this.onTouched();
     this.open.set(false);
   }
+
+  close(): void { this.open.set(false); this.onTouched(); }
 
   onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') { this.open.set(false); return; }

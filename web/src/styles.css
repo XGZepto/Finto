@@ -6,14 +6,14 @@
    Finto design system.
 
    The chrome is grey, black and white: panels, rules, nav, labels. Colour is
-   reserved for the things a financial interface has to encode — the sign of a
-   number, the state of a check, and series in a chart. Keeping the frame neutral
+   reserved for the things a financial interface has to encode — state, trend,
+   and related series in a chart. Keeping the frame neutral
    is what lets a red figure read as red at a glance rather than competing with a
    coloured sidebar and three coloured buttons.
 
    Square by intent. No rounded corners, hairline rules instead of shadows, and a
-   monospace face for anything a person reads as data: figures, codes, dates,
-   keys, labels. Prose stays in a proportional face, because a paragraph set in
+   monospace face for anything a person reads as data: figures, codes, dates and
+   keys. Labels and prose stay in a proportional face, because language set in
    mono is a chore to read. That split is the whole typographic system.
 --------------------------------------------------------------------------- */
 
@@ -38,14 +38,14 @@
   --line-strong: #5f656c;
 
   /* Four steps, each ≥4.5:1 on bg, panel and panel-2, each ~1.3:1 from its
-     neighbour. --fg-4 carries every uppercase label and table header in the
+     neighbour. --fg-4 carries supporting labels and table headers in the
      app, so it is the one that decides whether the labelling reads at all. */
   --fg: #e9eaec;
   --fg-2: #a4aab1;
   --fg-3: #8d939a;
   --fg-4: #7b8188;
 
-  /* Semantic. Money out, money in, needs attention, broken, informational. */
+  /* Semantic. Adverse, positive, needs attention, broken, informational. */
   --neg: #f0736c;
   --pos: #4ec98b;
   --warn: #e0aa2a;
@@ -89,8 +89,8 @@
      both at one size leaves the ranking to the reader. Ten steps, and a literal
      px font-size anywhere else is a bug — that is what let eleven sizes
      accumulate between 8px and 13.5px. */
-  --t-micro: 9.5px;   /* uppercase micro labels, chart ticks */
-  --t-label: 10.5px;  /* uppercase labels, table headers, tags */
+  --t-micro: 9.5px;   /* chart ticks and dense metadata */
+  --t-label: 10.5px;  /* labels, table headers, tags */
   --t-meta: 11.5px;   /* supporting text under a primary line */
   --t-data: 12.5px;   /* mono figures in rows and tables */
   --t-body: 14px;     /* prose and form values */
@@ -378,10 +378,10 @@ input[type='search']::-webkit-search-cancel-button { appearance: none; }
 label {
   display: block;
   margin-bottom: var(--s1);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: var(--t-label);
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   color: var(--fg-4);
 }
 
@@ -562,6 +562,21 @@ th.num, td.num {
   * { transition: none !important; }
 }
 
+router-outlet + * { view-transition-name: page-content; }
+/* view-transition-name creates a stacking context. Lift the routed page while
+   it owns an overlay so its sheet can cover the sibling tab bar. */
+router-outlet + *:has(.select-root.open, .date-root.open, .filter-bar.sheet-open, .picker, .drawer.open) {
+  position: relative;
+  z-index: var(--z-overlay);
+}
+::view-transition-old(page-content) { animation: page-out var(--motion-fast) var(--ease) both; }
+::view-transition-new(page-content) { animation: page-in var(--motion-base) var(--ease-out) both; }
+@keyframes page-out { to { opacity: 0; transform: translateY(-3px); } }
+@keyframes page-in { from { opacity: 0; transform: translateY(7px); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(page-content), ::view-transition-new(page-content) { animation: none; }
+}
+
 /* --- Compact overrides ---------------------------------------------------
    Last in the file on purpose. These override base rules, and CSS resolves a
    tie on source order — sitting above the rules they target, every one of
@@ -580,13 +595,13 @@ th.num, td.num {
     border-bottom: 0;
   }
   .page-head h1 { font-size: var(--t-fig-sm); }
-  .card { padding: var(--s3); }
+  .card { padding: var(--s3); border: 0; }
   /* 44px is the smallest target Apple's HIG accepts and the size a thumb
      actually hits; 40px cleared WCAG 2.5.8 and little else. */
   input, select, textarea, button, .btn { min-height: 44px; }
   input, select, textarea { font-size: var(--t-data); }
   .section-head { align-items: flex-start; }
   .section-head > .row { width: 100%; }
-  .table-wrap { margin-inline: calc(-1 * var(--s3)); border-left: 0; border-right: 0; }
+  .table-wrap { margin-inline: calc(-1 * var(--s3)); border: 0; }
   th, td { padding-inline: var(--s2); }
 }

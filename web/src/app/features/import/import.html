@@ -175,7 +175,7 @@
                       <span class="tag installment">{{ s.installment[0] }}/{{ s.installment[1] }}</span>
                     }
                   </td>
-                  <td class="num" [class.neg]="s.amount < 0" [class.pos]="s.amount > 0">
+                  <td class="num" [class.pos]="s.amount > 0">
                     {{ { amount: s.amount, currency: s.currency } | money }}
                   </td>
                 </tr>

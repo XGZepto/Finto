@@ -67,3 +67,23 @@ level security.
 
 The generated OpenAPI document is available at `/openapi.json` when the API is
 running.
+
+## Transaction review and suggestions
+
+`GET /api/transactions` includes a `review` object computed over the same
+filtered set as `total` and `totals`:
+
+```json
+{"total": 1270, "unreviewed": 71, "confirmed": 1199, "flagged": 0}
+```
+
+`GET /api/transactions/{transaction_id}/category-suggestion` returns a cached
+or model-assisted taxonomy prediction without changing the ledger. A usable
+response has `available: true` and a `suggestion` with `category`,
+`subcategory`, optional canonical `merchant`, tags, and confidence. Predictions
+below the categoriser confidence floor are returned as `suggestion: null`.
+
+Applying a suggestion uses the existing
+`PATCH /api/transactions/{transaction_id}` route. The web client sends the
+selected taxonomy fields and `review_state: "confirmed"`; manual taxonomy
+validation and annotation precedence remain unchanged.

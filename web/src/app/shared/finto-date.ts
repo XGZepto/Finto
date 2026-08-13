@@ -5,6 +5,7 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
 
 @Component({
   selector: 'finto-date',
+  host: { '[class.sheet-open]': 'open()' },
   template: `
     <div class="date-root" [class.open]="open()">
       <button type="button" class="date-trigger" [disabled]="disabled()"
@@ -14,7 +15,9 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3v3m12-3v3M3 7h14M4 5h12v12H4z" /></svg>
       </button>
       @if (open()) {
+        <button type="button" class="date-scrim" aria-label="Close date picker" (click)="close()"></button>
         <div class="calendar" role="dialog" [attr.aria-label]="ariaLabel">
+          <div class="sheet-head"><strong>Choose date</strong><button type="button" aria-label="Close" (click)="close()">×</button></div>
           <header>
             <button type="button" class="month-step" (click)="move(-1)" aria-label="Previous month">←</button>
             <strong>{{ monthLabel() }}</strong>
@@ -45,6 +48,7 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
     .date-trigger svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.2; }
     .open .date-trigger { border-color: var(--fg-3); background: var(--panel-2); }
     .calendar { position: absolute; z-index: var(--z-popover); top: calc(100% + 4px); left: 0; width: 264px; padding: 9px; border: 1px solid var(--line-2); background: var(--panel); box-shadow: 0 8px 22px #0005; }
+    .date-scrim, .sheet-head { display: none; }
     header { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; margin-bottom: 7px; }
     header strong { color: var(--fg-2); font: 500 var(--t-label)/1 var(--mono); letter-spacing: .08em; text-align: center; text-transform: uppercase; }
     .month-step { padding: 0; border: 0; background: transparent; }
@@ -56,8 +60,20 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
     .days button.today { border-color: var(--fg-3); }
     .days button.selected { border-color: var(--fg); background: var(--fg); color: var(--bg); }
     footer { display: flex; justify-content: space-between; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--line); }
-    footer button { font-size: var(--t-label); text-transform: uppercase; }
-    @media (max-width: 880px) { .date-trigger { min-height: 40px; } .calendar { position: fixed; left: 12px; right: 12px; top: 50%; width: auto; transform: translateY(-50%); padding: 12px; box-shadow: 0 0 0 100vmax #0009, 0 12px 32px #0008; } .days button { min-height: 40px; } }
+    footer button { font-family: var(--sans); font-size: var(--t-label); letter-spacing: 0; text-transform: none; }
+    @media (max-width: 880px) {
+      .date-trigger { min-height: 44px; }
+      .date-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: #000a; animation: date-fade var(--motion-fast) var(--ease-out) both; }
+      .calendar { position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; width: auto; padding: 0 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--line-2); box-shadow: 0 -16px 42px #0008; animation: date-up var(--motion-base) var(--ease-out) both; }
+      .sheet-head { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: 54px; margin: 0 -12px 4px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+      .sheet-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 32px; height: 3px; border-radius: 3px; background: var(--fg-4); transform: translateX(-50%); opacity: .6; }
+      .sheet-head strong { font: 550 var(--t-data)/1 var(--sans); }
+      .sheet-head button { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--fg-3); font-size: 24px; }
+      .days button { min-height: 44px; }
+      @keyframes date-up { from { transform: translateY(100%); } }
+      @keyframes date-fade { from { opacity: 0; } }
+    }
+    @media (prefers-reduced-motion: reduce) { .calendar, .date-scrim { animation: none; } }
   `],
   providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => FintoDate), multi: true }],
 })
@@ -95,6 +111,7 @@ export class FintoDate implements ControlValueAccessor {
   }
   choose(iso: string): void { this.value.set(iso); this.onChange(iso); this.onTouched(); this.open.set(false); }
   clear(): void { this.choose(''); }
+  close(): void { this.open.set(false); this.onTouched(); }
 
   @HostListener('document:pointerdown', ['$event'])
   closeOutside(event: PointerEvent): void { if (!this.host.nativeElement.contains(event.target as Node)) this.open.set(false); }

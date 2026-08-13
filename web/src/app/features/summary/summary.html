@@ -24,19 +24,20 @@
 
 <section class="hero">
   <div class="card hero-figure">
-    <div class="hero-top">
-      <finto-stat label="Net worth" [value]="netWorth()" [change]="netWorthChange()"
-                  [percent]="netWorthPercent()" [period]="range()" />
-      <finto-pills [options]="rangeOptions" [value]="range()" ariaLabel="Chart range"
-                   (pick)="setRange($event)" />
-    </div>
-    @if (series().length > 1) {
-      <finto-timeseries [points]="series()" label="Net worth over time" />
+    @if (spendComparison(); as comparison) {
+      <span class="label">Spent this month</span>
+      <strong class="hero-value mono">{{ comparison.spend | money }}</strong>
+      @if (comparison.percent !== null) {
+        <span class="hero-change" [class.better]="comparison.percent < 0" [class.worse]="comparison.percent > 0">
+          {{ comparison.percent > 0 ? '↑' : comparison.percent < 0 ? '↓' : '—' }}
+          {{ comparison.percent === 0 ? 'No change' : (comparison.percent < 0 ? -comparison.percent : comparison.percent).toFixed(1) + '% ' + (comparison.percent < 0 ? 'less' : 'more') }}
+          <small>vs same time last month</small>
+        </span>
+      } @else { <span class="hero-change muted">No comparable activity last month</span> }
     }
-    @if (headline(); as h) {
+    @if (monthToDate(); as h) {
       <div class="hero-stats">
         <span><label>In</label><b class="pos">{{ h.income | money: 'bare' }}</b></span>
-        <span><label>Out</label><b class="neg">{{ h.spend | money: 'bare' }}</b></span>
         <span>
           <label>Net</label>
           <b [class.neg]="h.net.amount < 0" [class.pos]="h.net.amount > 0">{{ h.net | money: 'bare' }}</b>
@@ -47,26 +48,20 @@
         </span>
       </div>
     }
+    <button class="hero-action bare" (click)="go('/blotter')">Review this month →</button>
   </div>
-
-  @if (assetSlices().length || liabilitySlices().length) {
-    <div class="card hero-mix">
-      <span class="label">Assets</span>
-      <finto-share-bar [slices]="assetSlices()" label="Assets by account type" />
-      @if (liabilitySlices().length) {
-        <span class="label" style="margin-top: var(--s4)">Liabilities</span>
-        <finto-share-bar [slices]="liabilitySlices()" label="Liabilities by account type" />
-      }
-    </div>
-  }
 </section>
 
 
 <section class="card breakdown">
   <div class="section-head">
     <h2>Flow</h2>
-    <finto-select class="dimension-select" ariaLabel="Split by" [options]="dimensions"
-                  [ngModel]="groupBy()" (ngModelChange)="setGroupBy($event)" />
+    <div class="flow-controls">
+      <finto-pills [options]="rangeOptions" [value]="range()" ariaLabel="Flow range"
+                   (pick)="setRange($event)" />
+      <finto-select class="dimension-select" ariaLabel="Split by" [options]="dimensions"
+                    [ngModel]="groupBy()" (ngModelChange)="setGroupBy($event)" />
+    </div>
   </div>
 
   @if (loading()) {
@@ -79,10 +74,10 @@
       </div>
       <div class="trend" role="img" [attr.aria-label]="convertTo() + '-normalised cash flow trend'">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <defs><linearGradient id="out-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--neg)" stop-opacity=".23"/><stop offset="1" stop-color="var(--neg)" stop-opacity="0"/></linearGradient></defs>
+          <defs><linearGradient id="out-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--fg-2)" stop-opacity=".18"/><stop offset="1" stop-color="var(--fg-2)" stop-opacity="0"/></linearGradient></defs>
           <line class="gridline" x1="0" y1="14" x2="100" y2="14"/><line class="gridline" x1="0" y1="53" x2="100" y2="53"/><line class="gridline" x1="0" y1="92" x2="100" y2="92"/>
           <polygon class="area" [attr.points]="trendChart().outArea"/>
-          <polyline class="series out" [attr.points]="trendChart().out"/><polyline class="series in" [attr.points]="trendChart().inn"/>
+          <polyline class="series out" pathLength="1" [attr.points]="trendChart().out"/><polyline class="series in" pathLength="1" [attr.points]="trendChart().inn"/>
         </svg>
         <div class="chart-hits">
           @for (b of trendChart().labels; track b.bucket) {
@@ -104,7 +99,7 @@
             <span class="rank mono">{{ ($index + 1).toString().padStart(2, '0') }}</span>
             <span class="name">{{ b.bucket }}</span>
             <span class="bar-track"><span class="bar-fill" [style.width]="b.width"></span></span>
-            <span class="amount mono neg">{{ b.spend | money: 'bare' }}</span>
+            <span class="amount mono">{{ b.spend | money: 'bare' }}</span>
             <span class="share mono">{{ (b.share * 100).toFixed(1) }}%</span>
           </button>
         }

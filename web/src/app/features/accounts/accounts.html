@@ -67,7 +67,7 @@
           }
           <h3>Out</h3>
           @for (node of detailFlow().outgoing; track node.key) {
-            <div class="detail-flow-row"><span>{{ node.label }}</span><span class="tag">{{ node.kind }}</span><strong class="mono neg">{{ { amount: -node.amount, currency: flows().normalised.currency } | money }}</strong></div>
+            <div class="detail-flow-row"><span>{{ node.label }}</span><span class="tag">{{ node.kind }}</span><strong class="mono">{{ { amount: -node.amount, currency: flows().normalised.currency } | money }}</strong></div>
           }
         </div> }
       }
@@ -81,7 +81,7 @@
             <div class="month-row">
               <span class="mono small">{{ m.bucket }}</span>
               <span class="month-track"><i [style.width]="monthWidth(m)"></i></span>
-              <span class="mono neg">{{ m.spend | money: 'bare' }} <small>{{ m.currency }}</small></span>
+              <span class="mono">{{ m.spend | money: 'bare' }} <small>{{ m.currency }}</small></span>
             </div>
           } @empty { <div class="empty">No outflow history</div> }
         </div>
@@ -103,7 +103,7 @@
         @if (byHolder().length) {
           <h3>Spend by cardholder</h3>
           @for (h of byHolder(); track h.bucket + h.currency) {
-            <div class="stat-row"><span class="k">{{ h.bucket }}</span><span class="v mono neg">{{ h.spend | money: 'bare' }}</span><span class="c mono">{{ h.currency }}</span></div>
+            <div class="stat-row"><span class="k">{{ h.bucket }}</span><span class="v mono">{{ h.spend | money: 'bare' }}</span><span class="c mono">{{ h.currency }}</span></div>
           }
         }
         @if (accountFlows().length) {
@@ -123,7 +123,7 @@
       <section class="card">
         <h2>By transaction type</h2>
         @for (k of byKind(); track k.bucket + k.currency) {
-          <div class="stat-row"><span class="k">{{ humanize(k.bucket) }}</span><span class="v mono neg">{{ k.spend | money: 'bare' }}</span><span class="c mono">{{ k.currency }}</span><span class="n muted">{{ k.txn_count }}</span></div>
+          <div class="stat-row"><span class="k">{{ humanize(k.bucket) }}</span><span class="v mono">{{ k.spend | money: 'bare' }}</span><span class="c mono">{{ k.currency }}</span><span class="n muted">{{ k.txn_count }}</span></div>
         }
       </section>
       <section class="card recent">
@@ -132,7 +132,7 @@
           <div class="txn-row">
             <span class="mono small muted">{{ t.date | shortDate }}</span>
             <span class="txn-desc">{{ t.merchant || t.description }}</span>
-            <span class="mono" [class.neg]="t.booked.amount < 0" [class.pos]="t.booked.amount > 0">{{ t.booked | money: 'bare' }}</span>
+            <span class="mono" [class.pos]="t.booked.amount > 0">{{ t.booked | money: 'bare' }}</span>
           </div>
         }
       </section>
@@ -146,6 +146,22 @@
   @if (loading()) {
     <div class="card"><finto-skeleton [rows]="6" label="Loading accounts" /></div>
   } @else {
+    @if (netWorth(); as worth) {
+      <section class="card portfolio-hero">
+        <div>
+          <span class="label">Net worth</span>
+          <strong class="mono" [class.neg]="worth.amount < 0">{{ worth | money }}</strong>
+          <small>{{ preferences.baseCurrency() }} normalised across your accounts</small>
+        </div>
+        <div class="portfolio-split">
+          @if (assets(); as value) { <span><label>Assets</label><b class="mono pos">{{ value | money: 'bare' }}</b></span> }
+          @if (liabilities(); as value) { <span><label>Liabilities</label><b class="mono">{{ value | money: 'bare' }}</b></span> }
+        </div>
+        @if (unconvertible().length) {
+          <p class="banner warn">Missing rates for {{ unconvertible().join(', ') }}; those balances are excluded.</p>
+        }
+      </section>
+    }
     <section class="account-groups">
       @for (g of groups(); track g.key) {
         <article class="card account-group">
@@ -203,7 +219,7 @@
       </div></div> }
       @if (flowView() === 'list') { <div class="flow-mobile">
         @for (r of flowRows(); track r.account_id) {
-          <div class="mobile-flow"><strong>{{ r.name }}</strong><span class="pos mono">+{{ r.in | money: 'bare' }}</span><span class="neg mono">{{ r.out | money: 'bare' }}</span></div>
+          <div class="mobile-flow"><strong>{{ r.name }}</strong><span class="pos mono">+{{ r.in | money: 'bare' }}</span><span class="mono">{{ r.out | money: 'bare' }}</span></div>
         }
         @if (allInternalFlows().length) {
           <h3>Internal transfers</h3>

@@ -44,6 +44,14 @@
     }
   }
 
+  @if (reviewProgress().total; as totalReview) {
+    <div class="review-progress" role="status">
+      <span><b>{{ reviewProgress().confirmed }}</b> reviewed</span>
+      <span>{{ reviewProgress().unreviewed }} left@if (reviewProgress().flagged) { · {{ reviewProgress().flagged }} flagged }</span>
+      <span class="review-track" aria-hidden="true"><i [style.width.%]="reviewProgress().confirmed / totalReview * 100"></i></span>
+    </div>
+  }
+
   @if (loading()) {
     <finto-skeleton [rows]="8" label="Loading transactions" />
   } @else {
@@ -67,9 +75,8 @@
           @for (band of dayGroups(); track band.date ?? '_') {
             @if (band.date) {
               <tr class="daygroup">
-                <td colspan="4" class="mono">{{ band.date | shortDate }}</td>
+                <td colspan="4" class="mono" [attr.title]="band.date">{{ band.date | shortDate }}</td>
                 <td colspan="2" class="num mono"
-                    [class.neg]="(band.total?.amount ?? 0) < 0"
                     [class.pos]="(band.total?.amount ?? 0) > 0">
                   {{ band.total ? (band.total | money: 'bare') : '' }}
                 </td>
@@ -86,7 +93,9 @@
                 tabindex="0"
                 role="button" [attr.aria-expanded]="selected()?.id === t.id"
                 [attr.aria-label]="(t.merchant || t.description) + ', ' + (t.booked | money)">
-              <td class="date mono small nowrap">{{ t.date | shortDate }}</td>
+              <td class="date mono small nowrap">
+                @if (sort() !== 'date') { <span [attr.title]="t.date">{{ t.date | shortDate }}</span> }
+              </td>
               <td class="account">
                 {{ t.account_name }}
                 @if (t.cardholder_name) {
@@ -111,7 +120,7 @@
                   <span class="primary dim">Merchant not disclosed</span>
                   <span class="muted small block">{{ t.description }}</span>
                 } @else {
-                  <span class="primary">{{ displayTitle(t) }}</span>
+                  <span class="primary">{{ displayTitle(t) }} <i class="review-state" [class.confirmed]="t.review_state === 'confirmed'" [class.flagged]="t.review_state === 'flagged'" [attr.title]="t.review_state"></i></span>
                   @if (t.merchant && t.description !== t.merchant) {
                     <span class="muted small block">{{ t.description }}</span>
                   }
@@ -142,8 +151,8 @@
                 @if (isTravel(t)) { <span class="tag travel">travel</span> }
                 @if (gateway(t); as g) { <span class="tag gateway">{{ g }}</span> }
               </td>
-              <td class="num" [class.neg]="t.booked.amount < 0" [class.pos]="t.booked.amount > 0">
-                {{ t.booked | money }}
+              <td class="num" [class.pos]="t.booked.amount > 0">
+                {{ t.booked | money: 'bare' }}@if (t.booked.currency !== t.account_currency) { <span class="row-currency">{{ t.booked.currency }}</span> }
                 @if (t.native) {
                   <span class="muted small block">{{ t.native | money }}</span>
                 }
@@ -181,8 +190,17 @@
   <div class="picker" role="dialog" aria-modal="true" aria-label="Choose a category">
     <p class="picker-head">
       <span>{{ txn.merchant || txn.description }}</span>
-      <b class="mono" [class.neg]="txn.booked.amount < 0">{{ txn.booked | money: 'bare' }}</b>
+      <b class="mono" [class.pos]="txn.booked.amount > 0">{{ txn.booked | money: 'bare' }}@if (txn.booked.currency !== txn.account_currency) { <span class="row-currency">{{ txn.booked.currency }}</span> }</b>
     </p>
+    @if (suggestionLoading()) {
+      <div class="suggestion skeleton" aria-label="Finding a category">Finding a category</div>
+    } @else if (suggestion(); as guess) {
+      <button type="button" class="suggestion" (click)="applyCategory(guess.category, guess.subcategory, guess.merchant)">
+        <span><small>Suggested</small><b>{{ friendlyTaxonomy(guess.category) }}</b><em>{{ friendlyTaxonomy(guess.subcategory) }}</em></span>
+        <strong class="mono">{{ (guess.confidence * 100).toFixed(0) }}%</strong>
+      </button>
+      <p class="picker-label">All categories</p>
+    }
     <div class="picker-grid">
       @for (c of categories(); track c) {
         <button type="button" [class.on]="c === txn.category" (click)="applyCategory(c)">{{ c }}</button>
@@ -207,8 +225,8 @@
 
     @if (detailLoading()) { <div class="drawer-loading" aria-live="polite">Loading</div> }
 
-    <div class="amount-hero" [class.neg]="txn.booked.amount < 0" [class.pos]="txn.booked.amount > 0">
-      {{ txn.booked | money }}
+    <div class="amount-hero" [class.pos]="txn.booked.amount > 0">
+      {{ txn.booked | money: 'bare' }}@if (txn.booked.currency !== txn.account_currency) { <span class="row-currency">{{ txn.booked.currency }}</span> }
     </div>
     @if (txn.native) {
       <p class="muted small">
@@ -218,9 +236,10 @@
 
     <dl class="drawer-overview">
       <div><dt>Account</dt><dd>{{ txn.account_name }}</dd></div>
-      <div><dt>Date</dt><dd class="mono">{{ txn.date | shortDate }}</dd></div>
+      <div><dt>Date</dt><dd class="mono" [attr.title]="txn.date">{{ txn.date | shortDate }}</dd></div>
       <div><dt>Category</dt><dd>{{ friendlyTaxonomy(txn.category) }}@if (txn.subcategory) { <span class="taxonomy sub">{{ friendlyTaxonomy(txn.subcategory) }}</span> }</dd></div>
       <div><dt>Type</dt><dd><span class="tag">{{ txn.kind }}</span><span class="tag">{{ txn.status }}</span></dd></div>
+      <div><dt>Review</dt><dd><span class="tag" [class.good]="txn.review_state === 'confirmed'" [class.bad]="txn.review_state === 'flagged'">{{ txn.review_state }}</span></dd></div>
       @if (txn.cardholder_name) { <div class="wide"><dt>Cardholder</dt><dd>{{ txn.cardholder_name }}@if (txn.card_last4) { <span class="mono muted"> ·{{ txn.card_last4 }}</span> }</dd></div> }
     </dl>
 
@@ -310,8 +329,7 @@
             <span class="tag">{{ leg.role }}</span>
             <span class="leg-desc">{{ leg.description_raw }}</span>
             <span class="mono small muted">{{ leg.account_id }} · {{ leg.txn_date }}</span>
-            <span class="mono leg-amt"
-                  [class.neg]="leg.amount_booked < 0" [class.pos]="leg.amount_booked > 0">
+            <span class="mono leg-amt" [class.pos]="leg.amount_booked > 0">
               {{ { amount: leg.amount_booked, currency: leg.currency_booked } | money: 'bare' }}
             </span>
           </button>
@@ -327,7 +345,7 @@
             <span class="tag">{{ linked.relation }}</span>
             <span class="leg-desc">{{ linked.description_raw }}</span>
             <span class="mono small muted">{{ linked.account_id }} · {{ linked.txn_date }}</span>
-            <span class="mono leg-amt" [class.neg]="linked.amount_booked < 0" [class.pos]="linked.amount_booked > 0">
+            <span class="mono leg-amt" [class.pos]="linked.amount_booked > 0">
               {{ { amount: linked.amount_booked, currency: linked.currency_booked } | money: 'bare' }}
             </span>
           </button>

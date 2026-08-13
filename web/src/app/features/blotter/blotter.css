@@ -159,7 +159,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
     column-gap: var(--s3);
     row-gap: 1px;
     min-height: 58px;
-    padding: var(--s2) var(--s3);
+    padding: var(--s1) var(--s3);
     border-bottom: 1px solid var(--line);
   }
   .table-wrap td { border: none; padding: 0; }
@@ -169,11 +169,13 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .table-wrap td.desc .primary {
     grid-column: 2; grid-row: 1; align-self: end;
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--fg); font-family: var(--sans); font-weight: 550;
   }
   .table-wrap td.desc .block, .table-wrap td.desc .row-tags { display: none; }
   .table-wrap td.num {
     grid-column: 3; grid-row: 1 / 3; align-self: center;
     text-align: right; white-space: nowrap;
+    color: var(--fg); font-weight: 500;
   }
   /* One subtitle only — the category under the merchant. */
   .table-wrap td.category {
@@ -235,7 +237,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   background: var(--panel-2);
 }
 .aggregation-controls { display: flex; justify-content: space-between; align-items: center; gap: var(--s2); margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
-.aggregation-label { color: var(--fg-3); font: 500 var(--t-label)/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.aggregation-label { color: var(--fg-3); font: 550 var(--t-meta)/1 var(--sans); }
 .aggregation-actions { display: flex; align-items: center; gap: 8px; }
 .aggregation-controls .currency-select { width: 78px; }
 
@@ -245,11 +247,28 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
    the leading code here is a dangling repeat. */
 .normalised-scope .ccy { display: none; }
 .scope-item .metric { display: flex; align-items: baseline; gap: 5px; }
-.scope-item .metric small { color: var(--fg-4); font: var(--t-micro)/1 var(--mono); text-transform: uppercase; }
+.scope-item .metric small { color: var(--fg-4); font: 500 var(--t-label)/1 var(--sans); }
 .scope-item .metric b { font-weight: 500; }
-.scope-item .out b { color: var(--neg); }
+.scope-item .out b { color: var(--fg); }
 .scope-item .in b { color: var(--pos); }
 .scope-item .net { border-left: 1px solid var(--line); padding-left: 8px; }
+.review-progress {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px var(--s3);
+  padding: var(--s2) var(--s3);
+  color: var(--fg-4);
+  font-size: var(--t-label);
+}
+.review-progress > span:nth-child(2) { text-align: right; }
+.review-progress b { color: var(--fg-2); font-weight: 550; }
+.review-track { grid-column: 1 / -1; height: 2px; background: var(--panel-3); }
+.review-track i { display: block; height: 100%; background: var(--info); transform-origin: left; animation: review-grow var(--motion-base) var(--ease-out) both; transition: width var(--motion) var(--ease-out); }
+@keyframes review-grow { from { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .review-track i { animation: none; } }
+.review-state { display: inline-block; width: 6px; height: 6px; margin-left: 3px; background: var(--fg-4); vertical-align: middle; }
+.review-state.confirmed { background: var(--pos); }
+.review-state.flagged { background: var(--warn); }
 
 @media (max-width: 880px) {
   .aggregation-controls { align-items: stretch; }
@@ -294,17 +313,16 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .drawer, .drawer-backdrop, .edit-panel { animation: none; }
 }
 
-/* A day band carries its own total, so a date is also an answer. */
+/* Dates divide the list without becoming a second row of chrome. */
 .daygroup td {
-  padding-block: var(--s2);
+  padding-block: var(--s1);
   background: var(--panel-2);
-  border-bottom: 1px solid var(--line-2);
+  border-bottom: 0;
   color: var(--fg-3);
   font-size: var(--t-meta);
-  letter-spacing: .1em;
-  text-transform: uppercase;
 }
 .daygroup td.num { text-align: right; }
+.row-currency { margin-left: .35em; color: var(--fg-3); font-size: var(--t-label); }
 
 /* Merchant monogram. Desktop keeps the text column dense, so it is mobile-only. */
 .glyph {
@@ -320,6 +338,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   font-size: var(--t-meta);
 }
 .glyph finto-icon { width: 100%; height: 100%; }
+@media (max-width: 880px) { .glyph { border: 0; background: var(--panel-2); } }
 /* The desktop table keeps its dense text columns; the mark is a mobile-list affordance. */
 @media (min-width: 881px) { td.desc .glyph { display: none; } }
 
@@ -425,6 +444,28 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   color: var(--fg-2);
 }
 .picker-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggestion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 66px;
+  margin-bottom: var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  background: var(--info-wash);
+  color: var(--fg);
+  font-family: var(--sans);
+  letter-spacing: 0;
+  text-align: left;
+}
+.suggestion span { display: grid; grid-template-columns: auto 1fr; gap: 1px var(--s2); min-width: 0; }
+.suggestion small { grid-column: 1 / -1; color: var(--info); font-size: var(--t-label); }
+.suggestion b { overflow: hidden; text-overflow: ellipsis; font-size: var(--t-data); }
+.suggestion em { overflow: hidden; color: var(--fg-3); font-size: var(--t-meta); font-style: normal; text-overflow: ellipsis; }
+.suggestion > strong { color: var(--info); font-size: var(--t-meta); }
+.picker-label { margin: 0 0 var(--s2); color: var(--fg-4); font-size: var(--t-label); }
 .picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
 .picker-grid button {
   justify-content: flex-start;
