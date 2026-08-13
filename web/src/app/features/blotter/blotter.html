@@ -12,6 +12,7 @@
       </div>
       @if (!showNative()) {
         <finto-select class="currency-select" ariaLabel="Aggregation currency"
+                      helperText="Changes converted ledger totals"
                       [options]="currencies()" [ngModel]="convertTo()"
                       (ngModelChange)="setConvertTo($event)" />
       }
@@ -78,7 +79,7 @@
                 <td colspan="4" class="mono" [attr.title]="band.date">{{ band.date | shortDate }}</td>
                 <td colspan="2" class="num mono"
                     [class.pos]="(band.total?.amount ?? 0) > 0">
-                  {{ band.total ? (band.total | money: 'bare') : '' }}
+                  {{ band.total ? (band.total | money) : '' }}
                 </td>
               </tr>
             }
@@ -120,7 +121,7 @@
                   <span class="primary dim">Merchant not disclosed</span>
                   <span class="muted small block">{{ t.description }}</span>
                 } @else {
-                  <span class="primary">{{ displayTitle(t) }} <i class="review-state" [class.confirmed]="t.review_state === 'confirmed'" [class.flagged]="t.review_state === 'flagged'" [attr.title]="t.review_state"></i></span>
+                  <span class="primary">{{ displayTitle(t) }}@if (t.review_state === 'flagged') { <i class="review-flag" title="Flagged for review" aria-label="Flagged for review">!</i> }</span>
                   @if (t.merchant && t.description !== t.merchant) {
                     <span class="muted small block">{{ t.description }}</span>
                   }
@@ -152,7 +153,7 @@
                 @if (gateway(t); as g) { <span class="tag gateway">{{ g }}</span> }
               </td>
               <td class="num" [class.pos]="t.booked.amount > 0">
-                {{ t.booked | money: 'bare' }}@if (t.booked.currency !== t.account_currency) { <span class="row-currency">{{ t.booked.currency }}</span> }
+                {{ t.booked | money: 'bare' }}<span class="row-currency">{{ t.booked.currency }}</span>
                 @if (t.native) {
                   <span class="muted small block">{{ t.native | money }}</span>
                 }
@@ -190,7 +191,7 @@
   <div class="picker" role="dialog" aria-modal="true" aria-label="Choose a category">
     <p class="picker-head">
       <span>{{ txn.merchant || txn.description }}</span>
-      <b class="mono" [class.pos]="txn.booked.amount > 0">{{ txn.booked | money: 'bare' }}@if (txn.booked.currency !== txn.account_currency) { <span class="row-currency">{{ txn.booked.currency }}</span> }</b>
+      <b class="mono" [class.pos]="txn.booked.amount > 0">{{ txn.booked | money }}</b>
     </p>
     @if (suggestionLoading()) {
       <div class="suggestion skeleton" aria-label="Finding a category">Finding a category</div>
@@ -215,32 +216,44 @@
   <button type="button" class="drawer-backdrop" (click)="close()" aria-label="Close transaction details"></button>
   <aside #drawer class="drawer" role="dialog" aria-modal="true" aria-labelledby="transaction-title"
          tabindex="-1" [attr.aria-busy]="detailLoading()" (keydown)="trapFocus($event)">
-    <header>
-      <div class="head-text">
-        <h2 id="transaction-title">{{ txn.merchant || txn.description }}</h2>
-        @if (txn.description !== (txn.merchant || txn.description)) { <p class="muted small">{{ txn.description }}</p> }
-      </div>
-      <button class="bare close" (click)="close()" aria-label="Close">×</button>
+    <header class="transaction-bar">
+      <button class="bare close mobile-back" (click)="close()" aria-label="Back to blotter">‹</button>
+      <span class="bar-title">Transaction</span>
+      @if (!editMode()) {
+        <button class="bare bar-action" (click)="editMode.set(true)">Edit</button>
+      } @else {
+        <button class="bare bar-action" (click)="cancelEdit()">Cancel</button>
+      }
+      <button class="bare close desktop-close" (click)="close()" aria-label="Close">×</button>
     </header>
 
     @if (detailLoading()) { <div class="drawer-loading" aria-live="polite">Loading</div> }
 
-    <div class="amount-hero" [class.pos]="txn.booked.amount > 0">
-      {{ txn.booked | money: 'bare' }}@if (txn.booked.currency !== txn.account_currency) { <span class="row-currency">{{ txn.booked.currency }}</span> }
-    </div>
+    <section class="transaction-hero">
+      <span class="detail-glyph" aria-hidden="true">
+        <finto-icon kind="merchant" [name]="txn.merchant || txn.description"
+                    [fallbackCategory]="txn.category || 'other'" />
+      </span>
+      <h2 id="transaction-title">{{ txn.merchant || txn.description }}</h2>
+      @if (txn.description !== (txn.merchant || txn.description)) { <p class="transaction-description">{{ txn.description }}</p> }
+      <div class="amount-hero" [class.pos]="txn.booked.amount > 0">
+        {{ txn.booked | money }}
+      </div>
+      <p class="hero-context"><span [attr.title]="txn.date">{{ txn.date | shortDate }}</span> · {{ txn.account_name }}</p>
+    </section>
+
     @if (txn.native) {
-      <p class="muted small">
-        Merchant charged {{ txn.native | money }}@if (txn.fx_rate) {, converted at {{ txn.fx_rate }}}
-      </p>
+      <div class="fx-summary">
+        <span>Paid in {{ txn.native.currency }}</span><strong class="mono">{{ txn.native | money }}</strong>
+        @if (txn.fx_rate) { <small>Exchange rate {{ txn.fx_rate }}</small> }
+      </div>
     }
 
     <dl class="drawer-overview">
-      <div><dt>Account</dt><dd>{{ txn.account_name }}</dd></div>
-      <div><dt>Date</dt><dd class="mono" [attr.title]="txn.date">{{ txn.date | shortDate }}</dd></div>
       <div><dt>Category</dt><dd>{{ friendlyTaxonomy(txn.category) }}@if (txn.subcategory) { <span class="taxonomy sub">{{ friendlyTaxonomy(txn.subcategory) }}</span> }</dd></div>
-      <div><dt>Type</dt><dd><span class="tag">{{ txn.kind }}</span><span class="tag">{{ txn.status }}</span></dd></div>
-      <div><dt>Review</dt><dd><span class="tag" [class.good]="txn.review_state === 'confirmed'" [class.bad]="txn.review_state === 'flagged'">{{ txn.review_state }}</span></dd></div>
-      @if (txn.cardholder_name) { <div class="wide"><dt>Cardholder</dt><dd>{{ txn.cardholder_name }}@if (txn.card_last4) { <span class="mono muted"> ·{{ txn.card_last4 }}</span> }</dd></div> }
+      <div><dt>Status</dt><dd>{{ friendlyTaxonomy(txn.status) }} · {{ friendlyTaxonomy(txn.kind) }}</dd></div>
+      <div><dt>Review</dt><dd class="review-value"><i [class.confirmed]="txn.review_state === 'confirmed'" [class.flagged]="txn.review_state === 'flagged'"></i>{{ friendlyTaxonomy(txn.review_state) }}</dd></div>
+      @if (txn.cardholder_name) { <div><dt>Cardholder</dt><dd>{{ txn.cardholder_name }}@if (txn.card_last4) { <span class="mono muted"> ·{{ txn.card_last4 }}</span> }</dd></div> }
     </dl>
 
     @if (gateway(txn); as g) {
@@ -270,13 +283,13 @@
     <section>
       <div class="section-head">
         <h3>Annotations</h3>
-        @if (!editMode()) { <button class="ghost" (click)="editMode.set(true)">Edit</button> }
       </div>
       @if (editMode()) {
         <div class="edit-panel">
           <div class="field">
-            <label for="cat">Category</label>
-            <input id="cat" [ngModel]="editCategory()" (ngModelChange)="editCategory.set($event)" />
+            <label>Category</label>
+            <finto-select ariaLabel="Category" [options]="categories()" placeholder="Choose category"
+                          [ngModel]="editCategory()" (ngModelChange)="editCategory.set($event)" />
           </div>
           <div class="field">
             <label for="notes">Notes</label>
@@ -289,7 +302,7 @@
                 <span>{{ tg }}</span><button class="bare x" (click)="removeTag(tg)" [attr.aria-label]="'Remove ' + tg">×</button>
               </span>
             }
-            <input class="tag-input" [ngModel]="newTag()" (ngModelChange)="newTag.set($event)" (keyup.enter)="addTag()" placeholder="add tag" />
+            <input class="tag-input" [ngModel]="newTag()" (ngModelChange)="newTag.set($event)" (keyup.enter)="addTag()" placeholder="Add tag" />
           </div>
           <div class="edit-actions">
             <button class="primary" [disabled]="saving()" (click)="save()">{{ saving() ? 'Saving…' : 'Save' }}</button>
@@ -303,23 +316,6 @@
         </dl>
       }
     </section>
-
-    @if (detailEntries(txn).length) {
-      <section>
-        <h3>Statement detail</h3>
-        <dl class="details">
-          @for (d of detailEntries(txn); track d.key) {
-            <dt>{{ d.key | detailKey }}</dt>
-            <dd>
-              <button class="bare fact" (click)="filterByDetail(d.key, d.value)"
-                      [title]="'Show every transaction with this ' + (d.key | detailKey)">
-                {{ d.value }}
-              </button>
-            </dd>
-          }
-        </dl>
-      </section>
-    }
 
     @if (otherLegs(txn).length) {
       <section>
@@ -353,22 +349,29 @@
       </section>
     }
 
-    <section>
-      <h3>Provenance</h3>
-      @if (txn.provenance; as p) {
-        <p class="muted small">
-          Parsed by <span class="mono">{{ p.parser_id }}</span> from
-          <span class="mono break">{{ p.source_path }}</span>
-        </p>
-        <dl class="details raw">
-          @for (r of rawEntries(txn); track r.key) {
-            <dt>{{ r.key }}</dt>
-            <dd class="mono">{{ r.value }}</dd>
-          }
-        </dl>
-      } @else {
-        <p class="muted small">No raw record linked.</p>
+    <details class="data-disclosure">
+      <summary><span><strong>Statement data</strong><small>Original fields and import source</small></span><i aria-hidden="true">⌄</i></summary>
+      @if (detailEntries(txn).length) {
+        <section>
+          <h3>Statement detail</h3>
+          <dl class="details">
+            @for (d of detailEntries(txn); track d.key) {
+              <dt>{{ d.key | detailKey }}</dt>
+              <dd><button class="bare fact" (click)="filterByDetail(d.key, d.value)"
+                          [title]="'Show every transaction with this ' + (d.key | detailKey)">{{ d.value }}</button></dd>
+            }
+          </dl>
+        </section>
       }
-    </section>
+      <section>
+        <h3>Import source</h3>
+        @if (txn.provenance; as p) {
+          <p class="muted small">Parsed by <span class="mono">{{ p.parser_id }}</span> from <span class="mono break">{{ p.source_path }}</span></p>
+          <dl class="details raw">
+            @for (r of rawEntries(txn); track r.key) { <dt>{{ r.key }}</dt><dd class="mono">{{ r.value }}</dd> }
+          </dl>
+        } @else { <p class="muted small">No raw record linked.</p> }
+      </section>
+    </details>
   </aside>
 }

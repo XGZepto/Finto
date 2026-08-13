@@ -151,7 +151,7 @@
         <div>
           <span class="label">Net worth</span>
           <strong class="mono" [class.neg]="worth.amount < 0">{{ worth | money }}</strong>
-          <small>{{ preferences.baseCurrency() }} normalised across your accounts</small>
+          <small>Balances converted at the latest rates</small>
         </div>
         <div class="portfolio-split">
           @if (assets(); as value) { <span><label>Assets</label><b class="mono pos">{{ value | money: 'bare' }}</b></span> }

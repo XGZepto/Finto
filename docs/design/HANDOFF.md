@@ -1,11 +1,11 @@
 # Mobile UI handoff
 
-State after the 2026-08 mobile experience uplift. The backlog in §3 is closed;
+State after the 2026-08 mobile experience uplift and critical follow-up. The backlog in §3 is closed;
 new work should start from the principles and QA matrix in
 [`MOBILE_UX.md`](MOBILE_UX.md).
 
-Two rounds of work are merged. This document is what the next person needs to
-carry on: how to get a populated app running, what the design system now
+The uplift and its critical follow-up are captured here. This document is what
+the next person needs to carry on: how to get a populated app running, what the design system now
 guarantees, what is deliberately still open, and the traps that have already
 cost time once.
 
@@ -46,7 +46,9 @@ triage queue and the swipe gesture have something to act on.
 
 **Screenshots.** `npm --prefix web run capture:mobile` drives system Chrome at
 390×844 @2x, validates compact and desktop overflow/touch targets, checks the
-reduced-motion path, and refreshes `docs/design/mobile/*-after.png`.
+mobile tab architecture, currency search/names, transaction detail and
+statement-data disclosure, reduced-motion path, and refreshes
+`docs/design/mobile/*-after.png`.
 
 ---
 
@@ -156,6 +158,14 @@ the target iOS version first.
 are desktop patterns scaled up. On compact they should become bottom sheets
 (the `.picker` in `blotter.css` is a working reference for the pattern). The
 segmented control is fine. This is the last structurally desktop thing left.
+
+### 3.12 Complete — transaction detail and mobile information architecture
+The blotter row opens a full-screen compact detail with a native top bar,
+booked currency always visible, an adjacent native-charge/FX summary, flat fact
+rows, editable annotations, and statement/provenance data behind one disclosure.
+The bottom navigation contains stable destinations — Summary, Blotter, Reports,
+Accounts, More — while Review remains badged inside More instead of occupying a
+privileged central tab.
 
 ---
 

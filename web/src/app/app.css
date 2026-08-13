@@ -140,34 +140,38 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 3px;
     min-width: 0;
     min-height: 48px;
     padding: 3px;
     border: 0;
     background: transparent;
     color: var(--fg-3);
-    font-family: var(--mono);
+    font-family: var(--sans);
     font-size: var(--t-micro);
-    letter-spacing: .04em;
+    font-weight: 500;
+    letter-spacing: 0;
     text-decoration: none;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
   .mobile-nav a.active, .mobile-nav button.active { color: var(--fg); }
-  .mobile-nav a.active .mobile-icon, .mobile-nav button.active .mobile-icon { color: var(--fg); background: var(--panel-3); border-color: var(--line-2); }
+  .mobile-nav a.active::after, .mobile-nav button.active::after {
+    content: ''; position: absolute; top: -7px; width: 28px; height: 2px; background: var(--fg);
+  }
   .mobile-icon {
     display: grid;
     place-items: center;
     position: relative;
-    width: 31px;
-    height: 27px;
+    width: 32px;
+    height: 28px;
     padding: 5px 6px;
-    border: 1px solid transparent;
     font-size: var(--t-lede);
     line-height: 1;
-    transition: background var(--motion-fast) linear, border-color var(--motion-fast) linear;
+    transition: color var(--motion-fast) linear, transform var(--motion-fast) var(--ease-out);
   }
+  .mobile-nav a, .mobile-nav button { position: relative; }
+  .mobile-nav a.active .mobile-icon, .mobile-nav button.active .mobile-icon { transform: translateY(-1px); }
   /* A count on a tab is unreadable at this size and nobody acts on the exact
      number from here — only on whether there is anything at all. */
   .pip {

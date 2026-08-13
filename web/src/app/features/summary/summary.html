@@ -1,6 +1,7 @@
 <div class="page-head">
   <h1>Summary</h1>
   <finto-select class="currency-select" ariaLabel="Reporting currency"
+                helperText="Changes converted totals and comparisons"
                 [options]="reportingCurrencies" [ngModel]="convertTo()"
                 (ngModelChange)="setConvertTo($event)" />
 </div>
@@ -48,7 +49,7 @@
         </span>
       </div>
     }
-    <button class="hero-action bare" (click)="go('/blotter')">Review this month →</button>
+    <button class="hero-action bare" (click)="reviewThisMonth()">View this month →</button>
   </div>
 </section>
 
@@ -97,7 +98,7 @@
         @for (b of rankedTop(); track b.bucket) {
           <button (click)="drill(b.bucket)">
             <span class="rank mono">{{ ($index + 1).toString().padStart(2, '0') }}</span>
-            <span class="name">{{ b.bucket }}</span>
+            <span class="name">{{ humanize(b.bucket) }}</span>
             <span class="bar-track"><span class="bar-fill" [style.width]="b.width"></span></span>
             <span class="amount mono">{{ b.spend | money: 'bare' }}</span>
             <span class="share mono">{{ (b.share * 100).toFixed(1) }}%</span>

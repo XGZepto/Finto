@@ -25,6 +25,7 @@ async function settle(selector) {
 
 async function visit(route, selector) {
   await page.goto(`${baseUrl}${route}`, { waitUntil: 'networkidle0' });
+  await page.evaluate(() => document.querySelector('.content')?.scrollTo(0, 0));
   await settle(selector);
   await assertMobileBasics(route);
 }
@@ -73,18 +74,65 @@ try {
 
   await visit('/summary', '.hero-figure');
   await shot('summary-after.png');
+  const tickOverlap = await page.$$eval('.trend .tick', (nodes) => {
+    const boxes = nodes.filter((node) => getComputedStyle(node).display !== 'none')
+      .map((node) => node.getBoundingClientRect()).sort((a, b) => a.left - b.left);
+    return boxes.some((box, index) => index > 0 && box.left < boxes[index - 1].right);
+  });
+  if (tickOverlap) throw new Error('Summary chart labels overlap');
   await page.click('finto-select.currency-select .select-trigger');
   await settle('.select-menu');
   const sheet = await page.$eval('.select-menu', (node) => {
     const box = node.getBoundingClientRect();
     return { bottom: Math.round(box.bottom), viewport: innerHeight,
-      ownsBottom: !!document.elementFromPoint(innerWidth / 2, innerHeight - 10)?.closest('.select-menu') };
+      ownsBottom: !!document.elementFromPoint(innerWidth / 2, innerHeight - 10)?.closest('.select-menu'),
+      namedCurrencies: [...node.querySelectorAll('.option-copy strong')].some((item) => item.textContent?.includes('Dollar')),
+      hasSearch: !!node.querySelector('input[type="search"]') };
   });
   if (Math.abs(sheet.viewport - sheet.bottom) > 1 || !sheet.ownsBottom) throw new Error('Select sheet is not above the tab bar at the viewport bottom');
+  if (!sheet.namedCurrencies || !sheet.hasSearch) throw new Error('Currency sheet lacks names or search');
   await shot('summary-currency-sheet-after.png');
 
   await visit('/blotter', '.ledger-card');
+  const navLabels = await page.$$eval('.mobile-nav a', (nodes) => nodes.map((node) => node.textContent?.trim()));
+  if (navLabels.join('|') !== 'Summary|Blotter|Reports|Accounts|More') {
+    throw new Error(`Unexpected mobile navigation: ${navLabels.join('|')}`);
+  }
   await shot('blotter-after.png');
+
+  const openedDetail = await page.$$eval('tr.clickable', (rows) => {
+    const row = rows.find((item) => item.querySelector('td.num .muted')) ?? rows[0];
+    if (!row) return false;
+    row.click();
+    return true;
+  });
+  if (!openedDetail) throw new Error('Could not open transaction detail');
+  await settle('.drawer .transaction-hero');
+  const detailAudit = await page.$eval('.drawer', (node) => ({
+    overflow: node.scrollWidth - node.clientWidth,
+    bar: node.querySelector('.bar-title')?.textContent?.trim(),
+    disclosure: !!node.querySelector('.data-disclosure'),
+    backTarget: Math.round(node.querySelector('.mobile-back')?.getBoundingClientRect().height ?? 0),
+    amountHasCurrency: /[A-Z]{3}/.test(node.querySelector('.amount-hero')?.textContent ?? ''),
+  }));
+  if (detailAudit.overflow > 1 || detailAudit.bar !== 'Transaction' || !detailAudit.disclosure || detailAudit.backTarget < 44 || !detailAudit.amountHasCurrency) {
+    throw new Error(`Transaction detail failed mobile audit: ${JSON.stringify(detailAudit)}`);
+  }
+  await shot('blotter-transaction-after.png');
+  await clickText('.drawer button', 'Edit');
+  await settle('.edit-panel');
+  await page.click('.edit-panel finto-select .select-trigger');
+  await settle('.select-menu');
+  await shot('blotter-transaction-category-after.png');
+  await page.click('.select-menu .sheet-head button');
+  await clickText('.drawer button', 'Cancel');
+  await page.click('.data-disclosure > summary');
+  await page.$eval('.data-disclosure', (node) => node.scrollIntoView({ block: 'start' }));
+  await settle('.data-disclosure[open]');
+  await shot('blotter-statement-data-after.png');
+  await page.click('.mobile-back');
+  await settle('.ledger-card');
+
   await clickText('button', 'Filters');
   await settle('.advanced.open');
   await shot('blotter-filters-after.png');
@@ -116,6 +164,8 @@ try {
 
   await visit('/accounts', '.account-groups');
   await shot('accounts-after.png');
+  await visit('/reports', '.totals-card');
+  await shot('reports-after.png');
 
   // The compact treatment must not damage the wider information-dense layout.
   await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });

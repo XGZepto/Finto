@@ -46,7 +46,7 @@
   grid-template-columns: 8px minmax(90px, 1.1fr) minmax(0, 2fr) auto 52px;
   align-items: center;
   gap: var(--s3);
-  min-height: 0;
+  min-height: 44px;
   padding: var(--s2) 0;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -66,7 +66,9 @@
 .rank-list .share { color: var(--fg-4); text-align: right; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 880px) {
-  .totals-row { gap: var(--s4) var(--s5); }
+  .totals-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+  .totals-row > span { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); min-width: 0; }
+  .totals-row > span b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .totals-row b { font-size: var(--t-fig-sm); }
   .rank-list button { grid-template-columns: 8px minmax(0, 1fr) auto; row-gap: var(--s1); }
   .rank-list .bar-track { grid-column: 2 / -1; grid-row: 2; }

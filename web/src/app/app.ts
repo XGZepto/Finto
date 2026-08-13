@@ -72,7 +72,9 @@ import { PullToRefresh } from './shared/pull-to-refresh';
           </a>
         }
         <a routerLink="/tools" routerLinkActive="active">
-          <span class="mobile-icon"><finto-nav-icon name="more" /></span>
+          <span class="mobile-icon"><finto-nav-icon name="more" />
+            @if (reviewCount() > 0) { <span class="pip" aria-hidden="true"></span> }
+          </span>
           <span>{{ preferences.text('More', '更多') }}</span>
         </a>
       </nav>
@@ -94,22 +96,9 @@ export class App {
     { path: '/ask', label: 'Ask', labelZh: '查詢', icon: 'ask' },
   ];
 
-  /**
-   * The phone's four, chosen for the phone.
-   *
-   * This used to be `nav.slice(0, 4)` — the desktop sidebar's first four — which
-   * spent three of four tabs on Summary, Reports and Accounts, all answering
-   * "where did the money go" in different chart idioms, and left the only
-   * destination you *act* on behind More. Reports is the deep analytical
-   * surface and belongs on a wide screen; Review is the one queue a phone is
-   * genuinely better at, so it takes the tab and carries the badge.
-   */
-  readonly primaryNav = [
-    this.nav[0],                                                          // Summary
-    this.nav[1],                                                          // Blotter
-    { path: '/review', label: 'Review', labelZh: '審核', icon: 'review' },
-    this.nav[3],                                                          // Accounts
-  ];
+  /** Stable top-level destinations earn tabs; episodic queues remain one tap
+   * away in More, whose pip still reports when review work is waiting. */
+  readonly primaryNav = this.nav.slice(0, 4);
 
   readonly desktopGroups = [
     { label: 'Money', labelZh: '財務', items: this.nav.slice(0, 4) },

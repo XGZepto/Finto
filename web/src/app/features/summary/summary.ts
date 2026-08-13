@@ -132,7 +132,7 @@ export class SummaryPage {
 
   /** Where the money went, on whichever dimension is selected. */
   spendSlices = computed<Slice[]>(() =>
-    this.ranked().map((row) => ({ label: row.bucket, value: Math.abs(row.spend.amount) })));
+    this.ranked().map((row) => ({ label: this.humanize(row.bucket), value: Math.abs(row.spend.amount) })));
 
   /** Kept out of the ledger as a stored figure: it is a ratio of two others. */
   savingsRate = computed(() => {
@@ -240,7 +240,8 @@ export class SummaryPage {
       outArea: items.length ? `0,94 ${out} 100,94` : '',
       labels: items.map((item, i) => ({
         ...item,
-        show: items.length <= 8 || i === 0 || i === items.length - 1 || i % Math.ceil(items.length / 6) === 0,
+        show: items.length <= 8 || i === 0 || i === items.length - 1 ||
+          (i % Math.ceil(items.length / 6) === 0 && i < items.length - Math.ceil(items.length / 6)),
       })),
     };
   });
@@ -328,6 +329,10 @@ export class SummaryPage {
   }
 
   go(path: string): void { this.router.navigate([path]); }
+
+  reviewThisMonth(): void {
+    this.router.navigate(['/blotter'], { queryParams: this.comparisonFilters().current });
+  }
 
   humanize(value: string): string {
     return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());

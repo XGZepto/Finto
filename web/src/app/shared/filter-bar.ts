@@ -25,7 +25,7 @@ import { FintoDate } from './finto-date';
           <input
             id="q"
             type="search"
-            placeholder="merchant, description, passenger…"
+            placeholder="Merchant or description"
             [ngModel]="filters.filter().q ?? ''"
             (ngModelChange)="onSearch($event)"
           />

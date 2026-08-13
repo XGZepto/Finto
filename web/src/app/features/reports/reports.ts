@@ -162,6 +162,10 @@ export class ReportsPage {
     this.load();
   }
 
+  humanize(value: string): string {
+    return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (character) => character.toLocaleUpperCase());
+  }
+
   /** Change in outflow against the previous window of equal length. */
   spendDelta = computed<{ amount: Money; percent: number } | null>(() => {
     const now = this.headline(); const before = this.priorHeadline();

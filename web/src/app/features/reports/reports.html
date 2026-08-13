@@ -86,7 +86,7 @@
       @for (band of topBands(); track band.label) {
         <button type="button" (click)="drill(band.label)">
           <span class="dot" [style.background]="band.colour"></span>
-          <span class="name">{{ band.label }}</span>
+          <span class="name">{{ humanize(band.label) }}</span>
           <span class="bar-track"><span class="bar-fill" [style.width]="band.width"
                                         [style.background]="band.colour"></span></span>
           <span class="amount mono">{{ band.amount | money: 'bare' }}</span>
