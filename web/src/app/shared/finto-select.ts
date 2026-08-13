@@ -43,11 +43,11 @@ let instances = 0;
       text-align: left; letter-spacing: 0;
     }
     .select-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .select-trigger i { width: 7px; height: 7px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform .14s ease; }
+    .select-trigger i { width: 7px; height: 7px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform var(--motion-fast) var(--ease); }
     .open .select-trigger { border-color: var(--fg-3); background: var(--panel-2); }
     .open .select-trigger i { transform: rotate(225deg) translate(-2px, -1px); }
     .select-menu {
-      position: absolute; z-index: 80; top: calc(100% + 4px); left: 0; min-width: 100%;
+      position: absolute; z-index: var(--z-popover); top: calc(100% + 4px); left: 0; min-width: 100%;
       width: max-content; max-width: min(320px, 88vw); max-height: 260px; overflow-y: auto;
       padding: 4px; border: 1px solid var(--line-2); background: var(--panel);
       box-shadow: 0 8px 22px #0005;

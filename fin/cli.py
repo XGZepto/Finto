@@ -490,13 +490,13 @@ def cmd_stats(args):
             label = f"{names.get(root, root)} ({root})"
             print(f"  {label:<40} {ccy}  {n:>5} txns  net {tot/100:>14,.2f}")
 
-    unattributed = q("SELECT COUNT(*) FROM v_ledger WHERE card_id IS NULL "
+    unattributed = q("SELECT COUNT(*) AS count_value FROM v_ledger WHERE card_id IS NULL "
                      "AND account_id IN (SELECT DISTINCT account_id FROM card)")
     if unattributed:
         print(f"\n!! {unattributed} txns on card accounts have no card attributed")
         print("   (a reissued card? register it with replaces_card_id)")
 
-    print("\nuncategorised:", q("SELECT COUNT(*) FROM v_ledger WHERE category IS NULL"))
+    print("\nuncategorised:", q("SELECT COUNT(*) AS count_value FROM v_ledger WHERE category IS NULL"))
 
 
 def cmd_export(args):

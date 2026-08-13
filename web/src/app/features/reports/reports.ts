@@ -1,6 +1,7 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api } from '../../core/api.service';
+import { Refresh } from '../../core/refresh.service';
 import { MoneyPipe } from '../../core/money.pipe';
 import { LedgerFilter, Money, SummaryRow } from '../../core/models';
 import { Preferences } from '../../core/preferences.service';
@@ -36,6 +37,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
 })
 export class ReportsPage {
   private api = inject(Api);
+  private refreshes = inject(Refresh);
   private filters = inject(FilterState);
   private preferences = inject(Preferences);
   readonly money = new MoneyPipe();
@@ -63,6 +65,8 @@ export class ReportsPage {
     ['All accounts', ...this.accounts().map((a) => a.display_name)]);
 
   constructor() {
+    // Token starts at 0, so this arms the reload without firing one now.
+    effect(() => { if (this.refreshes.token()) this.load(); });
     this.api.accounts().subscribe({
       next: (res: any) => this.accounts.set(res.accounts ?? res ?? []),
       error: () => undefined,

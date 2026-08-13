@@ -18,7 +18,7 @@ import { FintoDate } from './finto-date';
   selector: 'app-filter-bar',
   imports: [FormsModule, FintoSelect, FintoDate],
   template: `
-    <div class="filter-bar card">
+    <div class="filter-bar card" [class.sheet-open]="expanded()">
       <div class="filter-primary">
         <div class="field search">
           <label for="q">Search</label>
@@ -100,6 +100,11 @@ import { FintoDate } from './finto-date';
           <span>Instalments only</span>
         </label>
         </div>
+
+        <!-- How the scope total is denominated. A preference set once, not a
+             thing you steer with, so it lives with the other set-once controls
+             instead of above the ledger. -->
+        <ng-content select="[filterExtras]" />
         </div>
       </div>
 
@@ -126,7 +131,7 @@ import { FintoDate } from './finto-date';
       display: inline-block;
       margin-right: 6px;
       color: var(--fg-4);
-      transition: transform 220ms cubic-bezier(.4, 0, .2, 1);
+      transition: transform var(--motion) var(--ease);
     }
     .filter-toggle.on .chev { transform: rotate(90deg); color: var(--fg-2); }
     .filter-toggle .count {
@@ -141,8 +146,8 @@ import { FintoDate } from './finto-date';
       display: grid;
       grid-template-rows: 0fr;
       opacity: 0;
-      transition: grid-template-rows 220ms cubic-bezier(.4, 0, .2, 1),
-                  opacity 140ms linear, margin-top 220ms cubic-bezier(.4, 0, .2, 1);
+      transition: grid-template-rows var(--motion) var(--ease),
+                  opacity var(--motion-fast) linear, margin-top var(--motion) var(--ease);
     }
     .advanced.open { grid-template-rows: 1fr; opacity: 1; margin-top: var(--s3); }
     .advanced-inner { overflow: hidden; min-height: 0; }
@@ -172,12 +177,17 @@ import { FintoDate } from './finto-date';
     @media (max-width: 880px) {
       /* Sticky search; the day headers pin below it using the height the
          blotter measures into --filter-h. */
+      /* The sheet and its scrim are children of this bar, so they cannot rise
+         above the tab bar on their own — a positioned ancestor with a z-index
+         traps them in its stacking context, and z-index 40 inside a context at
+         25 still lands under a nav at 30. The bar itself has to move. */
+      .filter-bar.sheet-open { z-index: var(--z-overlay); }
       .filter-bar {
         position: sticky;
         /* Counteract the content pane's top padding so the bar pins flush under
            the status bar with no gap above it. */
         top: calc(-1 * var(--s3));
-        z-index: 25;
+        z-index: var(--z-sticky);
         margin-inline: calc(-1 * var(--s3));
         padding: var(--s3);
         border-left: 0;
@@ -189,7 +199,7 @@ import { FintoDate } from './finto-date';
       .advanced {
         position: fixed;
         left: 0; right: 0; bottom: 0;
-        z-index: 40;
+        z-index: var(--z-overlay);
         display: block;
         max-height: 78vh;
         overflow-y: auto;
@@ -198,7 +208,7 @@ import { FintoDate } from './finto-date';
         background: var(--panel);
         border-top: 1px solid var(--line-2);
         transform: translateY(100%);
-        transition: transform 260ms cubic-bezier(.4, 0, .2, 1), opacity 160ms linear;
+        transition: transform var(--motion-slow) var(--ease), opacity var(--motion-fast) linear;
       }
       .advanced.open { transform: translateY(0); margin-top: 0; }
       /* A sheet over the ledger has to take the taps the ledger would have got,
@@ -207,7 +217,7 @@ import { FintoDate } from './finto-date';
         display: block;
         position: fixed;
         inset: 0;
-        z-index: 39;
+        z-index: var(--z-scrim);
         min-height: 0;
         padding: 0;
         border: 0;

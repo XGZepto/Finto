@@ -2,6 +2,7 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
+import { Refresh } from '../../core/refresh.service';
 import { MoneyPipe } from '../../core/money.pipe';
 import { Money, StatementFreshness, SummaryRow, TotalRow } from '../../core/models';
 import { FintoSelect } from '../../shared/finto-select';
@@ -33,6 +34,7 @@ import { FilterState } from '../../core/filter-state';
 })
 export class SummaryPage {
   private api = inject(Api);
+  private refreshes = inject(Refresh);
   private router = inject(Router);
   private filters = inject(FilterState);
   private preferences = inject(Preferences);
@@ -292,6 +294,8 @@ export class SummaryPage {
   });
 
   constructor() {
+    // Token starts at 0, so this arms the reload without firing one now.
+    effect(() => { if (this.refreshes.token()) this.load(); });
     this.api.statementFreshness().subscribe({ next: (r) => this.freshness.set(r) });
     effect(() => {
       this.convertTo();

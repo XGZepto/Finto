@@ -70,11 +70,11 @@
 /* Drawer ------------------------------------------------------------------ */
 
 .drawer-backdrop {
-  position: fixed; inset: 0; z-index: 40;
+  position: fixed; inset: 0; z-index: var(--z-scrim);
   width: 100%; height: 100%; padding: 0; border: 0; background: #000a;
 }
 .drawer {
-  position: fixed; top: 0; right: 0; bottom: 0; z-index: 41;
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: var(--z-overlay);
   width: min(430px, 100vw);
   overflow-y: auto;
   overscroll-behavior: contain;

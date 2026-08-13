@@ -48,7 +48,7 @@ import { NavIcon } from '../../shared/nav-icon';
       border: 1px solid var(--line);
       background: var(--panel);
       text-decoration: none;
-      transition: border-color 90ms linear, background 90ms linear;
+      transition: border-color var(--motion-fast) linear, background var(--motion-fast) linear;
     }
     .tool:hover { border-color: var(--line-2); background: var(--panel-2); }
     .tool-icon {

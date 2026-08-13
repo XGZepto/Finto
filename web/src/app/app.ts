@@ -7,6 +7,7 @@ import { Api } from './core/api.service';
 import { Preferences } from './core/preferences.service';
 import { scrollPane } from './core/scroll';
 import { NavIcon } from './shared/nav-icon';
+import { PullToRefresh } from './shared/pull-to-refresh';
 
 /**
  * App shell.
@@ -17,7 +18,7 @@ import { NavIcon } from './shared/nav-icon';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NavIcon],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NavIcon, PullToRefresh],
   template: `
     <div class="shell">
       <nav class="sidebar">
@@ -51,6 +52,7 @@ import { NavIcon } from './shared/nav-icon';
       </nav>
 
       <main class="content">
+        <finto-pull-to-refresh />
         @if (offline()) {
           <p class="offline" role="status">{{ preferences.text('offline', '離線') }}</p>
         }
@@ -60,7 +62,12 @@ import { NavIcon } from './shared/nav-icon';
       <nav class="mobile-nav" aria-label="Primary navigation">
         @for (item of primaryNav; track item.path) {
           <a [routerLink]="item.path" routerLinkActive="active">
-            <span class="mobile-icon"><finto-nav-icon [name]="item.icon" /></span>
+            <span class="mobile-icon">
+              <finto-nav-icon [name]="item.icon" />
+              @if (item.path === '/review' && reviewCount() > 0) {
+                <span class="pip" aria-hidden="true"></span>
+              }
+            </span>
             <span>{{ preferences.text(item.label, item.labelZh) }}</span>
           </a>
         }
@@ -78,12 +85,6 @@ export class App {
   private router = inject(Router);
   preferences = inject(Preferences);
 
-  /**
-   * One ordered list. The first four are the mobile tab bar and the desktop
-   * "Money" group; everything after is the desktop "More" group and lives
-   * behind the mobile More tab. The group boundary is the fold, so the two
-   * platforms cannot drift apart.
-   */
   readonly nav = [
     { path: '/summary', label: 'Summary', labelZh: '總覽', icon: 'summary' },
     { path: '/blotter', label: 'Blotter', labelZh: '帳目', icon: 'blotter' },
@@ -93,7 +94,23 @@ export class App {
     { path: '/ask', label: 'Ask', labelZh: '查詢', icon: 'ask' },
   ];
 
-  readonly primaryNav = this.nav.slice(0, 4);
+  /**
+   * The phone's four, chosen for the phone.
+   *
+   * This used to be `nav.slice(0, 4)` — the desktop sidebar's first four — which
+   * spent three of four tabs on Summary, Reports and Accounts, all answering
+   * "where did the money go" in different chart idioms, and left the only
+   * destination you *act* on behind More. Reports is the deep analytical
+   * surface and belongs on a wide screen; Review is the one queue a phone is
+   * genuinely better at, so it takes the tab and carries the badge.
+   */
+  readonly primaryNav = [
+    this.nav[0],                                                          // Summary
+    this.nav[1],                                                          // Blotter
+    { path: '/review', label: 'Review', labelZh: '審核', icon: 'review' },
+    this.nav[3],                                                          // Accounts
+  ];
+
   readonly desktopGroups = [
     { label: 'Money', labelZh: '財務', items: this.nav.slice(0, 4) },
     { label: 'More', labelZh: '更多', items: this.nav.slice(4) },

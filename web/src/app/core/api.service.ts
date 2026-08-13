@@ -72,7 +72,8 @@ export class Api {
     return value;
   }
 
-  private invalidateReads(): void {
+  /** Drop every cached read. Mutations call this; so does a manual refresh. */
+  invalidateReads(): void {
     this.reads.clear();
     this.cacheVersion += 1;
     localStorage.setItem('finto.cacheVersion', String(this.cacheVersion));

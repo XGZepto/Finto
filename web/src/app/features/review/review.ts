@@ -1,5 +1,6 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { Api } from '../../core/api.service';
+import { Refresh } from '../../core/refresh.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { Money } from '../../core/models';
@@ -15,6 +16,7 @@ type Queue = 'duplicates' | 'transfers' | 'installments';
 })
 export class ReviewPage {
   private api = inject(Api);
+  private refreshes = inject(Refresh);
 
   readonly queues: Array<{ id: Queue; label: string }> = [
     { id: 'duplicates', label: 'Duplicates' },
@@ -32,6 +34,8 @@ export class ReviewPage {
   current = computed(() => this.items()[this.cursor()] ?? null);
 
   constructor() {
+    // Token starts at 0, so this arms the reload without firing one now.
+    effect(() => { if (this.refreshes.token()) this.load(); });
     this.loadCounts();
     this.load();
   }
