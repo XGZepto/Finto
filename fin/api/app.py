@@ -312,9 +312,15 @@ def login(req: LoginRequest, request: Request, response: Response) -> dict:
         conn.commit()
     finally:
         conn.close()
+    # Lax, not Strict: Strict withholds the cookie on any top-level navigation
+    # that did not start on this site — launching the installed PWA, or opening
+    # a Finto link from another app — so the session looks absent and the user
+    # is bounced to /login while still holding a valid year-long cookie. Every
+    # GET here is read-only and every mutation is POST/PATCH/DELETE, which Lax
+    # still withholds cross-site, so this keeps the CSRF protection that matters.
     response.set_cookie(
         "finto_session", token, max_age=max_age, httponly=True, secure=True,
-        samesite="strict", path="/",
+        samesite="lax", path="/",
     )
     return {"ok": True, "user": public_user(user)}
 
@@ -330,7 +336,7 @@ def logout(request: Request, response: Response) -> dict:
         conn.commit()
     finally:
         conn.close()
-    response.delete_cookie("finto_session", path="/", secure=True, samesite="strict")
+    response.delete_cookie("finto_session", path="/", secure=True, samesite="lax")
     return {"ok": True}
 
 
