@@ -91,9 +91,15 @@ try {
   });
   if (Math.abs(sheet.viewport - sheet.bottom) > 1 || !sheet.ownsBottom) throw new Error('Select sheet is not above the tab bar at the viewport bottom');
   if (!sheet.namedCurrencies || !sheet.hasSearch) throw new Error('Currency sheet lacks names or search');
+  const selectedCurrencyCopy = await page.$eval('.select-menu .select-option.selected', (node) => node.textContent ?? '');
+  if ((selectedCurrencyCopy.match(/USD/g) ?? []).length !== 1 || !selectedCurrencyCopy.includes('US Dollar')) {
+    throw new Error(`Currency identity is repetitive or incomplete: ${selectedCurrencyCopy.trim()}`);
+  }
   await shot('summary-currency-sheet-after.png');
 
   await visit('/blotter', '.ledger-card');
+  const reviewChrome = await page.$('.review-progress, .review-value');
+  if (reviewChrome) throw new Error('Ledger still exposes review-state chrome');
   const navLabels = await page.$$eval('.mobile-nav a', (nodes) => nodes.map((node) => node.textContent?.trim()));
   if (navLabels.join('|') !== 'Summary|Blotter|Reports|Accounts|More') {
     throw new Error(`Unexpected mobile navigation: ${navLabels.join('|')}`);
@@ -163,17 +169,99 @@ try {
   await shot('blotter-category-suggestion-after.png');
 
   await visit('/accounts', '.account-groups');
+  const accountGeometry = await page.evaluate(() => {
+    const single = document.querySelector('.single-account')?.getBoundingClientRect();
+    const group = document.querySelector('.group-header')?.getBoundingClientRect();
+    return { singleHeight: Math.round(single?.height ?? 0), groupHeight: Math.round(group?.height ?? 0),
+      singleCentre: single ? Math.round(single.top + single.height / 2) : 0,
+      groupCentre: group ? Math.round(group.top + group.height / 2) : 0 };
+  });
+  if (!accountGeometry.singleHeight || Math.abs(accountGeometry.singleHeight - accountGeometry.groupHeight) > 1) {
+    throw new Error(`Account headers do not share geometry: ${JSON.stringify(accountGeometry)}`);
+  }
   await shot('accounts-after.png');
+
+  await page.click('.group-header');
+  await settle('.group-hero');
+  await assertMobileBasics('/accounts/group/:group');
+  const groupScroll = await page.$eval('.content', (node) => node.scrollTop);
+  if (groupScroll > 1) throw new Error(`Group detail inherited ${groupScroll}px of list scroll`);
+  const groupRoute = new URL(page.url()).pathname;
+  await shot('account-group-after.png');
+  await page.click('.group-subaccount-grid button');
+  await settle('.balance-card');
+  await assertMobileBasics('/accounts/:id');
+  const subaccountScroll = await page.$eval('.content', (node) => node.scrollTop);
+  if (subaccountScroll > 1) throw new Error(`Subaccount detail inherited ${subaccountScroll}px of group scroll`);
+  const subaccountRoute = new URL(page.url()).pathname;
+  await shot('account-subaccount-after.png');
+
+  await visit('/accounts', '.single-account');
+  await page.click('.single-account');
+  await settle('.balance-card');
+  await assertMobileBasics('/accounts/:id');
+  const standaloneScroll = await page.$eval('.content', (node) => node.scrollTop);
+  if (standaloneScroll > 1) throw new Error(`Standalone account inherited ${standaloneScroll}px of list scroll`);
+  await shot('account-standalone-after.png');
+
+  await visit('/tools', '.tool-grid');
+  await shot('more-after.png');
+  await visit('/profile', '.settings-grid');
+  await shot('settings-after.png');
+
+  // Light surfaces are checked independently; dark-only polish is not enough.
+  for (const [route, selector, image] of [
+    ['/summary', '.hero-figure', 'summary-light-after.png'],
+    ['/accounts', '.account-groups', 'accounts-light-after.png'],
+    ['/profile', '.settings-grid', 'settings-light-after.png'],
+  ]) {
+    await visit(route, selector);
+    await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await shot(image);
+  }
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+
   await visit('/reports', '.totals-card');
   await shot('reports-after.png');
+  const flowWaiting = await page.$eval('finto-flow', (node) => !node.classList.contains('finto-in-view'));
+  if (!flowWaiting) throw new Error('Below-fold flow chart animated before entering the viewport');
+  await page.$eval('finto-flow', (node) => node.scrollIntoView({ block: 'center' }));
+  await settle('finto-flow.finto-in-view');
+  const flowRunning = await page.$eval('finto-flow .seg', (node) => getComputedStyle(node).animationPlayState);
+  if (flowRunning !== 'running') throw new Error(`Flow chart did not animate on entry: ${flowRunning}`);
+  await shot('reports-flow-after.png');
+
+  await visit('/reports', '.totals-card');
+  const edgesAtTop = await page.evaluate(() => ({
+    top: document.querySelector('.scroll-edge.top')?.classList.contains('show'),
+    bottom: document.querySelector('.scroll-edge.bottom')?.classList.contains('show'),
+  }));
+  if (edgesAtTop.top || !edgesAtTop.bottom) throw new Error(`Incorrect scroll edge state at top: ${JSON.stringify(edgesAtTop)}`);
+  await page.evaluate(() => document.querySelector('.content')?.scrollTo(0, document.querySelector('.content')?.scrollHeight ?? 0));
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const edgesAtBottom = await page.evaluate(() => ({
+    top: document.querySelector('.scroll-edge.top')?.classList.contains('show'),
+    bottom: document.querySelector('.scroll-edge.bottom')?.classList.contains('show'),
+  }));
+  if (!edgesAtBottom.top || edgesAtBottom.bottom) throw new Error(`Incorrect scroll edge state at bottom: ${JSON.stringify(edgesAtBottom)}`);
 
   // The compact treatment must not damage the wider information-dense layout.
   await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
-  for (const [route, selector] of [['/summary', '.hero-figure'], ['/blotter', '.ledger-card'], ['/accounts', '.account-groups']]) {
+  for (const [route, selector, image] of [
+    ['/summary', '.hero-figure', 'summary-desktop-after.png'],
+    ['/blotter', '.ledger-card', 'blotter-desktop-after.png'],
+    ['/accounts', '.account-groups', 'accounts-desktop-after.png'],
+    ['/reports', '.totals-card', 'reports-desktop-after.png'],
+    [groupRoute, '.group-hero', 'account-group-desktop-after.png'],
+    [subaccountRoute, '.balance-card', 'account-subaccount-desktop-after.png'],
+    ['/profile', '.settings-grid', 'settings-desktop-after.png'],
+  ]) {
     await page.goto(`${baseUrl}${route}`, { waitUntil: 'networkidle0' });
     await settle(selector);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (overflow > 1) throw new Error(`${route}: desktop horizontal overflow of ${overflow}px`);
+    await shot(image);
   }
 
   await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);

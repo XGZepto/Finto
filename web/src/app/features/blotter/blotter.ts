@@ -75,7 +75,6 @@ export class BlotterPage implements OnDestroy {
   rows = signal<Txn[]>([]);
   total = signal(0);
   scopeTotals = signal<TotalRow[]>([]);
-  reviewProgress = signal({ total: 0, unreviewed: 0, confirmed: 0, flagged: 0 });
   normalised = signal<{ net: Money; spend: Money; income: Money; unconvertible_currencies: string[] } | null>(null);
   showNative = signal(false);
   convertTo = signal('USD');
@@ -195,7 +194,6 @@ export class BlotterPage implements OnDestroy {
           this.rows.update((rows) => (reset ? page.items : [...rows, ...page.items]));
           this.total.set(page.total);
           this.scopeTotals.set(page.totals ?? []);
-          this.reviewProgress.set(page.review ?? { total: 0, unreviewed: 0, confirmed: 0, flagged: 0 });
           this.normalised.set(page.normalised ?? null);
           this.loading.set(false);
           this.loadingMore.set(false);
@@ -304,14 +302,6 @@ export class BlotterPage implements OnDestroy {
           ? rows.filter((r) => r.id !== updated.id)
           : rows.map((r) => (r.id === updated.id ? updated : r)));
         if (leavesQueue) this.total.update((total) => Math.max(0, total - 1));
-        if (txn.review_state === 'unreviewed') {
-          this.reviewProgress.update((review) => ({
-            ...review,
-            total: leavesQueue ? Math.max(0, review.total - 1) : review.total,
-            unreviewed: Math.max(0, review.unreviewed - 1),
-            confirmed: leavesQueue ? review.confirmed : review.confirmed + 1,
-          }));
-        }
       },
     });
   }

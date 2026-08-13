@@ -38,6 +38,11 @@ export const routes: Routes = [
     title: 'Timeline · Finto',
   },
   {
+    path: 'accounts/group/:group',
+    loadComponent: () => import('./features/accounts/accounts').then((m) => m.AccountsPage),
+    title: 'Account group · Finto',
+  },
+  {
     path: 'accounts/:id',
     loadComponent: () => import('./features/accounts/accounts').then((m) => m.AccountsPage),
     title: 'Account · Finto',
@@ -67,7 +72,7 @@ export const routes: Routes = [
   {
     path: 'review',
     loadComponent: () => import('./features/review/review').then((m) => m.ReviewPage),
-    title: 'Review · Finto',
+    title: 'Matching suggestions · Finto',
   },
   {
     path: 'integrity',

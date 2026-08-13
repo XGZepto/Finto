@@ -1,9 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, inject, signal } from '@angular/core';
 import {
   NavigationCancel, NavigationEnd, NavigationError, NavigationStart, Router,
   RouterLink, RouterLinkActive, RouterOutlet,
 } from '@angular/router';
-import { Api } from './core/api.service';
 import { Preferences } from './core/preferences.service';
 import { scrollPane } from './core/scroll';
 import { NavIcon } from './shared/nav-icon';
@@ -12,9 +11,8 @@ import { PullToRefresh } from './shared/pull-to-refresh';
 /**
  * App shell.
  *
- * The two badges are the only ambient state worth interrupting for: how much is
- * sitting in the review queues, and whether the ledger currently reconciles. Both
- * are questions you want answered without navigating to ask them.
+ * Navigation stays quiet. Connectivity is the only ambient state that crosses
+ * every route; other status belongs beside the data that explains it.
  */
 @Component({
   selector: 'app-root',
@@ -34,9 +32,6 @@ import { PullToRefresh } from './shared/pull-to-refresh';
                 <a [routerLink]="item.path" routerLinkActive="active">
                   <span class="idx"><finto-nav-icon [name]="item.icon" /></span>
                   <span class="label">{{ preferences.text(item.label, item.labelZh) }}</span>
-                  @if (item.path === '/review' && reviewCount() > 0) {
-                    <span class="badge">{{ reviewCount() }}</span>
-                  }
                 </a>
               }
             </section>
@@ -51,30 +46,27 @@ import { PullToRefresh } from './shared/pull-to-refresh';
         </div>
       </nav>
 
-      <main class="content">
+      <main #content class="content" (scroll)="updateScrollEdges()">
         <finto-pull-to-refresh />
         @if (offline()) {
           <p class="offline" role="status">{{ preferences.text('offline', '離線') }}</p>
         }
         <router-outlet />
       </main>
+      <span class="scroll-edge top" [class.show]="canScrollUp()" aria-hidden="true"></span>
+      <span class="scroll-edge bottom" [class.show]="canScrollDown()" aria-hidden="true"></span>
 
       <nav class="mobile-nav" aria-label="Primary navigation">
         @for (item of primaryNav; track item.path) {
           <a [routerLink]="item.path" routerLinkActive="active">
             <span class="mobile-icon">
               <finto-nav-icon [name]="item.icon" />
-              @if (item.path === '/review' && reviewCount() > 0) {
-                <span class="pip" aria-hidden="true"></span>
-              }
             </span>
             <span>{{ preferences.text(item.label, item.labelZh) }}</span>
           </a>
         }
         <a routerLink="/tools" routerLinkActive="active">
-          <span class="mobile-icon"><finto-nav-icon name="more" />
-            @if (reviewCount() > 0) { <span class="pip" aria-hidden="true"></span> }
-          </span>
+          <span class="mobile-icon"><finto-nav-icon name="more" /></span>
           <span>{{ preferences.text('More', '更多') }}</span>
         </a>
       </nav>
@@ -82,8 +74,7 @@ import { PullToRefresh } from './shared/pull-to-refresh';
   `,
   styleUrl: './app.css',
 })
-export class App {
-  private api = inject(Api);
+export class App implements AfterViewInit, OnDestroy {
   private router = inject(Router);
   preferences = inject(Preferences);
 
@@ -96,8 +87,7 @@ export class App {
     { path: '/ask', label: 'Ask', labelZh: '查詢', icon: 'ask' },
   ];
 
-  /** Stable top-level destinations earn tabs; episodic queues remain one tap
-   * away in More, whose pip still reports when review work is waiting. */
+  /** Stable top-level destinations earn tabs; episodic utilities stay in More. */
   readonly primaryNav = this.nav.slice(0, 4);
 
   readonly desktopGroups = [
@@ -105,11 +95,14 @@ export class App {
     { label: 'More', labelZh: '更多', items: this.nav.slice(4) },
   ];
 
-  reviewCount = signal(0);
   /** Live, not a boot-time probe: connectivity is only worth showing while it changes. */
   offline = signal(!navigator.onLine);
   navigating = signal(false);
+  canScrollUp = signal(false);
+  canScrollDown = signal(false);
   private lastPath = '';
+  private contentObserver?: MutationObserver;
+  @ViewChild('content') content?: ElementRef<HTMLElement>;
 
   constructor() {
     this.preferences.loadUser();
@@ -123,15 +116,23 @@ export class App {
       }
       if (event instanceof NavigationEnd) this.scrollOnPathChange(event.urlAfterRedirects);
     });
-    this.api.stats().subscribe({
-      next: (s) =>
-        this.reviewCount.set(
-          (s.open_duplicate_candidates ?? 0) +
-            (s.open_transfer_candidates ?? 0) +
-            (s.open_installment_candidates ?? 0),
-        ),
-      error: () => undefined,
-    });
+  }
+
+  ngAfterViewInit(): void {
+    const content = this.content?.nativeElement;
+    if (!content) return;
+    this.contentObserver = new MutationObserver(() => requestAnimationFrame(() => this.updateScrollEdges()));
+    this.contentObserver.observe(content, { childList: true, subtree: true, characterData: true });
+    this.updateScrollEdges();
+  }
+
+  ngOnDestroy(): void { this.contentObserver?.disconnect(); }
+
+  updateScrollEdges(): void {
+    const pane = this.content?.nativeElement;
+    if (!pane) return;
+    this.canScrollUp.set(pane.scrollTop > 2);
+    this.canScrollDown.set(pane.scrollTop + pane.clientHeight < pane.scrollHeight - 2);
   }
 
   /**
@@ -144,6 +145,14 @@ export class App {
     const path = url.split('?')[0];
     if (path === this.lastPath) return;
     this.lastPath = path;
-    scrollPane()?.scrollTo(0, 0);
+    // Reset immediately and after the incoming view has laid out. A clicked
+    // row can otherwise be focus-scrolled after NavigationEnd and leak the
+    // list's offset into its detail page.
+    const reset = () => {
+      scrollPane()?.scrollTo(0, 0);
+      this.updateScrollEdges();
+    };
+    reset();
+    requestAnimationFrame(() => requestAnimationFrame(reset));
   }
 }

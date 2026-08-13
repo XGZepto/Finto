@@ -7,7 +7,7 @@ import { Money } from '../../core/models';
 
 type Queue = 'duplicates' | 'transfers' | 'installments';
 
-/** Review queues with J/K navigation and A/R decisions. */
+/** Occasional matching suggestions with J/K navigation and A/R decisions. */
 @Component({
   selector: 'app-review',
   imports: [FintoSkeleton, MoneyPipe, ShortDatePipe],

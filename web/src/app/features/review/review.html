@@ -1,5 +1,8 @@
 <div class="page-head">
-  <h1>Review</h1>
+  <div>
+    <h1>Matching suggestions</h1>
+    <p class="sub">Resolve only the matches that need a human decision.</p>
+  </div>
 </div>
 
 <div class="bar">
@@ -26,7 +29,7 @@
   </div>
 } @else {
   <div class="workspace">
-    <!-- The queue, so you can see how far in you are. -->
+    <!-- The candidate list keeps this occasional task bounded and transparent. -->
     <ol class="queue">
       @for (item of items(); track item.id; let i = $index) {
         <li [class.on]="i === cursor()" (click)="cursor.set(i)">
@@ -103,8 +106,8 @@
           </div>
         }
 
-        <!-- Why the matcher scored it this way. A score with no reasons is not
-             reviewable, it is just a number to trust or ignore. -->
+        <!-- Why the matcher scored it this way. A score with no reasons is only
+             a number to trust or ignore. -->
         <div class="reasons">
           <label>Scored on</label>
           <ul>

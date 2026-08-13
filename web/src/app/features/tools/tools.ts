@@ -1,6 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Api } from '../../core/api.service';
 import { NavIcon } from '../../shared/nav-icon';
 
 /**
@@ -26,12 +25,10 @@ import { NavIcon } from '../../shared/nav-icon';
               <span class="tool-body">
                 <span class="tool-name">
                   {{ tool.name }}
-                  @if (tool.path === '/review' && reviewCount() > 0) {
-                    <span class="badge">{{ reviewCount() }}</span>
-                  }
                 </span>
                 <span class="tool-note">{{ tool.note }}</span>
               </span>
+              <span class="tool-arrow" aria-hidden="true">›</span>
             </a>
           }
         </div>
@@ -43,7 +40,8 @@ import { NavIcon } from '../../shared/nav-icon';
     .tool-group h2 { margin-bottom: var(--s3); }
     .tool-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--s3); }
     .tool {
-      display: flex; align-items: flex-start; gap: var(--s3);
+      display: grid; grid-template-columns: 32px minmax(0, 1fr) 16px; align-items: center; gap: var(--s3);
+      min-height: 72px;
       padding: var(--s4);
       border: 1px solid var(--line);
       background: var(--panel);
@@ -53,18 +51,24 @@ import { NavIcon } from '../../shared/nav-icon';
     .tool:hover { border-color: var(--line-2); background: var(--panel-2); }
     .tool-icon {
       display: grid; place-items: center; flex: none;
-      width: 30px; height: 30px;
+      width: 32px; height: 32px;
       border: 1px solid var(--line-2); color: var(--fg-3);
     }
     .tool-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .tool-name { display: flex; align-items: center; gap: var(--s2); color: var(--fg); font-size: var(--t-body); font-weight: 600; }
     .tool-note { color: var(--fg-3); font-size: var(--t-data); }
+    .tool-arrow { color: var(--fg-4); font-size: var(--t-lede); text-align: right; }
+    @media (max-width: 880px) {
+      .tool-group { margin: 0 0 var(--s5); }
+      .tool-group h2 { margin: 0 0 var(--s2); color: var(--fg-4); font-size: var(--t-label); }
+      .tool-grid { display: block; border: 1px solid var(--line); background: var(--panel); }
+      .tool { min-height: 68px; padding: var(--s3); border: 0; border-bottom: 1px solid var(--line); background: transparent; }
+      .tool:last-child { border-bottom: 0; }
+      .tool-note { font-size: var(--t-meta); }
+    }
   `],
 })
 export class ToolsPage {
-  private api = inject(Api);
-  reviewCount = signal(0);
-
   readonly groups = [
     {
       label: 'Money',
@@ -82,9 +86,9 @@ export class ToolsPage {
       ],
     },
     {
-      label: 'Checks',
+      label: 'Ledger health',
       items: [
-        { path: '/review', icon: 'review', name: 'Review', note: 'Duplicate, transfer and instalment candidates' },
+        { path: '/review', icon: 'review', name: 'Matching suggestions', note: 'Potential duplicates, transfers and instalments' },
         { path: '/integrity', icon: 'integrity', name: 'Integrity', note: 'Statement reconciliation and coverage' },
         { path: '/timeline', icon: 'timeline', name: 'Timeline', note: 'Month by month movement' },
       ],
@@ -96,16 +100,4 @@ export class ToolsPage {
       ],
     },
   ];
-
-  constructor() {
-    this.api.stats().subscribe({
-      next: (s) =>
-        this.reviewCount.set(
-          (s.open_duplicate_candidates ?? 0) +
-            (s.open_transfer_candidates ?? 0) +
-            (s.open_installment_candidates ?? 0),
-        ),
-      error: () => undefined,
-    });
-  }
 }

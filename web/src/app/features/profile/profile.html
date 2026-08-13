@@ -1,4 +1,4 @@
-<div class="page-head"><h1>{{ t('Profile & settings', '個人及設定') }}</h1></div>
+<div class="page-head"><h1>{{ t('Settings', '設定') }}</h1></div>
 <div class="settings-grid">
   <section class="card identity"><div class="avatar">{{ preferences.user()?.username?.charAt(0)?.toUpperCase() || 'F' }}</div><div><h2>{{ preferences.user()?.username || t('Private workspace', '私人工作區') }}</h2>@if (preferences.user()?.email; as email) { <span>{{ email }}</span> }</div></section>
   <section class="card">
@@ -24,7 +24,7 @@
     </div>
   </section>
   <section class="card api-access">
-    <div class="section-head"><h2>API access</h2><button (click)="generateApiKey()">Generate key</button></div>
+    <div class="section-head"><h2>API access</h2><button class="ghost" (click)="generateApiKey()">Generate key</button></div>
     @if (newApiKey()) {
       <div class="key-reveal"><code>{{ newApiKey() }}</code><button class="primary" (click)="copyApiKey()">{{ copied() ? 'Copied' : 'Copy' }}</button></div>
     }
@@ -36,7 +36,10 @@
       </div>
     } @empty { <div class="empty compact">No API keys</div> }
   </section>
-  <section class="card"><h2>{{ t('Session', '工作階段') }}</h2><button class="danger" (click)="logout()">{{ t('Sign out', '登出') }}</button></section>
-  <section class="card"><h2>{{ t('Storage', '儲存') }}</h2><div class="setting-row"><strong>PostgreSQL</strong><span class="dot ok"></span></div></section>
-  <section class="card"><h2>{{ t('Data maintenance', '資料維護') }}</h2><a routerLink="/import" class="btn">{{ t('Import statements', '匯入月結單') }} →</a></section>
+  <section class="card workspace-settings">
+    <h2>{{ t('Workspace', '工作區') }}</h2>
+    <a routerLink="/import" class="setting-link"><span><strong>{{ t('Import statements', '匯入月結單') }}</strong><small>{{ t('Add or preview ledger data', '新增或預覽帳目資料') }}</small></span><i>›</i></a>
+    <div class="setting-link static"><span><strong>{{ t('Storage', '儲存') }}</strong><small>PostgreSQL</small></span><span class="status"><i class="dot ok"></i>{{ t('Connected', '已連線') }}</span></div>
+    <button class="setting-link sign-out" (click)="logout()"><span><strong>{{ t('Sign out', '登出') }}</strong><small>{{ t('End this session', '結束此工作階段') }}</small></span><i>›</i></button>
+  </section>
 </div>

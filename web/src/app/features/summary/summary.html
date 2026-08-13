@@ -73,7 +73,7 @@
         <span class="peak mono">peak {{ trendPeak() | money: 'bare' }}</span>
         <span class="legend"><i class="key out"></i>out <i class="key in"></i>in</span>
       </div>
-      <div class="trend" role="img" [attr.aria-label]="convertTo() + '-normalised cash flow trend'">
+      <div class="trend" fintoReveal role="img" [attr.aria-label]="convertTo() + '-normalised cash flow trend'">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           <defs><linearGradient id="out-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--fg-2)" stop-opacity=".18"/><stop offset="1" stop-color="var(--fg-2)" stop-opacity="0"/></linearGradient></defs>
           <line class="gridline" x1="0" y1="14" x2="100" y2="14"/><line class="gridline" x1="0" y1="53" x2="100" y2="53"/><line class="gridline" x1="0" y1="92" x2="100" y2="92"/>
@@ -89,7 +89,7 @@
     }
 
     @if (spendSlices().length > 1) {
-      <finto-donut class="breakdown-donut" [slices]="spendSlices()"
+      <finto-donut class="breakdown-donut" fintoReveal [slices]="spendSlices()"
                    [label]="'Spending by ' + groupBy()" />
     }
 

@@ -2,25 +2,24 @@
   <h1>Blotter</h1>
 </div>
 
-<app-filter-bar #filterBar (changed)="load()">
-  <div filterExtras class="aggregation-controls">
-    <span class="aggregation-label">Totals</span>
+<app-filter-bar #filterBar (changed)="load()" />
+
+<div class="card ledger-card">
+  <div class="aggregation-controls">
+    <span class="aggregation-label">Amounts</span>
     <div class="aggregation-actions">
-      <div class="seg" aria-label="Aggregation currency mode">
-        <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Normalised</button>
+      <div class="seg" aria-label="Amount display">
+        <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Converted</button>
         <button [class.on]="showNative()" (click)="setAggregation('native')">Native</button>
       </div>
       @if (!showNative()) {
-        <finto-select class="currency-select" ariaLabel="Aggregation currency"
-                      helperText="Changes converted ledger totals"
+        <finto-select class="currency-select" ariaLabel="Display currency"
+                      helperText="Used for comparable totals"
                       [options]="currencies()" [ngModel]="convertTo()"
                       (ngModelChange)="setConvertTo($event)" />
       }
     </div>
   </div>
-</app-filter-bar>
-
-<div class="card ledger-card">
   @if (scopeTotals().length) {
     @if (!showNative() && normalised(); as total) {
       <div class="scope normalised-scope">
@@ -43,14 +42,6 @@
       }
     </div>
     }
-  }
-
-  @if (reviewProgress().total; as totalReview) {
-    <div class="review-progress" role="status">
-      <span><b>{{ reviewProgress().confirmed }}</b> reviewed</span>
-      <span>{{ reviewProgress().unreviewed }} left@if (reviewProgress().flagged) { · {{ reviewProgress().flagged }} flagged }</span>
-      <span class="review-track" aria-hidden="true"><i [style.width.%]="reviewProgress().confirmed / totalReview * 100"></i></span>
-    </div>
   }
 
   @if (loading()) {
@@ -252,7 +243,6 @@
     <dl class="drawer-overview">
       <div><dt>Category</dt><dd>{{ friendlyTaxonomy(txn.category) }}@if (txn.subcategory) { <span class="taxonomy sub">{{ friendlyTaxonomy(txn.subcategory) }}</span> }</dd></div>
       <div><dt>Status</dt><dd>{{ friendlyTaxonomy(txn.status) }} · {{ friendlyTaxonomy(txn.kind) }}</dd></div>
-      <div><dt>Review</dt><dd class="review-value"><i [class.confirmed]="txn.review_state === 'confirmed'" [class.flagged]="txn.review_state === 'flagged'"></i>{{ friendlyTaxonomy(txn.review_state) }}</dd></div>
       @if (txn.cardholder_name) { <div><dt>Cardholder</dt><dd>{{ txn.cardholder_name }}@if (txn.card_last4) { <span class="mono muted"> ·{{ txn.card_last4 }}</span> }</dd></div> }
     </dl>
 

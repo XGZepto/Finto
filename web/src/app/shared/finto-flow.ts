@@ -42,7 +42,7 @@ export interface FlowNode {
   styles: [`
     .alloc { display: flex; flex-direction: column; gap: var(--s4); }
     .bar { display: flex; height: 12px; width: 100%; overflow: hidden; background: var(--panel-3); }
-    .seg { min-width: 1px; border-right: 1px solid var(--bg); }
+    .seg { min-width: 1px; border-right: 1px solid var(--bg); transform-origin: left; animation: allocation-reveal var(--motion-base) var(--ease-out) both; }
     .seg:last-child { border-right: 0; }
     .legend { display: grid; grid-template-columns: 1fr; gap: 0; }
     .row {
@@ -68,6 +68,8 @@ export interface FlowNode {
     @media (min-width: 881px) {
       .row { grid-template-columns: 10px minmax(0, 1fr) 64px 120px; }
     }
+    @keyframes allocation-reveal { from { opacity: 0; transform: scaleX(0); } }
+    @media (prefers-reduced-motion: reduce) { .seg { animation: none; } }
   `],
 })
 export class FintoFlow {

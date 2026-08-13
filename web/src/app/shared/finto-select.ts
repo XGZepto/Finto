@@ -42,7 +42,6 @@ let instances = 0;
               @if (isCurrency(option)) { <span class="option-code mono">{{ optionLabel(option) }}</span> }
               <span class="option-copy">
                 <strong>{{ isCurrency(option) ? currencyName(optionLabel(option)) : displayLabel(option) }}</strong>
-                @if (isCurrency(option)) { <small>{{ optionLabel(option) }}</small> }
               </span>
               <span class="selection-mark" aria-hidden="true">@if (optionValue(option) === value()) { ✓ }</span>
             </button>
@@ -86,7 +85,6 @@ let instances = 0;
     .option-code { display: grid; place-items: center; width: 42px; height: 30px; background: var(--panel-3); border: 1px solid var(--line); color: var(--fg-2); font-size: var(--t-label); }
     .option-copy { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
     .option-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font: 520 var(--t-meta)/1.2 var(--sans); }
-    .option-copy small { margin-top: 2px; color: var(--fg-4); font: var(--t-micro)/1 var(--mono); letter-spacing: .08em; }
     .selection-mark { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--line-2); color: transparent; font-size: var(--t-label); }
     .select-option.active { background: var(--panel-3); color: var(--fg); }
     .select-option.selected { color: var(--fg); }

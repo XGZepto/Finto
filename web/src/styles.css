@@ -562,6 +562,29 @@ th.num, td.num {
   * { transition: none !important; }
 }
 
+/* Charts below the fold hold at their first frame until the scroll-pane
+   observer reveals them. The chart owns its animation; this only owns timing. */
+[fintoReveal] .series,
+[fintoReveal] .area,
+[fintoReveal] .arc,
+[fintoReveal] .fill,
+[fintoReveal] .month-track i,
+[fintoReveal] .detail-link,
+[fintoReveal] .detail-node,
+[fintoReveal] .sankey .link,
+[fintoReveal] .sankey .node,
+[fintoReveal] .seg { animation-play-state: paused !important; }
+[fintoReveal].finto-in-view .series,
+[fintoReveal].finto-in-view .area,
+[fintoReveal].finto-in-view .arc,
+[fintoReveal].finto-in-view .fill,
+[fintoReveal].finto-in-view .month-track i,
+[fintoReveal].finto-in-view .detail-link,
+[fintoReveal].finto-in-view .detail-node,
+[fintoReveal].finto-in-view .sankey .link,
+[fintoReveal].finto-in-view .sankey .node,
+[fintoReveal].finto-in-view .seg { animation-play-state: running !important; }
+
 router-outlet + * { view-transition-name: page-content; }
 /* view-transition-name creates a stacking context. Lift the routed page while
    it owns an overlay so its sheet can cover the sibling tab bar. */

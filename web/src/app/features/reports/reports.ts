@@ -10,6 +10,7 @@ import { FintoPills } from '../../shared/finto-pills';
 import { FintoSelect } from '../../shared/finto-select';
 import { FintoBars, Bar } from '../../shared/finto-bars';
 import { FintoFlow, FlowNode } from '../../shared/finto-flow';
+import { RevealOnView } from '../../shared/reveal-on-view';
 
 interface Band {
   label: string;
@@ -31,7 +32,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
  */
 @Component({
   selector: 'app-reports',
-  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoFlow, FintoBars],
+  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoFlow, FintoBars, RevealOnView],
   templateUrl: './reports.html',
   styleUrl: './reports.css',
 })

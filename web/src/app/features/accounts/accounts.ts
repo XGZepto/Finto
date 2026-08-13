@@ -7,6 +7,7 @@ import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { Account, Card, Flows, Money, Position, SummaryRow, Txn } from '../../core/models';
 import { forkJoin } from 'rxjs';
 import { Preferences } from '../../core/preferences.service';
+import { RevealOnView } from '../../shared/reveal-on-view';
 
 interface AccountRow {
   account: Account;
@@ -16,7 +17,7 @@ interface AccountRow {
 
 @Component({
   selector: 'app-accounts',
-  imports: [FintoSkeleton, FintoIcon, MoneyPipe, ShortDatePipe],
+  imports: [FintoSkeleton, FintoIcon, MoneyPipe, ShortDatePipe, RevealOnView],
   templateUrl: './accounts.html',
   styleUrl: './accounts.css',
 })
@@ -35,8 +36,10 @@ export class AccountsPage {
   unconvertible = signal<string[]>([]);
   flows = signal<Flows>({ internal: [], external: [], external_accounts: [], normalised: { currency: 'USD', unconvertible_currencies: [], external_accounts: [], internal: [], external_nodes: [] } });
   selected = signal<string | null>(null);
+  selectedGroup = signal<string | null>(null);
   detailLoading = signal(false);
   byKind = signal<SummaryRow[]>([]);
+  byCategory = signal<SummaryRow[]>([]);
   byHolder = signal<SummaryRow[]>([]);
   byMonth = signal<SummaryRow[]>([]);
   recent = signal<Txn[]>([]);
@@ -46,10 +49,16 @@ export class AccountsPage {
   constructor() {
     this.route.paramMap.subscribe((params) => {
       const id = params.get('id');
+      const group = params.get('group');
       this.selected.set(id);
+      this.selectedGroup.set(group);
       if (id) this.loadDetail(id);
+      if (group && this.accounts().length) this.loadGroupDetail(group);
     });
-    this.api.accounts().subscribe({ next: (r) => this.accounts.set(r.accounts) });
+    this.api.accounts().subscribe({ next: (r) => {
+      this.accounts.set(r.accounts);
+      if (this.selectedGroup()) this.loadGroupDetail(this.selectedGroup()!);
+    }});
     this.api.cards().subscribe({ next: (r) => this.cards.set(r.cards) });
     effect(() => {
       const currency = this.preferences.baseCurrency();
@@ -115,6 +124,9 @@ export class AccountsPage {
   });
 
   current = computed(() => this.rows().find((r) => r.account.id === this.selected()));
+  groupCurrent = computed(() => this.groups().find((group) => group.key === this.selectedGroup()));
+  groupIds = computed(() => this.groupCurrent()?.children.map((child) => child.account.id) ?? []);
+  groupCardCount = computed(() => this.groupCurrent()?.children.reduce((sum, child) => sum + child.cards, 0) ?? 0);
   siblings = computed(() => {
     const current = this.current()?.account;
     if (!current) return [];
@@ -208,21 +220,39 @@ export class AccountsPage {
   });
 
   maxMonthSpend = computed(() => Math.max(1, ...this.byMonth().map((m) => Math.abs(m.spend.amount))));
+  topCategory = computed(() => this.byCategory()
+    .filter((row) => row.spend.amount !== 0)
+    .sort((a, b) => Math.abs(b.spend.amount) - Math.abs(a.spend.amount))[0] ?? null);
+  transactionCount = computed(() => this.byKind().reduce((sum, row) => sum + row.txn_count, 0));
+  spenderCount = computed(() => this.byHolder().filter((row) => row.bucket && row.bucket !== '(none)').length);
+  hasDetailFlow = computed(() => this.detailFlow().incoming.length + this.detailFlow().outgoing.length > 0);
+  hasAccountActivity = computed(() => this.transactionCount() > 0 || this.recent().length > 0);
   monthWidth(row: SummaryRow): string {
     return `${Math.max(2, Math.abs(row.spend.amount) / this.maxMonthSpend() * 100)}%`;
   }
 
   loadDetail(id: string): void {
-    const scope = { accounts: [id] };
+    this.loadScope([id]);
+  }
+
+  loadGroupDetail(group: string): void {
+    const ids = this.accounts().filter((account) => account.balance_group === group).map((account) => account.id);
+    if (ids.length) this.loadScope(ids);
+  }
+
+  private loadScope(accounts: string[]): void {
+    const scope = { accounts };
     this.detailLoading.set(true);
     forkJoin({
       byKind: this.api.summary('kind', scope),
+      byCategory: this.api.summary('category', scope),
       byHolder: this.api.summary('cardholder', scope),
       byMonth: this.api.summary('month', scope),
       recent: this.api.transactions(scope, { limit: 12, sort: 'date', direction: 'desc' }),
     }).subscribe({
       next: (result) => {
         this.byKind.set(result.byKind.rows);
+        this.byCategory.set(result.byCategory.rows);
         this.byHolder.set(result.byHolder.rows);
         this.byMonth.set(result.byMonth.rows);
         this.recent.set(result.recent.items);
@@ -233,9 +263,13 @@ export class AccountsPage {
   }
 
   open(id: string): void { this.router.navigate(['/accounts', id]); }
+  openGroup(group: string): void { this.router.navigate(['/accounts/group', group]); }
   back(): void { this.router.navigate(['/accounts']); }
   openInBlotter(id: string): void {
     this.router.navigate(['/blotter'], { queryParams: { accounts: id } });
+  }
+  openGroupInBlotter(ids: string[]): void {
+    this.router.navigate(['/blotter'], { queryParams: { accounts: ids } });
   }
   humanize(value: string): string {
     return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())

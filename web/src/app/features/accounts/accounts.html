@@ -1,4 +1,83 @@
-@if (selected(); as selectedId) {
+@if (selectedGroup()) {
+  @if (groupCurrent(); as g) {
+    <div class="page-head account-head">
+      <button class="bare back" (click)="back()">← Accounts</button>
+      <div>
+        <h1>{{ g.name }}</h1>
+        <p class="sub">{{ humanize(g.institution) }} · {{ g.children.length }} subaccounts@if (groupCardCount()) { · {{ groupCardCount() }} cards }</p>
+      </div>
+      <button class="ghost" (click)="openGroupInBlotter(groupIds())">Open transactions →</button>
+    </div>
+
+    <section class="card group-hero">
+      <div class="group-hero-copy">
+        <span class="label">Combined balance</span>
+        <div class="group-balance-values">
+          @for (total of g.totals; track total.currency) {
+            <strong class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money }}</strong>
+          } @empty { <strong class="dim empty-balance">No balance snapshot</strong> }
+        </div>
+        <small>Native balances across this product</small>
+      </div>
+      <div class="group-meta">
+        <span><label>Subaccounts</label><b class="mono">{{ g.children.length }}</b></span>
+        <span><label>Cards</label><b class="mono">{{ groupCardCount() }}</b></span>
+      </div>
+    </section>
+
+    <section class="card group-subaccounts">
+      <div class="section-head"><h2>Subaccounts</h2><span class="muted small">{{ g.children.length }} in {{ g.name }}</span></div>
+      <div class="group-subaccount-grid">
+        @for (child of g.children; track child.account.id) {
+          <button (click)="open(child.account.id)">
+            <span><strong>{{ child.account.display_name }}</strong><small>{{ humanize(child.account.account_type) }}@if (child.cards) { · {{ child.cards }} card{{ child.cards > 1 ? 's' : '' }} }</small></span>
+            <span class="child-balances">@for (p of child.positions; track p.currency) { <b class="mono" [class.neg]="p.balance.amount < 0" [class.pos]="p.balance.amount > 0">{{ p.balance | money }}</b> } @empty { <b class="dim">—</b> }</span>
+            <i>›</i>
+          </button>
+        }
+      </div>
+    </section>
+
+    @if (detailLoading()) {
+      <div class="card"><finto-skeleton [rows]="5" label="Loading account group" /></div>
+    } @else if (hasAccountActivity()) {
+      <div class="detail-grid group-analysis">
+        <section class="card chart-card" fintoReveal>
+          <div class="section-head"><h2>Monthly outflow</h2><span class="muted small">All subaccounts</span></div>
+          <div class="month-chart">
+            @for (m of byMonth(); track m.bucket + m.currency) {
+              <div class="month-row"><span class="mono small">{{ m.bucket }}</span><span class="month-track"><i [style.width]="monthWidth(m)"></i></span><span class="mono">{{ m.spend | money }}</span></div>
+            } @empty { <div class="empty">No outflow history</div> }
+          </div>
+        </section>
+        <section class="card">
+          <div class="section-head"><h2>Top spending</h2><span class="muted small">By category</span></div>
+          @for (row of byCategory().slice(0, 7); track row.bucket + row.currency) {
+            <div class="stat-row"><span class="k">{{ humanize(row.bucket) }}</span><span class="v mono">{{ row.spend | money }}</span><span class="n muted">{{ row.txn_count }}</span></div>
+          } @empty { <div class="empty">No spending yet</div> }
+        </section>
+      </div>
+      <div class="detail-grid lower">
+        <section class="card">
+          <h2>Spend by cardholder</h2>
+          @for (row of byHolder(); track row.bucket + row.currency) {
+            <div class="stat-row"><span class="k">{{ row.bucket }}</span><span class="v mono">{{ row.spend | money }}</span><span class="n muted">{{ row.txn_count }}</span></div>
+          } @empty { <div class="empty">No cardholder split</div> }
+        </section>
+        <section class="card recent">
+          <div class="section-head"><h2>Recent activity</h2><button class="bare" (click)="openGroupInBlotter(groupIds())">View all →</button></div>
+          @for (t of recent(); track t.id) {
+            <div class="txn-row"><span class="mono small muted">{{ t.date | shortDate }}</span><span class="txn-desc">{{ t.merchant || t.description }}</span><span class="mono" [class.pos]="t.booked.amount > 0">{{ t.booked | money }}</span></div>
+          }
+        </section>
+      </div>
+    } @else {
+      <section class="card empty compact-group-empty">No ledger activity for this product yet</section>
+    }
+  } @else {
+    <div class="card"><finto-skeleton [rows]="6" label="Loading account group" /></div>
+  }
+} @else if (selected(); as selectedId) {
   <div class="page-head account-head">
     <button class="bare back" (click)="back()">← Accounts</button>
     @if (current(); as c) {
@@ -23,6 +102,14 @@
       }
     </section>
 
+    @if (!detailLoading()) {
+      <section class="card account-summary-strip">
+        <span><label>Transactions</label><b class="mono">{{ transactionCount() }}</b></span>
+        <span><label>Cardholders</label><b class="mono">{{ spenderCount() || '—' }}</b></span>
+        <span class="top-spend"><label>Top spending</label>@if (topCategory(); as top) { <b>{{ humanize(top.bucket) }}</b><small class="mono">{{ top.spend | money }}</small> } @else { <b>—</b> }</span>
+      </section>
+    }
+
     @if (siblings().length > 1) {
       <section class="card sibling-card">
         <div class="section-head"><h2>{{ humanize(c.account.balance_group || '') }}</h2><span class="small muted">Subaccounts</span></div>
@@ -37,12 +124,14 @@
       </section>
     }
 
-    <section class="card detail-flow-card">
+    @if (detailLoading() || hasAccountActivity()) {
+    <section class="card detail-flow-card" fintoReveal>
       <div class="section-head"><h2>Money flow</h2><div class="flow-tools"><span class="tag">{{ flows().normalised.currency }} normalised</span><div class="view-switch" role="group" aria-label="Money flow view"><button [class.on]="detailFlowView() === 'chart'" (click)="setFlowView('chart', true)">Chart</button><button [class.on]="detailFlowView() === 'list'" (click)="setFlowView('list', true)">List</button></div></div></div>
       @if (detailLoading()) {
         <div class="flow-skeleton skeleton" aria-label="Loading money flow"></div>
       } @else {
-        @if (detailFlowView() === 'chart') { <div class="detail-sankey-scroll"><svg class="detail-sankey" viewBox="0 0 800 360" role="img"
+        @if (!hasDetailFlow()) { <div class="empty compact-flow">No categorised movement</div> }
+        @else if (detailFlowView() === 'chart') { <div class="detail-sankey-scroll"><svg class="detail-sankey" viewBox="0 0 800 360" role="img"
              [attr.aria-label]="'Money flowing through ' + c.account.display_name">
           @for (node of detailFlow().incoming; track node.key) {
             <path [attr.d]="'M 208 ' + node.y + ' C 270 ' + node.y + ', 272 180, 330 180'"
@@ -60,21 +149,21 @@
             <text x="604" [attr.y]="node.y + 4">{{ node.label }}</text>
           }
         </svg></div> }
-        @if (detailFlowView() === 'list') { <div class="detail-flow-mobile">
+        @if (hasDetailFlow() && detailFlowView() === 'list') { <div class="detail-flow-mobile">
           <h3>In</h3>
           @for (node of detailFlow().incoming; track node.key) {
-            <div class="detail-flow-row"><span>{{ node.label }}</span><span class="tag">{{ node.kind }}</span><strong class="mono pos">{{ { amount: node.amount, currency: flows().normalised.currency } | money }}</strong></div>
+            <div class="detail-flow-row"><span>{{ node.label }}</span><strong class="mono pos">{{ { amount: node.amount, currency: flows().normalised.currency } | money }}</strong></div>
           }
           <h3>Out</h3>
           @for (node of detailFlow().outgoing; track node.key) {
-            <div class="detail-flow-row"><span>{{ node.label }}</span><span class="tag">{{ node.kind }}</span><strong class="mono">{{ { amount: -node.amount, currency: flows().normalised.currency } | money }}</strong></div>
+            <div class="detail-flow-row"><span>{{ node.label }}</span><strong class="mono">{{ { amount: -node.amount, currency: flows().normalised.currency } | money }}</strong></div>
           }
         </div> }
       }
     </section>
 
     <div class="detail-grid">
-      <section class="card chart-card">
+      <section class="card chart-card" fintoReveal>
         <div class="section-head"><h2>Monthly outflow</h2></div>
         <div class="month-chart">
           @for (m of byMonth(); track m.bucket + m.currency) {
@@ -127,16 +216,19 @@
         }
       </section>
       <section class="card recent">
-        <div class="section-head"><h2>Recent activity</h2><button class="bare" (click)="openInBlotter(c.account.id)">view all →</button></div>
+        <div class="section-head"><h2>Recent activity</h2><button class="bare" (click)="openInBlotter(c.account.id)">View all →</button></div>
         @for (t of recent(); track t.id) {
           <div class="txn-row">
             <span class="mono small muted">{{ t.date | shortDate }}</span>
             <span class="txn-desc">{{ t.merchant || t.description }}</span>
-            <span class="mono" [class.pos]="t.booked.amount > 0">{{ t.booked | money: 'bare' }}</span>
+            <span class="mono" [class.pos]="t.booked.amount > 0">{{ t.booked | money }}</span>
           </div>
         }
       </section>
     </div>
+    } @else {
+      <section class="card empty compact-group-empty">No ledger activity for this subaccount yet</section>
+    }
   }
 } @else {
   <div class="page-head">
@@ -168,16 +260,17 @@
           @if (g.children.length === 1) {
             <button class="single-account" (click)="open(g.children[0].account.id)">
               <span class="issuer-mark"><finto-icon kind="issuer" [name]="g.institution" /></span>
-              <span class="child-main"><span class="eyebrow mono">{{ humanize(g.institution) }}</span><strong>{{ g.name }}</strong><small>{{ humanize(g.children[0].account.account_type) }} @if (g.children[0].cards) { · {{ g.children[0].cards }} cards }</small></span>
+              <span class="child-main"><span class="eyebrow mono">{{ humanize(g.institution) }} · {{ humanize(g.children[0].account.account_type) }}@if (g.children[0].cards) { · {{ g.children[0].cards }} card{{ g.children[0].cards > 1 ? 's' : '' }} }</span><strong>{{ g.name }}</strong></span>
               <span class="group-totals">@for (total of g.totals; track total.currency) { <span class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money: 'bare' }} <small>{{ total.currency }}</small></span> }</span>
               <span class="arrow">→</span>
             </button>
           } @else {
-            <header>
+            <button class="group-header" (click)="openGroup(g.key)">
               <span class="issuer-mark"><finto-icon kind="issuer" [name]="g.institution" /></span>
-              <div><span class="eyebrow mono">{{ humanize(g.institution) }}</span><h2>{{ g.name }}</h2></div>
+              <span class="child-main"><span class="eyebrow mono">{{ humanize(g.institution) }} · {{ g.children.length }} subaccounts</span><strong>{{ g.name }}</strong></span>
               <div class="group-totals">@for (total of g.totals; track total.currency) { <span class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money: 'bare' }} <small>{{ total.currency }}</small></span> }</div>
-            </header>
+              <span class="arrow">→</span>
+            </button>
             <div class="children">
               @for (r of g.children; track r.account.id) {
                 <button class="account-child" (click)="open(r.account.id)">
@@ -192,7 +285,7 @@
       }
     </section>
 
-    <section class="card sankey-card">
+    <section class="card sankey-card" fintoReveal>
       <div class="section-head">
         <h2>Money flow · {{ flows().normalised.currency }}</h2>
         <div class="flow-tools"><span class="tag">normalised</span><div class="view-switch" role="group" aria-label="Money flow view"><button [class.on]="flowView() === 'chart'" (click)="setFlowView('chart')">Chart</button><button [class.on]="flowView() === 'list'" (click)="setFlowView('list')">List</button></div></div>

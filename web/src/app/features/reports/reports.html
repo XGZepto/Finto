@@ -66,13 +66,13 @@
             <button class="bare focus-chip" (click)="clearFocus()">{{ f }} ✕</button>
           }
         </div>
-        <finto-bars [data]="monthlySpend()" label="Outflow per month"
+        <finto-bars fintoReveal [data]="monthlySpend()" label="Outflow per month"
                     [meanLabel]="monthlyMean()" [selected]="focusMonth()" (pick)="focus($event)" />
       </section>
     }
     <section class="card">
       <div class="section-head"><h2>Where the money went</h2></div>
-      <finto-flow [nodes]="flowNodes()" [income]="incomeTotal()"
+      <finto-flow fintoReveal [nodes]="flowNodes()" [income]="incomeTotal()"
                   [savedDisplay]="savedDisplay()" (pick)="drill($event)" />
     </section>
   </div>

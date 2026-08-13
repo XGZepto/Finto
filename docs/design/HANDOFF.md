@@ -45,9 +45,10 @@ Sign in as `owner` / `local-dev`. The seed leaves ~50 uncategorised rows so the
 triage queue and the swipe gesture have something to act on.
 
 **Screenshots.** `npm --prefix web run capture:mobile` drives system Chrome at
-390×844 @2x, validates compact and desktop overflow/touch targets, checks the
-mobile tab architecture, currency search/names, transaction detail and
-statement-data disclosure, reduced-motion path, and refreshes
+390×844 @2x, validates compact and desktop overflow/touch targets, checks both
+themes, mobile tab architecture, route scroll reset, currency identity,
+transaction detail, statement-data disclosure, chart entry, scroll edges, the
+reduced-motion path, and refreshes
 `docs/design/mobile/*-after.png`.
 
 ---
@@ -74,7 +75,7 @@ against all three surfaces in both themes.
 
 ## 3. Completed uplift backlog
 
-All eleven items are complete. The notes remain as rationale for future work.
+All thirteen items are complete. The notes remain as rationale for future work.
 
 ### 3.1 Complete — stop painting spending red
 Every outflow renders `--neg`, which on a spending ledger is ~90% of rows, so
@@ -127,10 +128,11 @@ Everything else earns its place by exception or moves to the drawer.
 suggestion endpoint and lead with the prediction — that turns 52 decisions into
 52 confirmations, which is the difference between a chore and a swipe session.
 
-### 3.7 Complete — render the review state
-`review_state` is on the model (`core/models.ts:80`), comes down the wire, and
-appears in no template. Surfacing it gives Review a denominator — "52 to look
-at, 11 done" — which is what makes a queue feel finishable.
+### 3.7 Complete — keep review state subordinate
+`review_state` remains an internal workflow field, but the ledger does not imply
+that every transaction needs review. There is no completion square, progress
+bar, tab badge, or central Review tab. Only genuinely flagged rows surface an
+exception. The episodic matching tool is named **Matching suggestions** in More.
 
 ### 3.8 Complete — rethink the home hero
 Summary opens on `-63,076.99` under a line falling to the right, because net
@@ -140,11 +142,12 @@ both. Net worth belongs on Accounts. The hero now compares month-to-date spend
 with the same elapsed days last month, avoiding a misleading partial-month to
 full-month comparison.
 
-### 3.9 Complete — animated charts
+### 3.9 Complete — viewport-aware charts
 `finto-timeseries`, `finto-bars`, `finto-viz` (donut/share bar) and the summary
-trend SVG all render statically. Line draw via `stroke-dasharray`, bars growing
-from baseline, donut sweep. Use the motion tokens; gate everything on
-`prefers-reduced-motion`, which the app already honours globally.
+trend SVG originally rendered statically. Line draw, bar growth, donut sweep,
+flow segments, and account Sankey marks now start once when their chart enters
+the `.content` viewport through `fintoReveal`. Use motion tokens and retain the
+immediate static path under `prefers-reduced-motion`.
 
 ### 3.10 Complete — animated routing
 Route changes are instant cuts. A short shared-axis transition would help
@@ -164,8 +167,29 @@ The blotter row opens a full-screen compact detail with a native top bar,
 booked currency always visible, an adjacent native-charge/FX summary, flat fact
 rows, editable annotations, and statement/provenance data behind one disclosure.
 The bottom navigation contains stable destinations — Summary, Blotter, Reports,
-Accounts, More — while Review remains badged inside More instead of occupying a
-privileged central tab.
+Accounts, More. Matching suggestions remains an unbadged utility in More instead
+of occupying a privileged central tab.
+
+### 3.13 Complete — comprehensive spacing, hierarchy, and account audit
+The critical follow-up audited mobile and desktop font tokens, padding, margins,
+label case, control alignment, row symmetry, brand marks, chart spacing, light
+and dark surfaces, sticky/transient blur, and scroll extremes. Amount conversion
+is now a compact **Amounts** control separate from Filters. Currency choices show
+one ISO code and one localized name. Settings rows no longer stretch to the
+height of an unrelated neighbor.
+
+Accounts now has three explicit levels: overview, multi-subaccount aggregate,
+and account/subaccount detail. Group and standalone overview rows share the same
+72px geometry and two-line text rhythm. Aggregate pages summarize balances,
+subaccounts, cards, spending, cardholders, and recent activity when present.
+Detail pages lead with balance plus transactions/cardholders/top spending, then
+money flow and history. Inactive accounts collapse redundant empty charts and
+tables to one compact ledger-activity message.
+
+The shell owns vertical scrolling, resets it on every real route change, and
+shows subtle top/bottom edge feedback. Charts reveal on entry; navigation and
+sticky chrome use blur, while permanent content hierarchy uses the panel surface
+scale. `capture-mobile.mjs` makes these constraints executable.
 
 ---
 

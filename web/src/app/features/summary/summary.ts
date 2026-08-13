@@ -11,6 +11,7 @@ import { FintoDonut, Slice } from '../../shared/finto-viz';
 import { Preferences } from '../../core/preferences.service';
 import { FilterState } from '../../core/filter-state';
 import { forkJoin } from 'rxjs';
+import { RevealOnView } from '../../shared/reveal-on-view';
 
 /**
  * Summary.
@@ -26,7 +27,7 @@ import { forkJoin } from 'rxjs';
  */
 @Component({
   selector: 'app-summary',
-  imports: [FormsModule, MoneyPipe, FintoSelect, FintoDonut, FintoPills],
+  imports: [FormsModule, MoneyPipe, FintoSelect, FintoDonut, FintoPills, RevealOnView],
   templateUrl: './summary.html',
   styleUrl: './summary.css',
 })
