@@ -1,7 +1,7 @@
 """Deterministic public demo data."""
 
 from fin import db as dbm
-from fin.demo import ACCOUNTS, seed_demo
+from fin.demo import ACCOUNTS, demo_write_blocked, seed_demo
 
 
 def test_seed_demo_creates_a_read_only_viewer(database_url, monkeypatch):
@@ -27,3 +27,12 @@ def test_seed_demo_creates_a_read_only_viewer(database_url, monkeypatch):
     assert {row["access_role"] for row in roles} == {"viewer"}
     assert version["value"] == "test-deployment"
     conn.close()
+
+
+def test_demo_user_write_gate(monkeypatch):
+    monkeypatch.setenv("FINTO_DEMO_READ_ONLY", "1")
+    assert demo_write_blocked("PATCH", "/api/auth/preferences", "demo")
+    assert demo_write_blocked("PUT", "/api/settings/base_currency", "demo")
+    assert not demo_write_blocked("GET", "/api/accounts", "demo")
+    assert not demo_write_blocked("POST", "/api/summary", "demo")
+    assert not demo_write_blocked("PATCH", "/api/auth/preferences", "owner")

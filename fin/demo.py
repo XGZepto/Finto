@@ -102,6 +102,15 @@ SUBSCRIPTIONS = {"Netflix", "Spotify", "iCloud", "Adobe", "GitHub", "Anthropic",
 CARD_MERCHANTS = {m[0] for m in MERCHANTS} - {"CLP Power", "Towngas"}
 
 
+def demo_write_blocked(method: str, path: str, user_id: str) -> bool:
+    """Keep the published viewer credential read-only across non-ledger tables."""
+    if os.environ.get("FINTO_DEMO_READ_ONLY") != "1" or user_id != "demo":
+        return False
+    if method in {"GET", "HEAD", "OPTIONS"}:
+        return False
+    return path not in {"/api/query", "/api/summary"}
+
+
 def _prepare_schema(conn, *, reset: bool, schema: str | None) -> None:
     if not reset:
         return

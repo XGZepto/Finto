@@ -431,6 +431,15 @@ async def authenticated_api_context(request: Request, call_next):
         conn = dbm.connect()
         try:
             user = _current_user(request, conn)
+            from ..demo import demo_write_blocked
+
+            if demo_write_blocked(request.method, path, user["id"]):
+                return Response(
+                    json.dumps({"detail": "the public demo is read-only"}),
+                    status_code=403,
+                    media_type="application/json",
+                    headers={"Cache-Control": "no-store"},
+                )
             request.state.user_id = user["id"]
             dbm.apply_acl(conn, user["id"])
             request.state.db_conn = conn
