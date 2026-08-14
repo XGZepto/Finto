@@ -406,7 +406,8 @@ async def authenticated_api_context(request: Request, call_next):
     """Verify the database session and attach its user to every private API call."""
     path = request.url.path
     public = (
-        path in {"/api/auth/login", "/api/auth/logout", "/api/demo/reset", "/api/health"}
+        path in {"/api/auth/login", "/api/auth/logout", "/api/health"}
+        or path.startswith("/api/demo/reset")
         or path.startswith("/api/agent/")
     )
     if request.url.path.startswith("/api/") and not public:
