@@ -112,10 +112,13 @@ def _prepare_schema(conn, *, reset: bool, schema: str | None) -> None:
     conn.execute("SELECT set_config('search_path', %s, false)", (schema,))
 
 
-def seed_demo(*, reset: bool = False, schema: str | None = None) -> int:
+def seed_demo(
+    *, reset: bool = False, schema: str | None = None, conn=None, version: str | None = None,
+) -> int:
     """Create a repeatable invented ledger and return its transaction count."""
     random.seed(11)
-    conn = dbm.connect()
+    owns_connection = conn is None
+    conn = conn or dbm.connect()
     _prepare_schema(conn, reset=reset, schema=schema)
     dbm.init_db(conn)
 
@@ -273,8 +276,15 @@ def seed_demo(*, reset: bool = False, schema: str | None = None) -> int:
             model="seed",
             prompt_version=PROMPT_VERSION,
         )
+    if version:
+        conn.execute(
+            "INSERT INTO setting (key,value) VALUES ('demo_seed_version', %s) "
+            "ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",
+            (version,),
+        )
     conn.commit()
-    conn.close()
+    if owns_connection:
+        conn.close()
     print(f"seeded {inserted} transactions across {len(ACCOUNTS)} accounts")
     return inserted
 

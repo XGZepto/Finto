@@ -70,6 +70,22 @@ def _ensure_live_schema() -> None:
                 sql.Identifier(schema)
             ))
             conn.execute("SELECT set_config('search_path', %s, false)", (schema,))
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext('finto_demo_seed'))")
+            version = (
+                os.environ.get("VERCEL_DEPLOYMENT_ID")
+                or os.environ.get("VERCEL_GIT_COMMIT_SHA")
+                or "manual"
+            )
+            current_version = None
+            if conn.execute("SELECT to_regclass('setting') AS name").fetchone()["name"]:
+                row = conn.execute(
+                    "SELECT value FROM setting WHERE key='demo_seed_version'"
+                ).fetchone()
+                current_version = row["value"] if row else None
+            if current_version != version:
+                from ..demo import seed_demo
+
+                seed_demo(reset=True, schema=schema, conn=conn, version=version)
         ready = conn.execute(
             "SELECT to_regclass('app_user') IS NOT NULL AS users, "
             "to_regclass('account_acl') IS NOT NULL AS acl, "
@@ -405,16 +421,8 @@ app.add_middleware(
 async def authenticated_api_context(request: Request, call_next):
     """Verify the database session and attach its user to every private API call."""
     path = request.url.path
-    demo_reset_token = os.environ.get("FINTO_DEMO_RESET_TOKEN", "")
-    demo_reset_header = request.headers.get("x-finto-demo-reset", "").strip()
-    valid_demo_reset = (
-        os.environ.get("FINTO_DEMO_SEED") == "1"
-        and bool(demo_reset_token)
-        and secrets.compare_digest(demo_reset_header, demo_reset_token)
-    )
     public = (
         path in {"/api/auth/login", "/api/auth/logout", "/api/health"}
-        or valid_demo_reset
         or path.startswith("/api/agent/")
     )
     if request.url.path.startswith("/api/") and not public:
@@ -486,22 +494,6 @@ def health() -> dict:
         return {"status": "ok", "storage": "postgresql"}
     finally:
         conn.close()
-
-
-@app.post("/api/demo/reset", include_in_schema=False)
-def reset_demo(request: Request) -> dict:
-    """Refresh the isolated public demo after its deployment completes."""
-    if os.environ.get("FINTO_DEMO_SEED") != "1":
-        raise HTTPException(404, "not found")
-    expected = os.environ.get("FINTO_DEMO_RESET_TOKEN", "")
-    provided = request.headers.get("x-finto-demo-reset", "").strip()
-    if not expected or not secrets.compare_digest(provided, expected):
-        raise HTTPException(401, "invalid demo reset token")
-
-    from ..demo import seed_demo
-
-    inserted = seed_demo(reset=True, schema=os.environ.get("FINTO_DEMO_SCHEMA"))
-    return {"ok": True, "transactions": inserted}
 
 
 def _bounded_transfer_rebuild(conn, month: str, start_day: int, end_day: int,

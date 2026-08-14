@@ -41,11 +41,10 @@ jobs:
       - name: Deploy demo
         run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
 
-      - name: Refresh and verify demo data
+      - name: Verify refreshed demo data
         shell: bash
         env:
           DEMO_PASSWORD: ${{ secrets.FINTO_DEMO_PASSWORD }}
-          DEMO_RESET_TOKEN: ${{ secrets.FINTO_DEMO_RESET_TOKEN }}
         run: |
           demo_url="https://finto-demo.vercel.app"
           for attempt in {1..12}; do
@@ -58,12 +57,6 @@ jobs:
             fi
             sleep 5
           done
-
-          curl --fail --silent --show-error \
-            --request POST \
-            --header "X-Finto-Demo-Reset: $DEMO_RESET_TOKEN" \
-            "$demo_url/api/demo/reset" \
-            | jq --exit-status '.ok and (.transactions > 0)' >/dev/null
 
           curl --fail --silent --show-error \
             --cookie-jar "$RUNNER_TEMP/finto-demo.cookies" \
