@@ -207,6 +207,9 @@ trailing check rather than checkbox geometry. The Summary donut now begins from
 a stable hidden state and explicitly completes visible when intersected. On
 compact transaction detail, the fixed title bar is removed and Back/Edit are
 detached frosted controls; the desktop drawer retains its dense header.
+The acceptance capture also opens the desktop drawer: the mobile Back control
+must compute to `display:none`, Edit and Close must share a centre line, and the
+header cannot grow into a wrapped second row.
 
 ---
 

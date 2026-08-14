@@ -34,8 +34,9 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
 .drawer header { display: grid; position: sticky; z-index: 2; top: -20px; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; margin: -20px -20px 14px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
 .bar-title { color: var(--fg); font: 600 var(--t-data)/1 var(--sans); }
 .bar-action { min-width: 44px; min-height: 44px; color: var(--info); font: 550 var(--t-meta)/1 var(--sans); }
-.mobile-back { display: none; }
+.mobile-back.close { display: none; }
 .close { display: grid; place-items: center; min-width: 44px; min-height: 44px; margin: -10px -10px 0 0; font-size: var(--t-figure); line-height: 1; touch-action: manipulation; }
+.desktop-close { margin: 0; color: var(--fg-3); }
 .drawer-loading { margin: -4px 0 10px; color: var(--fg-4); font: var(--t-label)/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 
 .amount-hero {
@@ -261,7 +262,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
     backdrop-filter: var(--glass-filter);
     box-shadow: 0 5px 18px #0005;
   }
-  .mobile-back { display: grid; left: 0; margin: 0; font-size: var(--t-hero); font-weight: 300; }
+  .mobile-back.close { display: grid; left: 0; margin: 0; font-size: var(--t-hero); font-weight: 300; }
   .bar-action { right: 0; min-width: 58px; padding: 0 12px; }
   .desktop-close { display: none; }
   .bar-title { display: none; }

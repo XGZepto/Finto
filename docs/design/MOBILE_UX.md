@@ -113,6 +113,7 @@ These choices follow Apple's official guidance on [layout](https://developer.app
 | Selector semantics | Selected single-choice row has an unboxed trailing check |
 | Chart stability | Donut is hidden before intersection and completes to visible on reveal |
 | Transaction actions | Mobile title bar is absent; detached Back and Edit targets remain at least 44px |
+| Desktop transaction actions | Mobile Back is absent; title, Edit, and Close share one compact aligned row |
 
 ## Current screens
 
@@ -143,6 +144,10 @@ These choices follow Apple's official guidance on [layout](https://developer.app
 | Advanced settings | Light settings |
 |---|---|
 | ![API access disclosure](mobile/settings-api-after.png) | ![Light settings](mobile/settings-light-after.png) |
+
+| Desktop transaction detail |
+|---|
+| ![Aligned desktop transaction actions](mobile/blotter-transaction-desktop-after.png) |
 
 | Light mobile | Desktop accounts |
 |---|---|

@@ -405,6 +405,32 @@ try {
     await shot(image);
   }
 
+  await page.goto(`${baseUrl}/blotter`, { waitUntil: 'networkidle0' });
+  await settle('.ledger-card');
+  await page.click('tr.clickable');
+  await settle('.drawer .transaction-hero');
+  const desktopDrawer = await page.$eval('.drawer', (node) => {
+    const header = node.querySelector('.transaction-bar');
+    const back = node.querySelector('.mobile-back');
+    const edit = node.querySelector('.bar-action');
+    const close = node.querySelector('.desktop-close');
+    const centre = (item) => {
+      const box = item.getBoundingClientRect();
+      return Math.round(box.top + box.height / 2);
+    };
+    return {
+      back: getComputedStyle(back).display,
+      headerHeight: Math.round(header.getBoundingClientRect().height),
+      editHeight: Math.round(edit.getBoundingClientRect().height),
+      closeHeight: Math.round(close.getBoundingClientRect().height),
+      alignment: Math.abs(centre(edit) - centre(close)),
+    };
+  });
+  if (desktopDrawer.back !== 'none' || desktopDrawer.headerHeight > 65 || desktopDrawer.editHeight < 44 || desktopDrawer.closeHeight < 44 || desktopDrawer.alignment > 1) {
+    throw new Error(`Desktop transaction actions are misaligned: ${JSON.stringify(desktopDrawer)}`);
+  }
+  await shot('blotter-transaction-desktop-after.png');
+
   await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
   await page.goto(`${baseUrl}/summary`, { waitUntil: 'networkidle0' });
   await settle('.trend');
