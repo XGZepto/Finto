@@ -126,8 +126,7 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
 .leg-amt { grid-column: 3; grid-row: 1 / span 2; font-variant-numeric: tabular-nums; }
 .leg .mono.small { grid-column: 2; }
 
-/* A charge routed through a payment gateway. Muted rather than alarming: it is
-   an ordinary purchase whose merchant the acquirer withheld, not a problem. */
+/* Payment-gateway charge metadata. */
 .tag.gateway {
   background: color-mix(in srgb, var(--accent, #6b7280) 12%, transparent);
   color: var(--muted, #6b7280);
@@ -147,21 +146,18 @@ button.fact {
 }
 button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 
-/* Narrow screens: the table becomes a list. A six-column grid pushes the
-   amount off-screen, and the amount is the number you came for. */
+/* Narrow screens render the transaction table as a list. */
 @media (max-width: 880px) {
-  /* Separators run to the screen edge; content keeps the page gutter, so a row
-     label sits on the same line as every other page's first character. */
+  /* Edge-to-edge row separators with page-gutter content. */
   .ledger-card {
     padding: 0;
     margin-inline: calc(-1 * var(--s3));
     border-left: 0;
     border-right: 0;
   }
-    /* The card already bleeds to the edge; the global table bleed would double it. */
+  /* The ledger card supplies the table's edge alignment. */
   .table-wrap { overflow-x: visible; margin-inline: 0; }
-  /* The drawer is the scroller on a phone; a capped inner pane would make the
-     raw statement row scroll inside something that is already scrolling. */
+  /* The mobile drawer is the statement-data scroll surface. */
   .details.raw { max-height: none; overflow-y: visible; padding-right: 0; }
   .table-wrap table,
   .table-wrap tbody,
@@ -169,8 +165,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .table-wrap td { display: block; }
   .table-wrap thead { display: none; }
 
-  /* A statement row on a phone is a list item: who, what, how much. The day
-     band already carries the date, so the row does not repeat it. */
+  /* Mobile statement rows show merchant, category, and amount. */
   /* Glyph | text | amount, with two text rows. The glyph and amount span both
      rows so they sit centred against the merchant-and-category block. */
   .table-wrap tr.clickable {
@@ -199,7 +194,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
     text-align: right; white-space: nowrap;
     color: var(--fg); font-weight: 500;
   }
-  /* One subtitle only — the category under the merchant. */
+  /* Category subtitle. */
   .table-wrap td.category {
     grid-column: 2; grid-row: 2; align-self: start;
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -211,8 +206,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .table-wrap td.account,
   .table-wrap td.flags { display: none; }
 
-  /* The band stays put while its own rows scroll under it, which is what lets
-     the rows drop the date entirely. */
+  /* Sticky date band for the following transaction rows. */
   .table-wrap tr.daygroup {
     display: flex;
     position: sticky;
@@ -257,7 +251,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
     background: var(--glass-strong);
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
-    box-shadow: 0 5px 18px #0005;
+    box-shadow: var(--shadow-float);
   }
   .mobile-back.close { display: grid; left: 0; margin: 0; font-size: var(--t-hero); font-weight: 300; }
   .bar-action { right: 0; min-width: 58px; padding: 0 12px; }
@@ -333,7 +327,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .drawer, .drawer-backdrop, .edit-panel { animation: none; }
 }
 
-/* Dates divide the list without becoming a second row of chrome. */
+/* Date group separator. */
 .daygroup td {
   padding-block: var(--s1);
   background: var(--panel-2);
@@ -344,7 +338,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 .daygroup td.num { text-align: right; }
 .row-currency { margin-left: .35em; color: var(--fg-3); font-size: var(--t-label); }
 
-/* Merchant monogram. Desktop keeps the text column dense, so it is mobile-only. */
+/* Merchant monogram for mobile rows. */
 .glyph {
   display: grid;
   place-items: center;
@@ -359,11 +353,10 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 }
 .glyph finto-icon { width: 100%; height: 100%; }
 @media (max-width: 880px) { .glyph { border: 0; background: var(--panel-2); } }
-/* The desktop table keeps its dense text columns; the mark is a mobile-list affordance. */
+/* Desktop rows hide the mobile monogram. */
 @media (min-width: 881px) { td.desc .glyph { display: none; } }
 
-/* Tail of an infinite list. Both states occupy the same height so the list does
-   not jump when the last page lands and the sentinel is replaced. */
+/* Infinite-list loading and completion states share fixed geometry. */
 .sentinel, .list-end {
   display: flex;
   align-items: center;
@@ -379,11 +372,8 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 @media (prefers-reduced-motion: reduce) { .sentinel span::after { animation: none; } }
 
 /* Swipe to categorise ------------------------------------------------------
-   One variable drives both halves: the row's cells translate by --swipe, and
-   the action's width is the same distance. They stay in lockstep by
-   construction, so the action can never cover content that has not moved yet.
-   Driving it off a variable rather than a wrapper element per row is what lets
-   the row keep the table markup the desktop layout still needs. */
+   --swipe controls row translation and action width. The row retains table
+   markup for the desktop layout. */
 .swipe-action { display: none; }
 
 @media (max-width: 880px) {
@@ -393,14 +383,12 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
     transform: translateX(var(--swipe, 0px));
     transition: transform var(--motion) var(--ease-out);
   }
-  /* Under the thumb the offset is the thumb's; easing it would feel like drag. */
+  /* Direct tracking during the active gesture. */
   .table-wrap tr.swiping > td:not(.swipe-action),
   .table-wrap tr.swiping td.desc > * { transition: none; }
 
-  /* The action is exactly as wide as the gap the row has vacated, so it is
-     revealed by the swipe rather than sitting under the content waiting to
-     show through. Its button keeps full width and is clipped from the left,
-     which is what makes the label slide out instead of squashing. */
+  /* Action width follows the row offset. The clipped button reveals its label
+     progressively during the gesture. */
   .table-wrap td.swipe-action {
     display: block;
     position: absolute;

@@ -6,24 +6,17 @@
    Finto design system.
 
    The chrome is grey, black and white: panels, rules, nav, labels. Colour is
-   reserved for the things a financial interface has to encode — state, trend,
-   and related series in a chart. Keeping the frame neutral
-   is what lets a red figure read as red at a glance rather than competing with a
-   coloured sidebar and three coloured buttons.
+   reserved for financial state, trend, and related chart series.
 
-   Square by intent. No rounded corners, hairline rules instead of shadows, and a
-   monospace face for anything a person reads as data: figures, codes, dates and
-   keys. Labels and prose stay in a proportional face, because language set in
-   mono is a chore to read. That split is the whole typographic system.
+   Surfaces use square corners and hairline boundaries. Figures, codes, dates,
+   and keys use monospace. Labels and prose use the proportional face.
 --------------------------------------------------------------------------- */
 
-/* Breakpoints. Two, and only two.
+/* Shared breakpoints.
    - compact  ≤ 880px : the sidebar becomes a tab bar and every layout below it
-                        switches to its one-column form. Nothing else may split
-                        the range, or a size exists that is neither layout.
-   - narrow   ≤ 520px : refinements *inside* compact, never a third layout.
-   CSS has no variables in media queries, so these live as literals. Grep for
-   `880px` before adding a width. */
+                        switches to its one-column form.
+   - narrow   ≤ 520px : refinements inside the compact layout.
+   CSS media queries use these literal values. */
 
 :root {
   --bg: #08090a;
@@ -52,7 +45,7 @@
   --bad: #f0736c;
   --info: #5aa9e6;
 
-  /* Tinted washes for row/panel states — never used as fills for text. */
+  /* Tinted washes for row and panel states. */
   --neg-wash: #f0736c1f;
   --pos-wash: #4ec98b1f;
   --warn-wash: #e0aa2a1f;
@@ -100,22 +93,16 @@
   --t-fig-lg: 27px;   /* drawer and detail figure */
   --t-hero: 34px;     /* the one number a page is about */
 
-  /* Motion. Three durations, two curves, and nothing else — a transition that
-     invents its own timing is what makes one panel feel unlike the next.
-     Entering uses --ease-out so it decelerates into place; anything that both
-     enters and leaves uses --ease so it is symmetric. */
+  /* Motion uses three durations and two curves. Entry uses --ease-out;
+     symmetric state changes use --ease. */
   --motion-fast: 120ms;  /* state: press, hover, colour */
   --motion: 220ms;       /* position: sheets, drawers, disclosure */
   --motion-slow: 320ms;  /* a full-height surface crossing the screen */
   --ease-out: cubic-bezier(.2, .8, .2, 1);
   --ease: cubic-bezier(.4, 0, .2, 1);
 
-  /* Layers, in the order they sit. Every z-index in the app comes from here.
-     Picking numbers per component is what put the filter sheet under the tab
-     bar and the refresh indicator under the search field: both were "high"
-     numbers that happened to lose. Note that a value only competes inside its
-     stacking context — an overlay nested in a positioned ancestor needs that
-     ancestor raised too, which is what --z-overlay is for. */
+  /* Shared layer order. Nested overlays raise their positioned host with
+     --z-overlay so their children use the intended stacking context. */
   --z-band: 15;      /* day bands, pinned under a sticky bar */
   --z-sticky: 20;    /* in-page sticky chrome: the filter bar */
   --z-status: 25;    /* offline notice */
@@ -126,22 +113,22 @@
   --z-popover: 50;   /* a menu opened from inside an overlay */
   --z-auth: 100;     /* the sign-in screen covers everything */
 
-  /* Material is semantic, not decoration. Persistent navigation and content
-     stay opaque. Blur belongs to an active modal relationship: the scrim
-     softens and dims the page while its sheet, drawer, or popover is open. */
+  /* Persistent navigation and content are opaque. Active modal scrims soften
+     and dim the page below a sheet, drawer, or popover. */
   --glass-surface: color-mix(in srgb, var(--panel) 88%, transparent);
   --glass-strong: color-mix(in srgb, var(--panel) 94%, transparent);
   --glass-filter: blur(18px) saturate(1.12);
   --modal-scrim: rgb(0 0 0 / .58);
   --modal-scrim-filter: blur(8px) saturate(.82);
+  /* Theme-specific elevation for detached controls and open overlays. */
+  --shadow-popover: 0 10px 28px rgb(0 0 0 / .32);
+  --shadow-sheet: 0 -12px 32px rgb(0 0 0 / .42);
+  --shadow-float: 0 4px 14px rgb(0 0 0 / .28);
 
   color-scheme: dark;
 }
 
-/* Phone viewing distance is about half a desk monitor's, and the scale above is
-   drawn for the monitor. Every reading size moves up one notch on compact; the
-   figure sizes do not, because those are already large enough to read and
-   growing them would cost rows. */
+/* Compact layouts increase reading sizes. Figure sizes remain fixed. */
 @media (max-width: 880px) {
   :root {
     --t-micro: 10px;
@@ -153,8 +140,7 @@
   }
 }
 
-/* A paper terminal: same structure, inverted. Colours are darkened rather than
-   reused, because the dark-mode values do not carry enough contrast on white. */
+/* Light-theme palette and contrast values. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
     --bg: #f4f4f2;
@@ -190,6 +176,10 @@
     --c7: #a03a6b;
     --c8: #4f6478;
 
+    --shadow-popover: 0 10px 30px rgb(21 24 29 / .10), 0 2px 8px rgb(21 24 29 / .06);
+    --shadow-sheet: 0 -10px 28px rgb(21 24 29 / .10);
+    --shadow-float: 0 3px 12px rgb(21 24 29 / .12);
+
     color-scheme: light;
   }
 }
@@ -223,6 +213,9 @@
   --c6: #12797c;
   --c7: #a03a6b;
   --c8: #4f6478;
+  --shadow-popover: 0 10px 30px rgb(21 24 29 / .10), 0 2px 8px rgb(21 24 29 / .06);
+  --shadow-sheet: 0 -10px 28px rgb(21 24 29 / .10);
+  --shadow-float: 0 3px 12px rgb(21 24 29 / .12);
   color-scheme: light;
 }
 
@@ -254,8 +247,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 /* --- Type ---------------------------------------------------------------- */
 
-/* Headings are prose, not data: they take the sans face and earn rank from
-   size and weight rather than from tracking every letter apart. */
+/* Headings use the proportional face, size, and weight for hierarchy. */
 h1, h2, h3 { font-family: var(--sans); margin: 0; text-wrap: balance; }
 
 h1 {
@@ -459,8 +451,7 @@ th.num, td.num {
 .chip button:hover { color: var(--fg); border: none; }
 .chip.accent { border-color: var(--fg-3); color: var(--fg); }
 
-/* Tags are outlined with a faint wash rather than solid-filled — a solid badge
-   reads as a button, and none of these are clickable. */
+/* Tags use an outline and faint state wash. */
 .tag {
   display: inline-block;
   padding: 0 var(--s1);
@@ -567,11 +558,9 @@ th.num, td.num {
   .amount-options, .amount-options-scrim { animation: none; }
 }
 
-/* Two waiting states, and which one to use is not a preference:
-   .skeleton  when the shape of what is coming is known (list rows, cards) — it
-              holds the layout, so nothing jumps when the data lands.
-   .spinner   when it is not (a single panel, a computed figure).
-   Not a spinner — a terminal blinks. */
+/* Waiting states:
+   .skeleton for rows and cards with stable geometry.
+   .spinner for a single panel or computed figure. */
 .spinner {
   padding: var(--s6) var(--s5);
   text-align: center;
@@ -609,8 +598,7 @@ th.num, td.num {
   * { transition: none !important; }
 }
 
-/* Charts below the fold hold at their first frame until the scroll-pane
-   observer reveals them. The chart owns its animation; this only owns timing. */
+/* The scroll observer starts chart animation when the chart enters view. */
 [fintoReveal] .series,
 [fintoReveal] .area,
 [fintoReveal] .arc,
@@ -643,14 +631,10 @@ router-outlet + *:has(.select-root.open, .date-root.open, .filter-bar.sheet-open
   z-index: var(--z-overlay);
 }
 /* --- Compact overrides ---------------------------------------------------
-   Last in the file on purpose. These override base rules, and CSS resolves a
-   tie on source order — sitting above the rules they target, every one of
-   them silently lost, including the 44px touch targets. */
+   Source order gives these rules precedence over equal-specificity base rules. */
 
 @media (max-width: 880px) {
-  /* A masthead with a rule under it costs ~130px of an 812px screen to repeat
-     what the tab bar already says. It becomes a header line: enough to orient
-     someone who deep-linked here, not enough to push content under the fold. */
+  /* Compact page headers use one line above the content. */
   .page-head {
     align-items: center;
     justify-content: space-between;

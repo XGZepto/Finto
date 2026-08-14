@@ -366,6 +366,28 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 100));
     await shot(image);
   }
+
+  await visit('/blotter', '.ledger-card');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await page.click('tr.clickable');
+  await settle('.drawer .transaction-hero');
+  const lightFloatShadow = await page.$eval('.mobile-back', (node) => getComputedStyle(node).boxShadow);
+  if (!lightFloatShadow.includes('0.12')) throw new Error(`Light floating controls use a hard shadow: ${lightFloatShadow}`);
+  await shot('blotter-transaction-light-after.png');
+  await page.click('.mobile-back');
+  await settle('.ledger-card');
+  await clickText('button', 'Filters');
+  await settle('.advanced.open');
+  await page.click('.advanced.open finto-select[ariaLabel="Account"] .select-trigger');
+  await settle('.select-menu');
+  const lightSheetShadow = await page.$eval('.select-menu', (node) => getComputedStyle(node).boxShadow);
+  if (!lightSheetShadow.includes('0.1')) throw new Error(`Light selector uses a hard shadow: ${lightSheetShadow}`);
+  await shot('blotter-account-selector-light-after.png');
+  await page.click('.select-menu .sheet-head button');
+  await page.click('finto-date .date-trigger');
+  await settle('finto-date .calendar');
+  await shot('blotter-date-sheet-light-after.png');
+  await page.click('finto-date .sheet-head button');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
 
   await visit('/reports', '.totals-card');

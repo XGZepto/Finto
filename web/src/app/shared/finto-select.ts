@@ -70,11 +70,10 @@ let instances = 0;
       position: absolute; z-index: var(--z-popover); top: calc(100% + 4px); left: 0; min-width: 100%;
       width: max-content; max-width: min(320px, 88vw); max-height: 260px; overflow-y: auto;
       padding: 4px; border: 1px solid var(--line-2); background: var(--panel);
-      box-shadow: 0 8px 22px #0005;
+      box-shadow: var(--shadow-popover);
     }
     .select-scrim, .sheet-head { display: none; }
-    /* Opens upward near the foot of the screen, so it never lands under the
-       fixed mobile nav (which reads as the nav vanishing behind it). */
+    /* Desktop menus near the viewport foot open upward. */
     .up .select-menu { top: auto; bottom: calc(100% + 4px); }
     .select-option {
       display: grid; grid-template-columns: minmax(0, 1fr) 24px; gap: 12px; align-items: center;
@@ -85,8 +84,7 @@ let instances = 0;
     .option-code { display: grid; place-items: center; width: 42px; height: 30px; background: var(--panel-3); border: 1px solid var(--line); color: var(--fg-2); font-size: var(--t-label); }
     .option-copy { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
     .option-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font: 520 var(--t-meta)/1.2 var(--sans); }
-    /* A trailing check is the platform convention for one selected row. A
-       boxed mark reads as a checkbox and falsely promises multi-selection. */
+    /* Single-choice rows use a trailing check. */
     .selection-mark { display: grid; place-items: center; width: 22px; height: 22px; color: transparent; font-size: var(--t-data); font-weight: 650; }
     .select-option.active { background: var(--panel-3); color: var(--fg); }
     .select-option.selected { color: var(--fg); }
@@ -105,7 +103,7 @@ let instances = 0;
         max-height: min(76dvh, 660px); padding: 0 14px calc(14px + env(safe-area-inset-bottom));
         border: 0; border-top: 1px solid var(--line-2); background: var(--glass-surface);
         -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
-        box-shadow: 0 -16px 42px #0008; animation: sheet-up var(--motion) var(--ease-out) both;
+        box-shadow: var(--shadow-sheet); animation: sheet-up var(--motion) var(--ease-out) both;
       }
       .sheet-head { position: sticky; z-index: 2; top: 0; display: flex; justify-content: space-between; align-items: center; min-height: 68px; margin: 0 -14px; padding: 10px 14px 8px; border-bottom: 1px solid var(--line); background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
       .sheet-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 32px; height: 3px; border-radius: 3px; background: var(--fg-4); transform: translateX(-50%); opacity: .6; }
@@ -134,8 +132,7 @@ export class FintoSelect implements ControlValueAccessor {
   @Input() placeholder = 'Select';
   @Input() ariaLabel = 'Select';
 
-  /* The active option is announced through the trigger, which never gives up
-     focus, so both ends of that reference need a stable id. */
+  /* Stable id for the trigger's active-descendant reference. */
   readonly id = `finto-select-${++instances}`;
 
   value = signal('');
