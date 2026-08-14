@@ -12,7 +12,7 @@ import { LedgerFilter } from './models';
  */
 
 const ARRAY_KEYS = [
-  'accounts', 'cards', 'cardholders', 'institutions', 'categories', 'kinds',
+  'months', 'accounts', 'cards', 'cardholders', 'institutions', 'categories', 'kinds',
   'detail', 'tags',
 ] as const;
 const BOOL_KEYS = [
@@ -94,7 +94,11 @@ export function describeFilter(f: LedgerFilter): Array<{ key: string; label: str
   if (f.from || f.to) {
     chips.push({ key: 'date', label: `${f.from ?? 'start'} → ${f.to ?? 'now'}` });
   }
+  if (f.months?.length) {
+    chips.push({ key: 'months', label: f.months.length === 1 ? f.months[0] : `${f.months.length} months` });
+  }
   for (const key of ARRAY_KEYS) {
+    if (key === 'months') continue;
     const v = (f as any)[key] as string[] | undefined;
     if (!v?.length) continue;
     chips.push({
@@ -183,4 +187,3 @@ export class FilterState {
     });
   }
 }
-

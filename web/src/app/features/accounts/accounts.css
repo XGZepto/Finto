@@ -147,9 +147,7 @@
   .group-header { padding: var(--s3) 12px; }
   .account-child { padding: 9px 12px; grid-template-columns: 1fr auto 14px; }
   .single-account, .group-header { min-height: 72px; padding: var(--s3) 12px; grid-template-columns: 32px minmax(0, 1fr) auto 12px; }
-  .sankey-frame::after { content: ''; position: absolute; z-index: 2; top: 30px; right: -12px; bottom: 0; width: 28px; pointer-events: none; background: linear-gradient(90deg, transparent, var(--panel)); }
-  .pan-cue { display: block; margin: -4px 0 7px; color: var(--fg-4); font: var(--t-micro)/1 var(--mono); letter-spacing: .08em; text-align: right; text-transform: uppercase; }
-  .sankey-scroll { display: block; overflow-x: auto; margin-inline: -12px; padding-inline: 12px 30px; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  .sankey-scroll { display: block; overflow-x: auto; margin-inline: -12px; padding-inline: 12px; overscroll-behavior-x: contain; scrollbar-width: thin; }
   .sankey { width: 600px; max-width: none; min-height: 0; }
   .mobile-flow { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: var(--t-meta); }
   .mobile-flow strong { font-family: var(--sans); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -167,8 +165,6 @@
 @media (prefers-reduced-motion: reduce) { .month-track i, .sankey .link, .sankey .node, .detail-link, .detail-node { animation: none; } }
 
 @media (max-width: 520px) {
-  .account-groups { margin-inline: -12px; }
-  .account-group { border-left: 0; border-right: 0; }
   .account-child { grid-template-columns: minmax(0, 1fr) auto 10px; gap: 7px; }
   .child-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .group-totals { font-size: var(--t-label); }

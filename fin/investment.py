@@ -187,6 +187,46 @@ def list_snapshots(conn) -> list[dict]:
     ]
 
 
+def valuation_history(conn, *, scheme: str | None = None,
+                      account_id: str | None = None) -> dict:
+    """Dated scheme or member-account values, ordered for charting."""
+    clauses: list[str] = []
+    params: list[str] = []
+    if scheme:
+        clauses.append("s.scheme=%s")
+        params.append(scheme)
+    if account_id:
+        clauses.append("b.account_id=%s")
+        params.append(account_id)
+        value_sql = "b.balance"
+        currency_sql = "b.currency"
+        join_sql = (
+            "JOIN investment_subaccount_balance b ON b.snapshot_id=s.id"
+        )
+    else:
+        value_sql = "s.total_value"
+        currency_sql = "s.currency"
+        join_sql = ""
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = conn.execute(
+        f"SELECT s.as_of_date,s.scheme,{value_sql} AS value,{currency_sql} AS currency "
+        f"FROM investment_snapshot s {join_sql} {where} "
+        "ORDER BY s.as_of_date ASC",
+        params,
+    )
+    return {
+        "scheme": scheme,
+        "account_id": account_id,
+        "points": [
+            {
+                "as_of_date": row["as_of_date"],
+                "value": {"amount": row["value"], "currency": row["currency"]},
+            }
+            for row in rows
+        ],
+    }
+
+
 def snapshot_detail(conn, snapshot_id: str) -> dict | None:
     r = conn.execute(
         "SELECT * FROM investment_snapshot WHERE id=%s", (snapshot_id,)

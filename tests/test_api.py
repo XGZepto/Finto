@@ -245,6 +245,16 @@ def test_transaction_totals_can_be_normalised(client):
     assert body["normalised"]["net"]["currency"] == "USD"
 
 
+def test_transactions_accept_an_exact_month_set(client):
+    january = client.get("/api/transactions?months=2025-01").json()
+    selected = client.get(
+        "/api/transactions?months=2025-01&months=2025-03"
+    ).json()
+    assert january["total"] > 0
+    assert selected["total"] == january["total"]
+    assert client.get("/api/transactions?months=2025-13").status_code == 422
+
+
 def test_flow_report_includes_external_nodes_for_account_sankey(client):
     body = client.get("/api/flows").json()
     assert "external_nodes" in body["normalised"]
@@ -272,6 +282,14 @@ def test_positions_include_investment_snapshots_under_acl(client, database_url):
             balance=Money(amount=16593537, currency="HKD"),
         )],
     ))
+    save_snapshot(conn, InvestmentSnapshot(
+        as_of_date=date(2026, 6, 30), scheme="hsbc_mpf", currency="HKD",
+        total_value=Money(amount=16000000, currency="HKD"), source="test",
+        subaccounts=[SubaccountBalance(
+            account_id="hsbc_mpf_regular", member_no=None,
+            balance=Money(amount=16000000, currency="HKD"),
+        )],
+    ))
     conn.close()
 
     body = client.get("/api/positions?convert_to=HKD").json()
@@ -282,6 +300,18 @@ def test_positions_include_investment_snapshots_under_acl(client, database_url):
         r for r in body["normalised"]["by_type"] if r["account_type"] == "investment"
     )
     assert investment["balance"]["amount"] == 16593537
+
+    scheme_history = client.get(
+        "/api/investments/history?scheme=hsbc_mpf"
+    ).json()
+    assert [point["value"]["amount"] for point in scheme_history["points"]] == [
+        16000000, 16593537,
+    ]
+    account_history = client.get(
+        "/api/investments/history?scheme=hsbc_mpf&account_id=hsbc_mpf_regular"
+    ).json()
+    assert account_history["account_id"] == "hsbc_mpf_regular"
+    assert account_history["points"][-1]["value"]["amount"] == 16593537
 
 
 def test_money_is_integer_minor_units(client):

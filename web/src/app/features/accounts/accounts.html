@@ -290,7 +290,7 @@
         <h2>Money flow · {{ flows().normalised.currency }}</h2>
         <div class="flow-tools"><span class="tag">normalised</span><div class="view-switch" role="group" aria-label="Money flow view"><button [class.on]="flowView() === 'chart'" (click)="setFlowView('chart')">Chart</button><button [class.on]="flowView() === 'list'" (click)="setFlowView('list')">List</button></div></div>
       </div>
-      @if (flowView() === 'chart') { <div class="sankey-frame"><span class="pan-cue">Swipe to explore ↔</span><div class="sankey-scroll" tabindex="0" aria-label="Scrollable money flow chart">
+      @if (flowView() === 'chart') { <div class="sankey-frame"><div class="sankey-scroll" tabindex="0" aria-label="Scrollable money flow chart">
         <svg class="sankey" viewBox="0 0 1000 800" preserveAspectRatio="xMidYMin meet" [attr.viewBox]="'0 0 1000 ' + flowHeight()">
           <defs><marker id="internal-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="internal-arrow"></path></marker></defs>
           <text x="26" y="22">MONEY IN</text><text x="468" y="22">ACCOUNTS</text><text x="900" y="22">MONEY OUT</text>

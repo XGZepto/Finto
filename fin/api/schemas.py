@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Money(BaseModel):
@@ -24,6 +24,7 @@ class Money(BaseModel):
 class LedgerFilter(BaseModel):
     date_from: str | None = Field(default=None, alias="from")
     date_to: str | None = Field(default=None, alias="to")
+    months: list[str] | None = None
     accounts: list[str] | None = None
     cards: list[str] | None = None
     cardholders: list[str] | None = None
@@ -44,6 +45,17 @@ class LedgerFilter(BaseModel):
     includeDuplicates: bool = False
     uncategorisedOnly: bool = False
     installmentsOnly: bool = False
+
+    @field_validator("months")
+    @classmethod
+    def valid_months(cls, value: list[str] | None) -> list[str] | None:
+        if value and any(
+            len(month) != 7 or month[4] != "-" or not month.replace("-", "").isdigit()
+            or not 1 <= int(month[5:]) <= 12
+            for month in value
+        ):
+            raise ValueError("months must use YYYY-MM")
+        return value
 
     model_config = {"populate_by_name": True}
 

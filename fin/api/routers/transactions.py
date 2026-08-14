@@ -16,6 +16,7 @@ router = APIRouter(tags=["transactions"])
 def filter_from_query(
     date_from: str | None = Query(None, alias="from"),
     date_to: str | None = Query(None, alias="to"),
+    months: list[str] | None = Query(None),
     accounts: list[str] | None = Query(None),
     cards: list[str] | None = Query(None),
     cardholders: list[str] | None = Query(None),
@@ -33,8 +34,14 @@ def filter_from_query(
     uncategorisedOnly: bool = Query(False),
     installmentsOnly: bool = Query(False),
 ) -> LedgerFilter:
+    if months and any(
+        len(month) != 7 or month[4] != "-" or not month.replace("-", "").isdigit()
+        or not 1 <= int(month[5:]) <= 12
+        for month in months
+    ):
+        raise HTTPException(422, "months must use YYYY-MM")
     return LedgerFilter(
-        **{"from": date_from, "to": date_to}, accounts=accounts, cards=cards,
+        **{"from": date_from, "to": date_to}, months=months, accounts=accounts, cards=cards,
         cardholders=cardholders, institutions=institutions, categories=categories, kinds=kinds,
         currency=currency, minAmount=minAmount, maxAmount=maxAmount, q=q,
         detail=detail, tags=tags,

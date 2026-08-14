@@ -62,12 +62,12 @@
       <section class="card">
         <div class="section-head">
           <h2>Spending over time</h2>
-          @if (focusMonth(); as f) {
-            <button class="bare focus-chip" (click)="clearFocus()">{{ f }} ✕</button>
+          @if (selectionLabel(); as label) {
+            <button class="bare focus-chip" (click)="clearFocus()">{{ label }} <span aria-hidden="true">×</span></button>
           }
         </div>
         <finto-bars fintoReveal [data]="monthlySpend()" label="Outflow per month"
-                    [meanLabel]="monthlyMean()" [selected]="focusMonth()" (pick)="focus($event)" />
+                    [meanLabel]="monthlyMean()" [selected]="selectedMonths()" (pick)="focus($event)" />
       </section>
     }
     <section class="card">

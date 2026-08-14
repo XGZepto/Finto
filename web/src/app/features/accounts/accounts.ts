@@ -262,8 +262,25 @@ export class AccountsPage {
     });
   }
 
-  open(id: string): void { this.router.navigate(['/accounts', id]); }
-  openGroup(group: string): void { this.router.navigate(['/accounts/group', group]); }
+  open(id: string): void {
+    const account = this.accounts().find((item) => item.id === id);
+    if (account?.account_type === 'investment') {
+      this.router.navigate(['/investments'], {
+        queryParams: { scheme: account.balance_group || undefined, account: id },
+      });
+      return;
+    }
+    this.router.navigate(['/accounts', id]);
+  }
+
+  openGroup(group: string): void {
+    const members = this.accounts().filter((account) => account.balance_group === group);
+    if (members.length && members.every((account) => account.account_type === 'investment')) {
+      this.router.navigate(['/investments'], { queryParams: { scheme: group } });
+      return;
+    }
+    this.router.navigate(['/accounts/group', group]);
+  }
   back(): void { this.router.navigate(['/accounts']); }
   openInBlotter(id: string): void {
     this.router.navigate(['/blotter'], { queryParams: { accounts: id } });

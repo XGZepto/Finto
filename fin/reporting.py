@@ -113,6 +113,12 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
     if f.get("to"):
         clauses.append("t.txn_date <= %s")
         params.append(str(f["to"]))
+    if f.get("months"):
+        months = [str(month) for month in f["months"]]
+        if any(len(month) != 7 or month[4] != "-" or not month.replace("-", "").isdigit()
+               for month in months):
+            raise ValueError("months must use YYYY-MM")
+        in_clause("substr(t.txn_date, 1, 7)", months)
     if f.get("accounts"):
         in_clause("t.account_id", f["accounts"])
     if f.get("cards"):

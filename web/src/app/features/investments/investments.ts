@@ -1,10 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { InvestmentDetail, InvestmentSnapshot } from '../../core/models';
+import { InvestmentDetail, InvestmentHistory, InvestmentSnapshot } from '../../core/models';
 import { FormsModule } from '@angular/forms';
 import { FintoSelect } from '../../shared/finto-select';
+import { FintoTimeseries, SeriesPoint } from '../../shared/finto-timeseries';
 
 /**
  * MPF positions.
@@ -15,16 +17,63 @@ import { FintoSelect } from '../../shared/finto-select';
  */
 @Component({
   selector: 'app-investments',
-  imports: [FintoSkeleton, FormsModule, MoneyPipe, ShortDatePipe, FintoSelect],
+  imports: [FintoSkeleton, FormsModule, MoneyPipe, ShortDatePipe, FintoSelect, FintoTimeseries],
   templateUrl: './investments.html',
   styleUrl: './investments.css',
 })
 export class InvestmentsPage {
   private api = inject(Api);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
 
   loading = signal(true);
   snapshots = signal<InvestmentSnapshot[]>([]);
+  accountNames = signal<Record<string, string>>({});
   current = signal<InvestmentDetail | null>(null);
+  history = signal<InvestmentHistory | null>(null);
+  scheme = signal(this.route.snapshot.queryParamMap.get('scheme') ?? '');
+  accountId = signal(this.route.snapshot.queryParamMap.get('account') ?? '');
+
+  scopedSnapshots = computed(() => {
+    const scheme = this.scheme();
+    return this.snapshots().filter((snapshot) => !scheme || snapshot.scheme === scheme);
+  });
+
+  selectedSubaccount = computed(() => {
+    const account = this.accountId();
+    return this.current()?.subaccounts.find((item) => item.account_id === account) ?? null;
+  });
+
+  displayedValue = computed(() => this.selectedSubaccount()?.balance ?? this.current()?.total ?? null);
+
+  visibleHistory = computed(() => {
+    const date = this.current()?.as_of_date;
+    return (this.history()?.points ?? []).filter((point) => !date || point.as_of_date <= date);
+  });
+
+  historyPoints = computed<SeriesPoint[]>(() => this.visibleHistory().map((point) => ({
+    label: point.as_of_date,
+    value: point.value.amount,
+  })));
+
+  valueChange = computed(() => {
+    const points = this.visibleHistory();
+    if (points.length < 2) return null;
+    const current = points[points.length - 1].value;
+    const previous = points[points.length - 2].value;
+    const amount = current.amount - previous.amount;
+    return {
+      amount: { amount, currency: current.currency },
+      percent: previous.amount ? amount / Math.abs(previous.amount) * 100 : null,
+    };
+  });
+
+  pageTitle = computed(() => {
+    const subaccount = this.selectedSubaccount();
+    if (subaccount) return this.accountLabel(subaccount.account_id);
+    const current = this.current();
+    return current ? this.friendly(current.scheme) : 'Investments';
+  });
 
   /** Largest holding, so the bars have something to scale against. */
   private peak = computed(() =>
@@ -32,13 +81,31 @@ export class InvestmentsPage {
   );
 
   constructor() {
+    this.api.accounts().subscribe({
+      next: (response) => this.accountNames.set(Object.fromEntries(
+        response.accounts.map((account) => [account.id, account.display_name]),
+      )),
+      error: () => undefined,
+    });
     this.api.investments().subscribe({
       next: (r) => {
         this.snapshots.set(r.snapshots);
-        if (r.snapshots.length) this.select(r.snapshots[0].id);
+        const first = this.scopedSnapshots()[0];
+        if (first) {
+          if (!this.scheme()) this.scheme.set(first.scheme);
+          this.select(first.id);
+          this.loadHistory();
+        }
         else this.loading.set(false);
       },
       error: () => this.loading.set(false),
+    });
+  }
+
+  private loadHistory(): void {
+    this.api.investmentHistory(this.scheme() || undefined, this.accountId() || undefined).subscribe({
+      next: (history) => this.history.set(history),
+      error: () => this.history.set(null),
     });
   }
 
@@ -66,6 +133,24 @@ export class InvestmentsPage {
 
   friendly(value: string): string {
     return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
-      .replace(/\b(Hsbc|Mpf|Hkd|Usd|Amex)\b/g, (word) => word.toUpperCase());
+      .replace(/\b(Hsbc|Mpf|Tdvc|Hkd|Usd|Amex)\b/g, (word) => word.toUpperCase());
+  }
+
+  accountLabel(accountId: string): string {
+    return this.accountNames()[accountId] ?? this.friendly(accountId);
+  }
+
+  back(): void {
+    this.router.navigate(['/accounts']);
+  }
+
+  openAccount(scheme: string, accountId: string): void {
+    this.scheme.set(scheme);
+    this.accountId.set(accountId);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { scheme, account: accountId },
+    });
+    this.loadHistory();
   }
 }

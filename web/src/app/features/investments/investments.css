@@ -1,47 +1,49 @@
-.card { margin-bottom: 12px; }
-.card h3 { margin: 0 0 10px; }
+.card { margin-bottom: var(--s3); }
+.investment-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s2) var(--s4); }
+.investment-head .back { grid-column: 1 / -1; justify-self: start; min-height: 44px; text-align: left; }
+.investment-head h1 { margin: 0; }
+.back { color: var(--fg-3); font: var(--t-label)/1.3 var(--mono); padding: 0; }
 
-.total-hero {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 6px 0 2px;
+.valuation-card { display: grid; gap: var(--s3); }
+.valuation-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); }
+.valuation-head > div { display: grid; gap: var(--s2); }
+.eyebrow { color: var(--fg-4); font: var(--t-label)/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.figure { font-size: var(--t-fig-lg); line-height: 1.05; font-variant-numeric: tabular-nums; }
+.change { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s2); font: var(--t-label)/1.4 var(--mono); }
+.change.positive { color: var(--pos); }
+.change.negative { color: var(--neg); }
+
+.section-head { align-items: flex-start; }
+.section-head h2 { margin-bottom: 3px; }
+.history-card finto-timeseries { margin-top: var(--s3); }
+.single-point { margin: var(--s3) 0 0; }
+
+.account-list, .holding-list { border-top: 1px solid var(--line); }
+.account-row {
+  width: 100%; min-height: 64px; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; gap: var(--s3); padding: var(--s3) 0; border: 0;
+  border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left;
 }
-.total-hero .figure {
-  font-size: var(--t-fig-lg);
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
+.account-row > span:first-child { display: grid; gap: 3px; min-width: 0; }
+.account-row small { color: var(--fg-4); }
+.row-value, .holding-value { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row-value span { color: var(--fg-4); margin-left: var(--s2); }
+
+.holding-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2) var(--s3);
+  padding: var(--s3) 0; border-bottom: 1px solid var(--line);
 }
+.holding-copy { display: grid; gap: 3px; min-width: 0; }
+.holding-copy strong { overflow-wrap: anywhere; }
+.allocation-track { grid-column: 1 / -1; height: 3px; overflow: hidden; background: var(--surface-3); }
+.allocation-track span { display: block; height: 100%; background: var(--info); }
+.empty-state, .empty { padding: var(--s4); }
 
-/* The bar sits behind the fund name rather than in its own column, so the
-   table stays readable at the width the sidebar leaves. */
-td.fund { position: relative; isolation: isolate; }
-td.fund .bar {
-  position: absolute;
-  inset: 2px auto 2px 0;
-  z-index: -1;
-  background: var(--c4-wash, var(--info-wash));
-  border-left: 2px solid var(--c4, var(--info));
-}
-td.fund .fund-name { position: relative; }
-
-.empty-state { padding: 20px; }
-.empty-state p { margin: 0 0 6px; }
-
-@media (max-width: 880px) {
-  .toolbar { align-items: stretch; }
-  .toolbar finto-select { width: 100%; }
-  .total-hero { display: grid; gap: 5px; }
-  .total-hero .figure { font-size: clamp(24px, 8vw, 30px); overflow-wrap: anywhere; }
-  .table-wrap { margin-inline: 0; border: 0; overflow: visible; }
-  table, tbody, tr, td { display: block; width: 100%; }
-  thead { display: none; }
-  tr { padding: 11px 0; border-bottom: 1px solid var(--line); }
-  tbody tr:last-child { border-bottom: 0; }
-  td, td.num { display: grid; grid-template-columns: minmax(84px, 38%) minmax(0, 1fr); gap: 12px; padding: 3px 0; border: 0; text-align: right; white-space: normal; }
-  td::before { content: attr(data-label); color: var(--fg-4); font: var(--t-label)/1.5 var(--mono); letter-spacing: .08em; text-align: left; text-transform: uppercase; }
-  td.fund { display: block; padding: 0 0 7px; text-align: left; font-weight: 600; }
-  td.fund::before { display: none; }
-  td.fund .bar { inset: -2px 0 4px; }
-  td.empty { display: block; text-align: center; }
+@media (max-width: 680px) {
+  .valuation-head { display: grid; }
+  .valuation-head finto-select { width: 100%; }
+  .figure { font-size: clamp(26px, 8vw, 34px); overflow-wrap: anywhere; }
+  .holding-row { grid-template-columns: minmax(0, 1fr); }
+  .holding-value { grid-row: 2; }
+  .allocation-track { grid-column: 1; }
 }

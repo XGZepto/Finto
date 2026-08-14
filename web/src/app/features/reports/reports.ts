@@ -52,7 +52,7 @@ export class ReportsPage {
 
   splitBy = signal('category');
   period = signal('3M');
-  focusMonth = signal<string | null>(null);
+  selectedMonths = signal<string[]>([]);
   accountId = signal('');
   accounts = signal<Array<{ id: string; display_name: string }>>([]);
   convertTo = this.preferences.baseCurrency;
@@ -108,8 +108,9 @@ export class ReportsPage {
     return this.monthRange(d.toISOString().slice(0, 7));
   }
 
-  private scope(range: { from: string; to: string }): LedgerFilter {
-    const filter: LedgerFilter = { ...range };
+  private scope(range?: { from: string; to: string }, includeSelection = true): LedgerFilter {
+    const months = includeSelection ? this.selectedMonths() : [];
+    const filter: LedgerFilter = months.length ? { months } : { ...range };
     const chosen = this.accounts().find((a) => a.display_name === this.accountId());
     if (chosen) filter.accounts = [chosen.id];
     return filter;
@@ -119,9 +120,9 @@ export class ReportsPage {
     this.loading.set(true);
     const convert = this.convertTo() || undefined;
     const { current, prior } = this.windows();
-    const focus = this.focusMonth();
-    const view = focus ? this.monthRange(focus) : current;
-    const priorView = focus ? this.priorMonth(focus) : prior;
+    const selected = this.selectedMonths();
+    const view = selected.length ? undefined : current;
+    const priorView = selected.length === 1 ? this.priorMonth(selected[0]) : prior;
 
     this.api.summary(this.splitBy(), this.scope(view) as any, convert).subscribe({
       next: (res) => {
@@ -132,12 +133,16 @@ export class ReportsPage {
       error: () => this.loading.set(false),
     });
 
-    this.api.summary('kind', this.scope(priorView) as any, convert).subscribe({
-      next: (res) => this.priorHeadline.set(res.normalised?.total ?? null),
-      error: () => this.priorHeadline.set(null),
-    });
+    if (selected.length <= 1) {
+      this.api.summary('kind', this.scope(priorView, false) as any, convert).subscribe({
+        next: (res) => this.priorHeadline.set(res.normalised?.total ?? null),
+        error: () => this.priorHeadline.set(null),
+      });
+    } else {
+      this.priorHeadline.set(null);
+    }
 
-    this.api.summary('month', this.scope(current) as any, convert).subscribe({
+    this.api.summary('month', this.scope(current, false) as any, convert).subscribe({
       next: (res) => this.monthRows.set(res.rows),
       error: () => this.monthRows.set([]),
     });
@@ -150,6 +155,7 @@ export class ReportsPage {
 
   setPeriod(value: string): void {
     this.period.set(value);
+    this.selectedMonths.set([]);
     this.load();
   }
 
@@ -254,23 +260,29 @@ export class ReportsPage {
   });
 
   focus(month: string): void {
-    this.focusMonth.set(this.focusMonth() === month ? null : month);
+    this.selectedMonths.update((selected) => selected.includes(month)
+      ? selected.filter((value) => value !== month)
+      : [...selected, month].sort());
     this.load();
   }
 
   clearFocus(): void {
-    this.focusMonth.set(null);
+    this.selectedMonths.set([]);
     this.load();
   }
 
-  /** How the delta is labelled: the prior month when focused, else the period. */
+  selectionLabel = computed(() => {
+    const selected = this.selectedMonths();
+    if (selected.length === 1) return selected[0];
+    return selected.length ? `${selected.length} months` : '';
+  });
+
+  /** How the delta is labelled for comparable contiguous windows. */
   comparisonLabel = computed(() =>
-    this.focusMonth() ? 'vs prior month' : `vs prior ${this.period()}`);
+    this.selectedMonths().length === 1 ? 'vs prior month' : `vs prior ${this.period()}`);
 
   /** The blotter, scoped to the same window and accounts this figure came from. */
   drill(bucket: string): void {
-    const focus = this.focusMonth();
-    const range = focus ? this.monthRange(focus) : this.windows().current;
-    this.filters.drillInto(this.splitBy(), bucket, this.scope(range));
+    this.filters.drillInto(this.splitBy(), bucket, this.scope(this.windows().current));
   }
 }
