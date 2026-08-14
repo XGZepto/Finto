@@ -205,6 +205,39 @@ def test_transactions_list(client):
     body = client.get("/api/transactions").json()
     assert body["total"] > 0
     assert len(body["items"]) == body["total"]
+    assert body["review"] == {
+        "total": body["total"], "unreviewed": body["total"],
+        "confirmed": 0, "flagged": 0,
+    }
+
+
+def test_review_progress_updates_with_manual_confirmation(client):
+    txn_id = client.get("/api/transactions").json()["items"][0]["id"]
+    response = client.patch(
+        f"/api/transactions/{txn_id}", json={"review_state": "confirmed"})
+    assert response.status_code == 200
+
+    review = client.get("/api/transactions").json()["review"]
+    assert review["confirmed"] == 1
+    assert review["unreviewed"] == review["total"] - 1
+
+
+def test_category_suggestion_is_confidence_gated_and_not_applied(client, monkeypatch):
+    from fin.llm.provider import EchoProvider
+
+    body = client.get("/api/transactions").json()
+    txn = next(item for item in body["items"] if not item["category"])
+    provider = EchoProvider({"categorise": [{
+        "i": 0, "category": "shopping", "subcategory": "general",
+        "merchant": "Recognised merchant", "tags": [], "confidence": 0.91,
+    }]})
+    monkeypatch.setattr("fin.llm.provider.build_provider", lambda conn: provider)
+
+    response = client.get(f"/api/transactions/{txn['id']}/category-suggestion")
+    assert response.status_code == 200
+    assert response.json()["suggestion"]["category"] == "shopping"
+    # Suggestions are preview-only until the person taps the category.
+    assert client.get(f"/api/transactions/{txn['id']}").json()["category"] is None
 
 
 def test_transaction_totals_can_be_normalised(client):
@@ -381,6 +414,29 @@ def test_patch_records_a_manual_annotation(client):
     again = client.get(f"/api/transactions/{txn_id}").json()
     assert again["category"] == "dining"
     assert again["notes"] == "team lunch"
+
+
+def test_patch_can_clear_subcategory_when_category_changes(client, conn):
+    txn_id = client.get("/api/transactions").json()["items"][0]["id"]
+    categorised = client.patch(
+        f"/api/transactions/{txn_id}",
+        json={"category": "dining", "subcategory": "coffee"},
+    )
+    assert categorised.status_code == 200
+
+    changed = client.patch(
+        f"/api/transactions/{txn_id}",
+        json={"category": "shopping", "subcategory": None},
+    )
+    assert changed.status_code == 200
+    assert changed.json()["category"] == "shopping"
+    assert changed.json()["subcategory"] is None
+    annotation = conn.execute(
+        "SELECT value,source FROM txn_annotation WHERE txn_id=%s AND field='subcategory'",
+        (txn_id,),
+    ).fetchone()
+    assert annotation["value"] is None
+    assert annotation["source"] == "manual"
 
 
 # ---------------------------------------------------------------------------

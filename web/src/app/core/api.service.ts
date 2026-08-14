@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { EMPTY, Observable, catchError, concat, shareReplay, take, tap } from 'rxjs';
 import {
-  Account, Card, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
+  Account, Card, CategorySuggestion, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
   ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentDetail, InvestmentSnapshot, Job,
   LedgerFilter, Money, Page, Position, QueryResult, StagePreview, StatementFreshness, SummaryRow,
   TotalRow, Txn,
@@ -125,6 +125,15 @@ export class Api {
 
   transaction(id: string): Observable<Txn> {
     return this.cached<Txn>(`${this.base}/transactions/${id}`, this.computedTtl);
+  }
+
+  categorySuggestion(id: string): Observable<{
+    available: boolean;
+    suggestion: CategorySuggestion | null;
+  }> {
+    return this.http.get<{ available: boolean; suggestion: CategorySuggestion | null }>(
+      `${this.base}/transactions/${id}/category-suggestion`,
+    );
   }
 
 addTag(id: string, tag: string): Observable<Txn> {

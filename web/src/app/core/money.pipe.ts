@@ -46,12 +46,40 @@ export class MoneyPipe implements PipeTransform {
   }
 }
 
-/** Formats a date as a short, locale-independent label. */
+/** Formats ledger dates for scanning while keeping older years unambiguous. */
 @Pipe({ name: 'shortDate', standalone: true })
 export class ShortDatePipe implements PipeTransform {
   transform(value: string | null | undefined): string {
     if (!value) return '—';
-    return value.slice(0, 10);
+    const iso = value.slice(0, 10);
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!match) return iso;
+
+    const [, yearText, monthText, dayText] = match;
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    const date = new Date(year, month - 1, day, 12);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+      return iso;
+    }
+
+    const now = new Date();
+    const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = Date.UTC(year, month - 1, day);
+    const days = Math.round((target - today) / 86_400_000);
+    const locale = typeof document === 'undefined' ? 'en' : document.documentElement.lang || 'en';
+    if (days === 0 || days === -1) {
+      const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(days, 'day');
+      return relative.charAt(0).toLocaleUpperCase(locale) + relative.slice(1);
+    }
+
+    return new Intl.DateTimeFormat(locale, {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      ...(year === now.getFullYear() ? {} : { year: 'numeric' as const }),
+    }).format(date).replace(',', '');
   }
 }
 

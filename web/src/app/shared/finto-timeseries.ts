@@ -27,8 +27,8 @@ export interface SeriesPoint {
         <line class="grid" x1="0" [attr.y1]="y" [attr.x2]="w" [attr.y2]="y" />
       }
       @if (geometry(); as g) {
-        <polygon [attr.points]="g.area" [attr.fill]="'url(#' + gradientId + ')'" />
-        <polyline [attr.points]="g.line" fill="none" [attr.stroke]="stroke()" stroke-width="2"
+        <polygon class="series-area" [attr.points]="g.area" [attr.fill]="'url(#' + gradientId + ')'" />
+        <polyline class="series-line" pathLength="1" [attr.points]="g.line" fill="none" [attr.stroke]="stroke()" stroke-width="2"
                   vector-effect="non-scaling-stroke" />
       }
     </svg>
@@ -41,11 +41,16 @@ export interface SeriesPoint {
     :host { display: block; }
     svg { display: block; width: 100%; height: 120px; }
     .grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .series-line { stroke-dasharray: 1000; animation: line-reveal var(--motion-slow) var(--ease-out) both; }
+    .series-area { animation: area-reveal var(--motion-slow) var(--ease-out) both; }
+    @keyframes line-reveal { from { stroke-dashoffset: 1000; } }
+    @keyframes area-reveal { from { opacity: 0; } }
     .axis {
       display: flex; justify-content: space-between;
       margin-top: var(--s2); color: var(--fg-4); font-size: var(--t-micro);
       letter-spacing: .1em; text-transform: uppercase;
     }
+    @media (prefers-reduced-motion: reduce) { .series-line, .series-area { animation: none; } }
   `],
 })
 export class FintoTimeseries {

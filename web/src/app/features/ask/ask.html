@@ -88,7 +88,7 @@
             {{ t.net | money: 'bare' }}
           </div>
           <div class="split">
-            <span><label>Out</label><span class="mono neg">{{ t.spend | money: 'bare' }}</span></span>
+            <span><label>Out</label><span class="mono">{{ t.spend | money: 'bare' }}</span></span>
             <span><label>In</label><span class="mono pos">{{ t.income | money: 'bare' }}</span></span>
             <span><label>Rows</label><span class="mono">{{ t.txn_count }}</span></span>
           </div>
@@ -126,7 +126,7 @@
                 <tr>
                   <td class="mono">{{ row.bucket }}</td>
                   <td><span class="tag">{{ row.currency }}</span></td>
-                  <td class="num neg">{{ row.spend | money: 'bare' }}</td>
+                  <td class="num">{{ row.spend | money: 'bare' }}</td>
                   <td class="num pos">{{ row.income | money: 'bare' }}</td>
                   <td class="num" [class.neg]="row.net.amount < 0" [class.pos]="row.net.amount > 0">
                     {{ row.net | money: 'bare' }}
@@ -176,7 +176,7 @@
                   <td>{{ t.account_name }}</td>
                   <td>{{ t.merchant || t.description }}</td>
                   <td class="muted">{{ t.category || '—' }}</td>
-                  <td class="num" [class.neg]="t.booked.amount < 0" [class.pos]="t.booked.amount > 0">
+                  <td class="num" [class.pos]="t.booked.amount > 0">
                     {{ t.booked | money }}
                   </td>
                 </tr>

@@ -6,14 +6,14 @@
    Finto design system.
 
    The chrome is grey, black and white: panels, rules, nav, labels. Colour is
-   reserved for the things a financial interface has to encode — the sign of a
-   number, the state of a check, and series in a chart. Keeping the frame neutral
+   reserved for the things a financial interface has to encode — state, trend,
+   and related series in a chart. Keeping the frame neutral
    is what lets a red figure read as red at a glance rather than competing with a
    coloured sidebar and three coloured buttons.
 
    Square by intent. No rounded corners, hairline rules instead of shadows, and a
-   monospace face for anything a person reads as data: figures, codes, dates,
-   keys, labels. Prose stays in a proportional face, because a paragraph set in
+   monospace face for anything a person reads as data: figures, codes, dates and
+   keys. Labels and prose stay in a proportional face, because language set in
    mono is a chore to read. That split is the whole typographic system.
 --------------------------------------------------------------------------- */
 
@@ -38,14 +38,14 @@
   --line-strong: #5f656c;
 
   /* Four steps, each ≥4.5:1 on bg, panel and panel-2, each ~1.3:1 from its
-     neighbour. --fg-4 carries every uppercase label and table header in the
+     neighbour. --fg-4 carries supporting labels and table headers in the
      app, so it is the one that decides whether the labelling reads at all. */
   --fg: #e9eaec;
   --fg-2: #a4aab1;
   --fg-3: #8d939a;
   --fg-4: #7b8188;
 
-  /* Semantic. Money out, money in, needs attention, broken, informational. */
+  /* Semantic. Adverse, positive, needs attention, broken, informational. */
   --neg: #f0736c;
   --pos: #4ec98b;
   --warn: #e0aa2a;
@@ -89,8 +89,8 @@
      both at one size leaves the ranking to the reader. Ten steps, and a literal
      px font-size anywhere else is a bug — that is what let eleven sizes
      accumulate between 8px and 13.5px. */
-  --t-micro: 9.5px;   /* uppercase micro labels, chart ticks */
-  --t-label: 10.5px;  /* uppercase labels, table headers, tags */
+  --t-micro: 9.5px;   /* chart ticks and dense metadata */
+  --t-label: 10.5px;  /* labels, table headers, tags */
   --t-meta: 11.5px;   /* supporting text under a primary line */
   --t-data: 12.5px;   /* mono figures in rows and tables */
   --t-body: 14px;     /* prose and form values */
@@ -125,6 +125,12 @@
   --z-overlay: 45;   /* the sheet or drawer itself, and its host */
   --z-popover: 50;   /* a menu opened from inside an overlay */
   --z-auth: 100;     /* the sign-in screen covers everything */
+
+  /* Material is semantic, not decoration. Content stays opaque; only chrome
+     that floats over content uses translucency and blur to expose its depth. */
+  --glass-surface: color-mix(in srgb, var(--panel) 88%, transparent);
+  --glass-strong: color-mix(in srgb, var(--panel) 94%, transparent);
+  --glass-filter: blur(18px) saturate(1.12);
 
   color-scheme: dark;
 }
@@ -378,10 +384,10 @@ input[type='search']::-webkit-search-cancel-button { appearance: none; }
 label {
   display: block;
   margin-bottom: var(--s1);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: var(--t-label);
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   color: var(--fg-4);
 }
 
@@ -520,6 +526,41 @@ th.num, td.num {
   letter-spacing: 0.08em;
 }
 
+/* Compact presentation preferences use a sheet; the Blotter's data filters
+   remain a separate scoped task. These rules are global because the sheet also
+   contains the shared select component. */
+.amount-options-trigger, .amount-options, .amount-options-scrim { display: none; }
+@media (max-width: 880px) {
+  .amount-options-trigger { display: block; min-height: 44px; padding-inline: var(--s2); color: var(--fg-2); font: 550 var(--t-meta)/1 var(--sans); letter-spacing: 0; }
+  .amount-options-scrim {
+    display: block; position: fixed; z-index: var(--z-scrim); inset: 0;
+    width: 100%; height: 100%; min-height: 0; padding: 0; border: 0;
+    background: #000a; animation: options-scrim-in var(--motion-fast) var(--ease-out) both;
+  }
+  .amount-options {
+    display: block; position: fixed; z-index: var(--z-overlay); inset: auto 0 0;
+    padding: 0 var(--s3) calc(var(--s4) + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line-2); background: var(--glass-surface);
+    -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+    animation: options-sheet-in var(--motion) var(--ease-out) both;
+  }
+  .amount-options:has(finto-select.sheet-open) { transform: none; }
+  .amount-options header { display: flex; align-items: center; justify-content: space-between; min-height: 64px; border-bottom: 1px solid var(--line); }
+  .amount-options header h2 { margin: 0; font-size: var(--t-lede); }
+  .amount-options header button { min-width: 44px; min-height: 44px; padding: 0; font-size: var(--t-figure); }
+  .amount-option-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: var(--s3); min-height: 68px; border-bottom: 1px solid var(--line); }
+  .amount-option-row:last-child { border-bottom: 0; }
+  .amount-option-row label { margin: 0; color: var(--fg-3); }
+  .amount-option-row .seg { display: flex; }
+  .amount-option-row .seg button { flex: 1; min-height: 44px; padding-inline: var(--s2); }
+  .amount-option-row finto-select { width: 100%; }
+  @keyframes options-sheet-in { from { transform: translateY(100%); } }
+  @keyframes options-scrim-in { from { opacity: 0; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .amount-options, .amount-options-scrim { animation: none; }
+}
+
 /* Two waiting states, and which one to use is not a preference:
    .skeleton  when the shape of what is coming is known (list rows, cards) — it
               holds the layout, so nothing jumps when the data lands.
@@ -562,6 +603,44 @@ th.num, td.num {
   * { transition: none !important; }
 }
 
+/* Charts below the fold hold at their first frame until the scroll-pane
+   observer reveals them. The chart owns its animation; this only owns timing. */
+[fintoReveal] .series,
+[fintoReveal] .area,
+[fintoReveal] .arc,
+[fintoReveal] .fill,
+[fintoReveal] .month-track i,
+[fintoReveal] .detail-link,
+[fintoReveal] .detail-node,
+[fintoReveal] .sankey .link,
+[fintoReveal] .sankey .node,
+[fintoReveal] .seg { animation-play-state: paused !important; }
+[fintoReveal].finto-in-view .series,
+[fintoReveal].finto-in-view .area,
+[fintoReveal].finto-in-view .arc,
+[fintoReveal].finto-in-view .fill,
+[fintoReveal].finto-in-view .month-track i,
+[fintoReveal].finto-in-view .detail-link,
+[fintoReveal].finto-in-view .detail-node,
+[fintoReveal].finto-in-view .sankey .link,
+[fintoReveal].finto-in-view .sankey .node,
+[fintoReveal].finto-in-view .seg { animation-play-state: running !important; }
+
+router-outlet + * { view-transition-name: page-content; }
+/* view-transition-name creates a stacking context. Lift the routed page while
+   it owns an overlay so its sheet can cover the sibling tab bar. */
+router-outlet + *:has(.select-root.open, .date-root.open, .filter-bar.sheet-open, .amount-options, .picker, .drawer.open) {
+  position: relative;
+  z-index: var(--z-overlay);
+}
+::view-transition-old(page-content) { animation: page-out var(--motion-fast) var(--ease) both; }
+::view-transition-new(page-content) { animation: page-in var(--motion) var(--ease-out) both; }
+@keyframes page-out { to { opacity: 0; transform: translateY(-3px); } }
+@keyframes page-in { from { opacity: 0; transform: translateY(7px); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(page-content), ::view-transition-new(page-content) { animation: none; }
+}
+
 /* --- Compact overrides ---------------------------------------------------
    Last in the file on purpose. These override base rules, and CSS resolves a
    tie on source order — sitting above the rules they target, every one of
@@ -580,13 +659,13 @@ th.num, td.num {
     border-bottom: 0;
   }
   .page-head h1 { font-size: var(--t-fig-sm); }
-  .card { padding: var(--s3); }
+  .card { padding: var(--s3); border: 0; }
   /* 44px is the smallest target Apple's HIG accepts and the size a thumb
      actually hits; 40px cleared WCAG 2.5.8 and little else. */
   input, select, textarea, button, .btn { min-height: 44px; }
   input, select, textarea { font-size: var(--t-data); }
   .section-head { align-items: flex-start; }
   .section-head > .row { width: 100%; }
-  .table-wrap { margin-inline: calc(-1 * var(--s3)); border-left: 0; border-right: 0; }
+  .table-wrap { margin-inline: calc(-1 * var(--s3)); border: 0; }
   th, td { padding-inline: var(--s2); }
 }

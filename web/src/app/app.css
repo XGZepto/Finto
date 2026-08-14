@@ -110,6 +110,15 @@
   padding: 28px 32px 72px;
 }
 
+.scroll-edge {
+  position: fixed; z-index: calc(var(--z-status) - 1); left: 218px; right: 0;
+  height: 18px; opacity: 0; pointer-events: none;
+  transition: opacity var(--motion-fast) var(--ease);
+}
+.scroll-edge.show { opacity: 1; }
+.scroll-edge.top { top: 0; background: linear-gradient(var(--bg), transparent); backdrop-filter: blur(1px); }
+.scroll-edge.bottom { bottom: 0; background: linear-gradient(transparent, var(--bg)); backdrop-filter: blur(1px); }
+
 .mobile-nav { display: none; }
 
 @media (max-width: 880px) {
@@ -122,6 +131,9 @@
     min-height: 0;
     padding: calc(var(--s3) + env(safe-area-inset-top)) var(--s3) var(--s5);
   }
+  .scroll-edge { left: 0; }
+  .scroll-edge.top { top: env(safe-area-inset-top); }
+  .scroll-edge.bottom { bottom: calc(64px + env(safe-area-inset-bottom)); }
   .mobile-nav {
     display: grid;
     flex: none;
@@ -130,8 +142,9 @@
     min-height: calc(64px + env(safe-area-inset-bottom));
     padding: 6px 6px env(safe-area-inset-bottom);
     border-top: 1px solid var(--line-2);
-    background: color-mix(in srgb, var(--panel) 94%, transparent);
-    backdrop-filter: blur(18px);
+    background: var(--glass-strong);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
     isolation: isolate;
     overscroll-behavior: contain;
   }
@@ -140,42 +153,36 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 3px;
     min-width: 0;
     min-height: 48px;
     padding: 3px;
     border: 0;
     background: transparent;
     color: var(--fg-3);
-    font-family: var(--mono);
+    font-family: var(--sans);
     font-size: var(--t-micro);
-    letter-spacing: .04em;
+    font-weight: 500;
+    letter-spacing: 0;
     text-decoration: none;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
   .mobile-nav a.active, .mobile-nav button.active { color: var(--fg); }
-  .mobile-nav a.active .mobile-icon, .mobile-nav button.active .mobile-icon { color: var(--fg); background: var(--panel-3); border-color: var(--line-2); }
+  .mobile-nav a.active::after, .mobile-nav button.active::after {
+    content: ''; position: absolute; top: -7px; width: 28px; height: 2px; background: var(--fg);
+  }
   .mobile-icon {
     display: grid;
     place-items: center;
     position: relative;
-    width: 31px;
-    height: 27px;
+    width: 32px;
+    height: 28px;
     padding: 5px 6px;
-    border: 1px solid transparent;
     font-size: var(--t-lede);
     line-height: 1;
-    transition: background var(--motion-fast) linear, border-color var(--motion-fast) linear;
+    transition: color var(--motion-fast) linear, transform var(--motion-fast) var(--ease-out);
   }
-  /* A count on a tab is unreadable at this size and nobody acts on the exact
-     number from here — only on whether there is anything at all. */
-  .pip {
-    position: absolute;
-    top: 1px;
-    right: 1px;
-    width: 6px;
-    height: 6px;
-    background: var(--warn);
-  }
+  .mobile-nav a, .mobile-nav button { position: relative; }
+  .mobile-nav a.active .mobile-icon, .mobile-nav button.active .mobile-icon { transform: translateY(-1px); }
 }

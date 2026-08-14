@@ -142,6 +142,7 @@ def test_api_returns_the_foreign_charge_and_the_issuers_rate(client):
     """The native pair and the rate reach the wire, in integer minor units."""
     item = client.get("/api/transactions").json()["items"][0]
     assert item["booked"] == {"amount": -11743, "currency": "HKD"}
+    assert item["account_currency"] == "HKD"
     assert item["native"] == {"amount": -1304, "currency": "EUR"}
     assert item["fx_rate"] == "9.005"
 

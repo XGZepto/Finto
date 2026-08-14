@@ -1,25 +1,25 @@
 <div class="page-head">
   <h1>Blotter</h1>
+  <button type="button" class="bare amount-options-trigger" (click)="openOptions($event)">Options</button>
 </div>
 
-<app-filter-bar #filterBar (changed)="load()">
-  <div filterExtras class="aggregation-controls">
-    <span class="aggregation-label">Totals</span>
+<app-filter-bar #filterBar (changed)="load()" />
+
+<div class="card ledger-card">
+  <div class="aggregation-controls">
+    <span class="aggregation-label">Amounts</span>
     <div class="aggregation-actions">
-      <div class="seg" aria-label="Aggregation currency mode">
-        <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Normalised</button>
+      <div class="seg" aria-label="Amount display">
+        <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Converted</button>
         <button [class.on]="showNative()" (click)="setAggregation('native')">Native</button>
       </div>
       @if (!showNative()) {
-        <finto-select class="currency-select" ariaLabel="Aggregation currency"
+        <finto-select class="currency-select" ariaLabel="Display currency"
                       [options]="currencies()" [ngModel]="convertTo()"
                       (ngModelChange)="setConvertTo($event)" />
       }
     </div>
   </div>
-</app-filter-bar>
-
-<div class="card ledger-card">
   @if (scopeTotals().length) {
     @if (!showNative() && normalised(); as total) {
       <div class="scope normalised-scope">
@@ -67,11 +67,10 @@
           @for (band of dayGroups(); track band.date ?? '_') {
             @if (band.date) {
               <tr class="daygroup">
-                <td colspan="4" class="mono">{{ band.date | shortDate }}</td>
+                <td colspan="4" class="mono" [attr.title]="band.date">{{ band.date | shortDate }}</td>
                 <td colspan="2" class="num mono"
-                    [class.neg]="(band.total?.amount ?? 0) < 0"
                     [class.pos]="(band.total?.amount ?? 0) > 0">
-                  {{ band.total ? (band.total | money: 'bare') : '' }}
+                  {{ band.total ? (band.total | money) : '' }}
                 </td>
               </tr>
             }
@@ -86,7 +85,9 @@
                 tabindex="0"
                 role="button" [attr.aria-expanded]="selected()?.id === t.id"
                 [attr.aria-label]="(t.merchant || t.description) + ', ' + (t.booked | money)">
-              <td class="date mono small nowrap">{{ t.date | shortDate }}</td>
+              <td class="date mono small nowrap">
+                @if (sort() !== 'date') { <span [attr.title]="t.date">{{ t.date | shortDate }}</span> }
+              </td>
               <td class="account">
                 {{ t.account_name }}
                 @if (t.cardholder_name) {
@@ -111,7 +112,7 @@
                   <span class="primary dim">Merchant not disclosed</span>
                   <span class="muted small block">{{ t.description }}</span>
                 } @else {
-                  <span class="primary">{{ displayTitle(t) }}</span>
+                  <span class="primary">{{ displayTitle(t) }}@if (t.review_state === 'flagged') { <i class="review-flag" title="Flagged for review" aria-label="Flagged for review">!</i> }</span>
                   @if (t.merchant && t.description !== t.merchant) {
                     <span class="muted small block">{{ t.description }}</span>
                   }
@@ -142,8 +143,8 @@
                 @if (isTravel(t)) { <span class="tag travel">travel</span> }
                 @if (gateway(t); as g) { <span class="tag gateway">{{ g }}</span> }
               </td>
-              <td class="num" [class.neg]="t.booked.amount < 0" [class.pos]="t.booked.amount > 0">
-                {{ t.booked | money }}
+              <td class="num" [class.pos]="t.booked.amount > 0">
+                {{ t.booked | money: 'bare' }}<span class="row-currency">{{ t.booked.currency }}</span>
                 @if (t.native) {
                   <span class="muted small block">{{ t.native | money }}</span>
                 }
@@ -175,14 +176,49 @@
   }
 </div>
 
+@if (optionsOpen()) {
+  <button type="button" class="amount-options-scrim" (click)="closeOptions()"
+          aria-label="Close display options"></button>
+  <section #amountOptions class="amount-options" role="dialog" aria-modal="true"
+           aria-labelledby="amount-options-title" tabindex="-1" (keydown)="trapOptionsFocus($event)">
+    <header>
+      <h2 id="amount-options-title">Display options</h2>
+      <button type="button" class="bare" (click)="closeOptions()" aria-label="Close">×</button>
+    </header>
+    <div class="amount-option-row">
+      <label>Amounts</label>
+      <div class="seg" aria-label="Amount display">
+        <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Converted</button>
+        <button [class.on]="showNative()" (click)="setAggregation('native')">Native</button>
+      </div>
+    </div>
+    @if (!showNative()) {
+      <div class="amount-option-row">
+        <label>Currency</label>
+        <finto-select ariaLabel="Display currency" [options]="currencies()"
+                      [ngModel]="convertTo()" (ngModelChange)="setConvertTo($event)" />
+      </div>
+    }
+  </section>
+}
+
 @if (picking(); as txn) {
   <button type="button" class="picker-scrim" (click)="picking.set(null)"
           aria-label="Cancel"></button>
   <div class="picker" role="dialog" aria-modal="true" aria-label="Choose a category">
     <p class="picker-head">
       <span>{{ txn.merchant || txn.description }}</span>
-      <b class="mono" [class.neg]="txn.booked.amount < 0">{{ txn.booked | money: 'bare' }}</b>
+      <b class="mono" [class.pos]="txn.booked.amount > 0">{{ txn.booked | money }}</b>
     </p>
+    @if (suggestionLoading()) {
+      <div class="suggestion skeleton" aria-label="Finding a category">Finding a category</div>
+    } @else if (suggestion(); as guess) {
+      <button type="button" class="suggestion" (click)="applyCategory(guess.category, guess.subcategory, guess.merchant)">
+        <span><small>Suggested</small><b>{{ friendlyTaxonomy(guess.category) }}</b><em>{{ friendlyTaxonomy(guess.subcategory) }}</em></span>
+        <strong class="mono">{{ (guess.confidence * 100).toFixed(0) }}%</strong>
+      </button>
+      <p class="picker-label">All categories</p>
+    }
     <div class="picker-grid">
       @for (c of categories(); track c) {
         <button type="button" [class.on]="c === txn.category" (click)="applyCategory(c)">{{ c }}</button>
@@ -197,31 +233,43 @@
   <button type="button" class="drawer-backdrop" (click)="close()" aria-label="Close transaction details"></button>
   <aside #drawer class="drawer" role="dialog" aria-modal="true" aria-labelledby="transaction-title"
          tabindex="-1" [attr.aria-busy]="detailLoading()" (keydown)="trapFocus($event)">
-    <header>
-      <div class="head-text">
-        <h2 id="transaction-title">{{ txn.merchant || txn.description }}</h2>
-        @if (txn.description !== (txn.merchant || txn.description)) { <p class="muted small">{{ txn.description }}</p> }
-      </div>
-      <button class="bare close" (click)="close()" aria-label="Close">×</button>
+    <header class="transaction-bar">
+      <button class="bare close mobile-back" (click)="close()" aria-label="Back to blotter">‹</button>
+      <span class="bar-title">Transaction</span>
+      @if (!editMode()) {
+        <button class="bare bar-action" (click)="editMode.set(true)">Edit</button>
+      } @else {
+        <button class="bare bar-action" (click)="cancelEdit()">Cancel</button>
+      }
+      <button class="bare close desktop-close" (click)="close()" aria-label="Close">×</button>
     </header>
 
     @if (detailLoading()) { <div class="drawer-loading" aria-live="polite">Loading</div> }
 
-    <div class="amount-hero" [class.neg]="txn.booked.amount < 0" [class.pos]="txn.booked.amount > 0">
-      {{ txn.booked | money }}
-    </div>
+    <section class="transaction-hero">
+      <span class="detail-glyph" aria-hidden="true">
+        <finto-icon kind="merchant" [name]="txn.merchant || txn.description"
+                    [fallbackCategory]="txn.category || 'other'" />
+      </span>
+      <h2 id="transaction-title">{{ txn.merchant || txn.description }}</h2>
+      @if (txn.description !== (txn.merchant || txn.description)) { <p class="transaction-description">{{ txn.description }}</p> }
+      <div class="amount-hero" [class.pos]="txn.booked.amount > 0">
+        {{ txn.booked | money }}
+      </div>
+      <p class="hero-context"><span [attr.title]="txn.date">{{ txn.date | shortDate }}</span> · {{ txn.account_name }}</p>
+    </section>
+
     @if (txn.native) {
-      <p class="muted small">
-        Merchant charged {{ txn.native | money }}@if (txn.fx_rate) {, converted at {{ txn.fx_rate }}}
-      </p>
+      <div class="fx-summary">
+        <span>Paid in {{ txn.native.currency }}</span><strong class="mono">{{ txn.native | money }}</strong>
+        @if (txn.fx_rate) { <small>Exchange rate {{ txn.fx_rate }}</small> }
+      </div>
     }
 
     <dl class="drawer-overview">
-      <div><dt>Account</dt><dd>{{ txn.account_name }}</dd></div>
-      <div><dt>Date</dt><dd class="mono">{{ txn.date | shortDate }}</dd></div>
       <div><dt>Category</dt><dd>{{ friendlyTaxonomy(txn.category) }}@if (txn.subcategory) { <span class="taxonomy sub">{{ friendlyTaxonomy(txn.subcategory) }}</span> }</dd></div>
-      <div><dt>Type</dt><dd><span class="tag">{{ txn.kind }}</span><span class="tag">{{ txn.status }}</span></dd></div>
-      @if (txn.cardholder_name) { <div class="wide"><dt>Cardholder</dt><dd>{{ txn.cardholder_name }}@if (txn.card_last4) { <span class="mono muted"> ·{{ txn.card_last4 }}</span> }</dd></div> }
+      <div><dt>Status</dt><dd>{{ friendlyTaxonomy(txn.status) }} · {{ friendlyTaxonomy(txn.kind) }}</dd></div>
+      @if (txn.cardholder_name) { <div><dt>Cardholder</dt><dd>{{ txn.cardholder_name }}@if (txn.card_last4) { <span class="mono muted"> ·{{ txn.card_last4 }}</span> }</dd></div> }
     </dl>
 
     @if (gateway(txn); as g) {
@@ -251,13 +299,13 @@
     <section>
       <div class="section-head">
         <h3>Annotations</h3>
-        @if (!editMode()) { <button class="ghost" (click)="editMode.set(true)">Edit</button> }
       </div>
       @if (editMode()) {
         <div class="edit-panel">
           <div class="field">
-            <label for="cat">Category</label>
-            <input id="cat" [ngModel]="editCategory()" (ngModelChange)="editCategory.set($event)" />
+            <label>Category</label>
+            <finto-select ariaLabel="Category" [options]="categories()" placeholder="Choose category"
+                          [ngModel]="editCategory()" (ngModelChange)="editCategory.set($event)" />
           </div>
           <div class="field">
             <label for="notes">Notes</label>
@@ -270,7 +318,7 @@
                 <span>{{ tg }}</span><button class="bare x" (click)="removeTag(tg)" [attr.aria-label]="'Remove ' + tg">×</button>
               </span>
             }
-            <input class="tag-input" [ngModel]="newTag()" (ngModelChange)="newTag.set($event)" (keyup.enter)="addTag()" placeholder="add tag" />
+            <input class="tag-input" [ngModel]="newTag()" (ngModelChange)="newTag.set($event)" (keyup.enter)="addTag()" placeholder="Add tag" />
           </div>
           <div class="edit-actions">
             <button class="primary" [disabled]="saving()" (click)="save()">{{ saving() ? 'Saving…' : 'Save' }}</button>
@@ -285,23 +333,6 @@
       }
     </section>
 
-    @if (detailEntries(txn).length) {
-      <section>
-        <h3>Statement detail</h3>
-        <dl class="details">
-          @for (d of detailEntries(txn); track d.key) {
-            <dt>{{ d.key | detailKey }}</dt>
-            <dd>
-              <button class="bare fact" (click)="filterByDetail(d.key, d.value)"
-                      [title]="'Show every transaction with this ' + (d.key | detailKey)">
-                {{ d.value }}
-              </button>
-            </dd>
-          }
-        </dl>
-      </section>
-    }
-
     @if (otherLegs(txn).length) {
       <section>
         <h3>Transfer counterpart</h3>
@@ -310,8 +341,7 @@
             <span class="tag">{{ leg.role }}</span>
             <span class="leg-desc">{{ leg.description_raw }}</span>
             <span class="mono small muted">{{ leg.account_id }} · {{ leg.txn_date }}</span>
-            <span class="mono leg-amt"
-                  [class.neg]="leg.amount_booked < 0" [class.pos]="leg.amount_booked > 0">
+            <span class="mono leg-amt" [class.pos]="leg.amount_booked > 0">
               {{ { amount: leg.amount_booked, currency: leg.currency_booked } | money: 'bare' }}
             </span>
           </button>
@@ -327,7 +357,7 @@
             <span class="tag">{{ linked.relation }}</span>
             <span class="leg-desc">{{ linked.description_raw }}</span>
             <span class="mono small muted">{{ linked.account_id }} · {{ linked.txn_date }}</span>
-            <span class="mono leg-amt" [class.neg]="linked.amount_booked < 0" [class.pos]="linked.amount_booked > 0">
+            <span class="mono leg-amt" [class.pos]="linked.amount_booked > 0">
               {{ { amount: linked.amount_booked, currency: linked.currency_booked } | money: 'bare' }}
             </span>
           </button>
@@ -335,22 +365,29 @@
       </section>
     }
 
-    <section>
-      <h3>Provenance</h3>
-      @if (txn.provenance; as p) {
-        <p class="muted small">
-          Parsed by <span class="mono">{{ p.parser_id }}</span> from
-          <span class="mono break">{{ p.source_path }}</span>
-        </p>
-        <dl class="details raw">
-          @for (r of rawEntries(txn); track r.key) {
-            <dt>{{ r.key }}</dt>
-            <dd class="mono">{{ r.value }}</dd>
-          }
-        </dl>
-      } @else {
-        <p class="muted small">No raw record linked.</p>
+    <details class="data-disclosure">
+      <summary><span><strong>Statement data</strong><small>Original fields and import source</small></span><i aria-hidden="true">⌄</i></summary>
+      @if (detailEntries(txn).length) {
+        <section>
+          <h3>Statement detail</h3>
+          <dl class="details">
+            @for (d of detailEntries(txn); track d.key) {
+              <dt>{{ d.key | detailKey }}</dt>
+              <dd><button class="bare fact" (click)="filterByDetail(d.key, d.value)"
+                          [title]="'Show every transaction with this ' + (d.key | detailKey)">{{ d.value }}</button></dd>
+            }
+          </dl>
+        </section>
       }
-    </section>
+      <section>
+        <h3>Import source</h3>
+        @if (txn.provenance; as p) {
+          <p class="muted small">Parsed by <span class="mono">{{ p.parser_id }}</span> from <span class="mono break">{{ p.source_path }}</span></p>
+          <dl class="details raw">
+            @for (r of rawEntries(txn); track r.key) { <dt>{{ r.key }}</dt><dd class="mono">{{ r.value }}</dd> }
+          </dl>
+        } @else { <p class="muted small">No raw record linked.</p> }
+      </section>
+    </details>
   </aside>
 }

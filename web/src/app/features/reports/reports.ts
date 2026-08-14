@@ -10,6 +10,7 @@ import { FintoPills } from '../../shared/finto-pills';
 import { FintoSelect } from '../../shared/finto-select';
 import { FintoBars, Bar } from '../../shared/finto-bars';
 import { FintoFlow, FlowNode } from '../../shared/finto-flow';
+import { RevealOnView } from '../../shared/reveal-on-view';
 
 interface Band {
   label: string;
@@ -31,7 +32,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
  */
 @Component({
   selector: 'app-reports',
-  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoFlow, FintoBars],
+  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoFlow, FintoBars, RevealOnView],
   templateUrl: './reports.html',
   styleUrl: './reports.css',
 })
@@ -160,6 +161,10 @@ export class ReportsPage {
   setAccount(value: string): void {
     this.accountId.set(value === 'All accounts' ? '' : value);
     this.load();
+  }
+
+  humanize(value: string): string {
+    return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (character) => character.toLocaleUpperCase());
   }
 
   /** Change in outflow against the previous window of equal length. */

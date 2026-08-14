@@ -22,9 +22,7 @@ export interface FlowNode {
     <div class="alloc">
       <div class="bar" role="img" [attr.aria-label]="'Allocation of ' + sourceLabel()">
         @for (seg of segments(); track seg.label) {
-          <button type="button" class="seg" [style.flex-grow]="seg.value"
-                  [style.background]="seg.colour" [title]="seg.label + ' · ' + seg.pctLabel"
-                  (click)="seg.saved ? null : pick.emit(seg.label)"></button>
+          <span class="seg" [style.flex-grow]="seg.value" [style.background]="seg.colour"></span>
         }
       </div>
 
@@ -33,7 +31,7 @@ export interface FlowNode {
           <button type="button" class="row" [class.static]="seg.saved"
                   (click)="seg.saved ? null : pick.emit(seg.label)">
             <span class="dot" [style.background]="seg.colour"></span>
-            <span class="name">{{ seg.label }}</span>
+            <span class="name">{{ displayName(seg.label) }}</span>
             <span class="pct mono">{{ seg.pctLabel }}</span>
             <span class="val mono">{{ seg.display }}</span>
           </button>
@@ -44,7 +42,7 @@ export interface FlowNode {
   styles: [`
     .alloc { display: flex; flex-direction: column; gap: var(--s4); }
     .bar { display: flex; height: 12px; width: 100%; overflow: hidden; background: var(--panel-3); }
-    .seg { min-height: 0; padding: 0; border: 0; border-right: 1px solid var(--bg); }
+    .seg { min-width: 1px; border-right: 1px solid var(--bg); transform-origin: left; animation: allocation-reveal var(--motion) var(--ease-out) both; }
     .seg:last-child { border-right: 0; }
     .legend { display: grid; grid-template-columns: 1fr; gap: 0; }
     .row {
@@ -52,7 +50,7 @@ export interface FlowNode {
       grid-template-columns: 10px minmax(0, 1fr) auto auto;
       align-items: center;
       gap: var(--s3);
-      min-height: 0;
+      min-height: 44px;
       padding: var(--s2) 0;
       border: 0;
       border-bottom: 1px solid var(--line);
@@ -70,6 +68,8 @@ export interface FlowNode {
     @media (min-width: 881px) {
       .row { grid-template-columns: 10px minmax(0, 1fr) 64px 120px; }
     }
+    @keyframes allocation-reveal { from { opacity: 0; transform: scaleX(0); } }
+    @media (prefers-reduced-motion: reduce) { .seg { animation: none; } }
   `],
 })
 export class FintoFlow {
@@ -81,6 +81,11 @@ export class FintoFlow {
   savedLabel = input('Saved');
   savedDisplay = input('');
   pick = output<string>();
+
+  displayName(value: string): string {
+    const words = value.replace(/[_-]+/g, ' ');
+    return words ? words.charAt(0).toLocaleUpperCase() + words.slice(1) : words;
+  }
 
   segments = computed(() => {
     const base = this.income() || this.nodes().reduce((sum, n) => sum + n.value, 0) || 1;

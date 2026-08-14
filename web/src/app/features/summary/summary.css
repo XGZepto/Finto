@@ -1,12 +1,21 @@
 /* The figure a person came for, then what it is made of. */
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 760px);
   align-items: start;
   gap: var(--s3);
   margin-bottom: var(--s3);
 }
 .hero-figure { display: flex; flex-direction: column; gap: var(--s4); }
+.hero-value { color: var(--fg); font-size: clamp(2.45rem, 8vw, 4.7rem); font-weight: 500; letter-spacing: -.055em; line-height: .94; }
+.hero-change { color: var(--fg-3); font: 500 var(--t-data)/1.35 var(--sans); }
+.hero-change small { margin-left: var(--s1); color: var(--fg-4); font-weight: 400; }
+.hero-change.better { color: var(--pos); }
+.hero-change.worse { color: var(--neg); }
+.hero-action { align-self: flex-start; min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line-2); background: var(--panel-2); color: var(--fg-2); }
+.hero-action:hover { border-color: var(--fg-3); background: var(--panel-3); color: var(--fg); }
+.page-head .currency-select { width: 92px; }
+.flow-controls { display: flex; align-items: center; gap: var(--s2); }
 .hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3); flex-wrap: wrap; }
 .hero-mix { display: flex; flex-direction: column; }
 
@@ -20,7 +29,7 @@
   border-top: 1px solid var(--line);
 }
 .hero-stats > span { display: flex; align-items: baseline; gap: var(--s2); }
-.hero-stats label { color: var(--fg-4); font-family: var(--mono); font-size: var(--t-micro); letter-spacing: .1em; text-transform: uppercase; }
+.hero-stats label { color: var(--fg-4); font-family: var(--sans); font-size: var(--t-label); font-weight: 500; }
 .hero-stats b {
   font-family: var(--mono);
   font-size: var(--t-data);
@@ -51,8 +60,14 @@ section.card { margin-bottom: var(--s3); }
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1000;
+  animation: chart-draw var(--motion-slow) var(--ease-out) both;
 }
-.trend .series.out { stroke: var(--neg); }
+.trend .series.in { animation-delay: 90ms; }
+.trend .area { animation: chart-fade var(--motion-slow) var(--ease-out) both; }
+@keyframes chart-draw { from { stroke-dashoffset: 1000; } to { stroke-dashoffset: 0; } }
+@keyframes chart-fade { from { opacity: 0; } }
+.trend .series.out { stroke: var(--fg-2); }
 .trend .series.in { stroke: var(--pos); opacity: .88; }
 .chart-hits { position: absolute; inset: 0 8px; display: flex; }
 .chart-hit {
@@ -76,7 +91,7 @@ section.card { margin-bottom: var(--s3); }
 }
 .trend-head .legend { display: flex; align-items: center; gap: 5px; }
 .trend-head .key { width: 8px; height: 8px; display: inline-block; }
-.trend-head .key.out { background: var(--neg); opacity: 0.7; }
+.trend-head .key.out { background: var(--fg-2); opacity: 0.7; }
 .trend-head .key.in { background: var(--pos); opacity: 0.55; margin-left: 6px; }
 .trend .tick {
   position: absolute;
@@ -114,8 +129,10 @@ section.card { margin-bottom: var(--s3); }
   .hero-stats { gap: var(--s4) var(--s5); }
   section.card { padding: var(--s3); }
   .trend { height: 160px; }
+  .trend { border: 0; }
   .page-head { margin-bottom: var(--s3); }
   .rank-list { grid-template-columns: 1fr; }
+  .flow-controls { width: 100%; justify-content: space-between; }
   /* Amount takes the width it needs; the name truncates and the share drops —
      the donut legend above already carries each share. */
   .rank-list button { grid-template-columns: 22px minmax(0, 1fr) auto; }
@@ -123,4 +140,7 @@ section.card { margin-bottom: var(--s3); }
   .freshness-banner { grid-template-columns: 28px 1fr; }
   .freshness-banner .btn { grid-column: 1 / -1; text-align: center; }
   .freshness-copy span { flex-direction: column; gap: 2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trend .series, .trend .area { animation: none; }
 }

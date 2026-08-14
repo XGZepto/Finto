@@ -216,6 +216,26 @@ def main() -> None:
     sf.row_count = len(txns)
     inserted = dbm.insert_txns(conn, txns)
     dbm.insert_txn_details(conn, txns)
+    # The demo represents a ledger already in use: most rule-classified rows
+    # have been checked, while the invented mystery merchants remain a queue.
+    conn.execute("UPDATE txn SET review_state='confirmed' WHERE category IS NOT NULL")
+
+    from fin.llm import cache as llm_cache
+    from fin.llm.categorize import PROMPT_VERSION
+    for row in conn.execute(
+            "SELECT DISTINCT description_norm FROM txn WHERE category IS NULL "):
+        description = row["description_norm"]
+        llm_cache.record(
+            conn,
+            task="categorize",
+            ihash=llm_cache.input_hash("categorize", description),
+            summary=description,
+            output={"category": "shopping", "subcategory": "general",
+                    "merchant": "Square Vendor", "tags": [], "confidence": 0.82},
+            confidence=0.82,
+            model="seed",
+            prompt_version=PROMPT_VERSION,
+        )
     conn.commit()
     conn.close()
     print(f"seeded {inserted} transactions across {len(ACCOUNTS)} accounts")

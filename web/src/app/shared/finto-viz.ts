@@ -34,13 +34,15 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
   `,
   styles: [`
     .share { display: flex; height: 8px; width: 100%; overflow: hidden; background: var(--panel-3); }
-    .share span { display: block; height: 100%; }
+    .share span { display: block; height: 100%; transform-origin: left; animation: share-reveal var(--motion) var(--ease-out) both; }
+    @keyframes share-reveal { from { transform: scaleX(0); } }
     .legend { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s3); }
     .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-data); }
     .dot { width: 8px; height: 8px; flex: none; }
     .name { flex: 1; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .amount { font-variant-numeric: tabular-nums; color: var(--fg); }
     .pct { font-variant-numeric: tabular-nums; color: var(--fg-4); width: 48px; text-align: right; }
+    @media (prefers-reduced-motion: reduce) { .share span { animation: none; } }
   `],
 })
 export class FintoShareBar {
@@ -68,7 +70,7 @@ export class FintoShareBar {
     <div class="donut-wrap">
       <svg viewBox="0 0 100 100" role="img" [attr.aria-label]="label()">
         @for (a of arcs(); track a.label) {
-          <circle cx="50" cy="50" r="38" fill="none" stroke-width="16"
+          <circle class="arc" cx="50" cy="50" r="38" fill="none" stroke-width="16"
                   [attr.stroke]="a.colour" [attr.stroke-dasharray]="a.dash"
                   [attr.stroke-dashoffset]="a.offset" transform="rotate(-90 50 50)">
             <title>{{ a.label }} — {{ a.pct.toFixed(1) }}%</title>
@@ -89,11 +91,14 @@ export class FintoShareBar {
   styles: [`
     .donut-wrap { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; }
     svg { width: 116px; height: 116px; flex: none; }
+    .arc { animation: donut-reveal var(--motion-slow) var(--ease-out) both; transform-origin: center; }
+    @keyframes donut-reveal { from { opacity: 0; transform: rotate(-12deg) scale(.9); } }
     .legend { display: flex; flex-direction: column; gap: var(--s2); flex: 1; min-width: 140px; }
     .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-data); }
     .dot { width: 8px; height: 8px; flex: none; }
     .name { flex: 1; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pct { font-variant-numeric: tabular-nums; color: var(--fg-3); }
+    @media (prefers-reduced-motion: reduce) { .arc { animation: none; } }
   `],
 })
 export class FintoDonut {
@@ -134,12 +139,15 @@ export class FintoDonut {
   selector: 'finto-sparkline',
   template: `
     <svg [attr.viewBox]="'0 0 ' + width() + ' ' + height()" role="img" [attr.aria-label]="label()">
-      <polyline [attr.points]="points()" fill="none" stroke="var(--fg-4)" stroke-width="1.5" />
+      <polyline class="spark" pathLength="1" [attr.points]="points()" fill="none" stroke="var(--fg-4)" stroke-width="1.5" />
     </svg>
   `,
   styles: [`
     :host { display: block; }
     svg { display: block; width: 100%; height: 100%; }
+    .spark { stroke-dasharray: 1000; animation: spark-reveal var(--motion) var(--ease-out) both; }
+    @keyframes spark-reveal { from { stroke-dashoffset: 1000; } }
+    @media (prefers-reduced-motion: reduce) { .spark { animation: none; } }
   `],
 })
 export class FintoSparkline {

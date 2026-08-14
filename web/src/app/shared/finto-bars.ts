@@ -41,13 +41,15 @@ export interface Bar {
       padding: 0; border: 0; background: none;
     }
     .track { display: flex; align-items: flex-end; height: 100%; }
-    .fill { width: 100%; background: var(--fg-4); min-height: 1px; transition: background var(--motion-fast) linear; }
+    .fill { width: 100%; background: var(--fg-4); min-height: 1px; transform-origin: bottom; animation: bar-reveal var(--motion) var(--ease-out) both; transition: background var(--motion-fast) linear; }
+    @keyframes bar-reveal { from { transform: scaleY(0); } }
     .fill.peak { background: var(--info); }
     .col:hover .fill { background: var(--fg-2); }
     .col:hover .fill.peak { background: var(--info); }
     .x { font-size: var(--t-micro); color: var(--fg-4); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mean { display: flex; align-items: baseline; gap: var(--s2); font-size: var(--t-label); color: var(--fg-4); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; }
     .mean b { color: var(--fg-3); font-variant-numeric: tabular-nums; }
+    @media (prefers-reduced-motion: reduce) { .fill { animation: none; } }
   `],
 })
 export class FintoBars {

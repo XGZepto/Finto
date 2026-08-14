@@ -6,7 +6,7 @@ import { Refresh } from '../../core/refresh.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { FilterState } from '../../core/filter-state';
 import { DetailKeyPipe, MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { Money, TotalRow, Txn } from '../../core/models';
+import { CategorySuggestion, Money, TotalRow, Txn } from '../../core/models';
 import { scrollPane } from '../../core/scroll';
 import { FilterBar } from '../../shared/filter-bar';
 import { FintoIcon } from '../../shared/finto-icon';
@@ -77,6 +77,7 @@ export class BlotterPage implements OnDestroy {
   scopeTotals = signal<TotalRow[]>([]);
   normalised = signal<{ net: Money; spend: Money; income: Money; unconvertible_currencies: string[] } | null>(null);
   showNative = signal(false);
+  optionsOpen = signal(false);
   convertTo = signal('USD');
   currencies = signal<string[]>(['USD']);
   /* A phone shows ~8 rows, so 100 was 12 screens of scroll bought up front and
@@ -101,6 +102,12 @@ export class BlotterPage implements OnDestroy {
     if (value) setTimeout(() => value.nativeElement.focus());
   }
   private lastTrigger: HTMLElement | null = null;
+  private optionsTrigger: HTMLElement | null = null;
+  private amountOptions?: ElementRef<HTMLElement>;
+  @ViewChild('amountOptions') set amountOptionsElement(value: ElementRef<HTMLElement> | undefined) {
+    this.amountOptions = value;
+    if (value) setTimeout(() => value.nativeElement.focus());
+  }
   private inspectorHistoryActive = false;
   private afterClose: (() => void) | null = null;
   private scrollLockOffset = 0;
@@ -123,7 +130,7 @@ export class BlotterPage implements OnDestroy {
     }
     for (const band of bands) {
       const currencies = new Set(band.rows.map((r) => r.booked.currency));
-      if (currencies.size !== 1) continue;
+      if (band.rows.length < 2 || currencies.size !== 1) continue;
       band.total = {
         amount: band.rows.reduce((sum, r) => sum + r.booked.amount, 0),
         currency: band.rows[0].booked.currency,
@@ -141,6 +148,8 @@ export class BlotterPage implements OnDestroy {
   swipeId = signal<string | null>(null);
   swipeX = signal(0);
   picking = signal<Txn | null>(null);
+  suggestion = signal<CategorySuggestion | null>(null);
+  suggestionLoading = signal(false);
   categories = signal<string[]>([]);
   private touch = { x: 0, y: 0, axis: '' as '' | 'x' | 'y', moved: false };
 
@@ -213,6 +222,33 @@ export class BlotterPage implements OnDestroy {
     this.load();
   }
 
+  openOptions(event: Event): void {
+    this.optionsTrigger = event.currentTarget as HTMLElement;
+    this.optionsOpen.set(true);
+    this.lockScroll();
+  }
+
+  closeOptions(): void {
+    this.optionsOpen.set(false);
+    this.unlockScroll();
+    queueMicrotask(() => this.optionsTrigger?.focus());
+  }
+
+  trapOptionsFocus(event: KeyboardEvent): void {
+    if (event.key !== 'Tab' || !this.amountOptions) return;
+    const focusable = [...this.amountOptions.nativeElement.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )].filter((node) => node !== this.amountOptions?.nativeElement);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (document.activeElement === this.amountOptions.nativeElement || (event.shiftKey && document.activeElement === first)) {
+      event.preventDefault(); (event.shiftKey ? last : first).focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  }
+
   sortBy(column: string): void {
     if (this.sort() === column) {
       this.direction.set(this.direction() === 'asc' ? 'desc' : 'asc');
@@ -272,16 +308,37 @@ export class BlotterPage implements OnDestroy {
   pick(txn: Txn): void {
     this.closeSwipe();
     this.picking.set(txn);
+    this.suggestion.set(null);
+    this.suggestionLoading.set(true);
+    this.api.categorySuggestion(txn.id).subscribe({
+      next: (result) => {
+        if (this.picking()?.id === txn.id) this.suggestion.set(result.suggestion);
+        this.suggestionLoading.set(false);
+      },
+      error: () => this.suggestionLoading.set(false),
+    });
   }
 
   /** Apply a category straight from the picker — no drawer, no edit mode. */
-  applyCategory(category: string): void {
+  applyCategory(category: string, subcategory?: string, merchant?: string | null): void {
     const txn = this.picking();
     if (!txn) return;
     this.picking.set(null);
-    this.api.patchTransaction(txn.id, { category } as Partial<Txn>).subscribe({
-      next: (updated) => this.rows.update((rows) =>
-        rows.map((r) => (r.id === updated.id ? updated : r))),
+    this.api.patchTransaction(txn.id, {
+      category,
+      // A top-level choice replaces the previous taxonomy pair. Omitting the
+      // leaf would make the API validate it against the new parent.
+      subcategory: subcategory ?? null,
+      merchant: merchant ?? undefined,
+      review_state: 'confirmed',
+    } as Partial<Txn>).subscribe({
+      next: (updated) => {
+        const leavesQueue = !!this.filters.filter().uncategorisedOnly;
+        this.rows.update((rows) => leavesQueue
+          ? rows.filter((r) => r.id !== updated.id)
+          : rows.map((r) => (r.id === updated.id ? updated : r)));
+        if (leavesQueue) this.total.update((total) => Math.max(0, total - 1));
+      },
     });
   }
 
@@ -383,6 +440,7 @@ export class BlotterPage implements OnDestroy {
   @HostListener('document:keydown.escape')
   closeOnEscape(): void {
     if (this.selected()) this.close();
+    else if (this.optionsOpen() && !this.host.nativeElement.querySelector('.amount-options finto-select.sheet-open')) this.closeOptions();
   }
 
   trapFocus(event: KeyboardEvent): void {

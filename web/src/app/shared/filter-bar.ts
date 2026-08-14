@@ -25,7 +25,7 @@ import { FintoDate } from './finto-date';
           <input
             id="q"
             type="search"
-            placeholder="merchant, description, passenger…"
+            placeholder="Merchant or description"
             [ngModel]="filters.filter().q ?? ''"
             (ngModelChange)="onSearch($event)"
           />
@@ -192,7 +192,7 @@ import { FintoDate } from './finto-date';
         padding: var(--s3);
         border-left: 0;
         border-right: 0;
-        background: var(--panel);
+        background: var(--glass-strong);
       }
       /* Inline expansion would push the ledger off screen, so on a phone the
          panel arrives as a sheet over it and leaves the rows where they were. */
@@ -205,12 +205,19 @@ import { FintoDate } from './finto-date';
         overflow-y: auto;
         margin-top: 0;
         padding: var(--s4) var(--s3) calc(var(--s5) + env(safe-area-inset-bottom));
-        background: var(--panel);
+        background: var(--glass-surface);
+        -webkit-backdrop-filter: var(--glass-filter);
+        backdrop-filter: var(--glass-filter);
         border-top: 1px solid var(--line-2);
         transform: translateY(100%);
         transition: transform var(--motion-slow) var(--ease), opacity var(--motion-fast) linear;
       }
       .advanced.open { transform: translateY(0); margin-top: 0; }
+      /* A nested control becomes the active sheet. Dropping the transform
+         restores the viewport as its fixed-position containing block, and
+         visible overflow keeps the nested header and scrim intact. */
+      .advanced.open:has(finto-date.sheet-open),
+      .advanced.open:has(finto-select.sheet-open) { transform: none; overflow: visible; }
       /* A sheet over the ledger has to take the taps the ledger would have got,
          and be dismissable by the gesture people already use for a sheet. */
       .sheet-scrim {

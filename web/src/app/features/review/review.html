@@ -1,5 +1,8 @@
 <div class="page-head">
-  <h1>Review</h1>
+  <div>
+    <h1>Matching suggestions</h1>
+    <p class="sub">Resolve only the matches that need a human decision.</p>
+  </div>
 </div>
 
 <div class="bar">
@@ -26,7 +29,7 @@
   </div>
 } @else {
   <div class="workspace">
-    <!-- The queue, so you can see how far in you are. -->
+    <!-- The candidate list keeps this occasional task bounded and transparent. -->
     <ol class="queue">
       @for (item of items(); track item.id; let i = $index) {
         <li [class.on]="i === cursor()" (click)="cursor.set(i)">
@@ -67,8 +70,7 @@
                   <span class="tag">{{ side.role }}</span>
                   <span class="mono small muted">{{ side.account }}</span>
                 </div>
-                <div class="pane-amount mono"
-                     [class.neg]="side.amount.amount < 0" [class.pos]="side.amount.amount > 0">
+                <div class="pane-amount mono" [class.pos]="side.amount.amount > 0">
                   {{ side.amount | money }}
                 </div>
                 <div class="pane-date mono small">{{ side.date | shortDate }}</div>
@@ -94,7 +96,7 @@
                   <tr>
                     <td class="mono">{{ t.txn_date | shortDate }}</td>
                     <td>{{ t.description_raw }}</td>
-                    <td class="num neg">
+                    <td class="num">
                       {{ asMoney(t.amount_booked, t.currency_booked) | money: 'bare' }}
                     </td>
                   </tr>
@@ -104,8 +106,8 @@
           </div>
         }
 
-        <!-- Why the matcher scored it this way. A score with no reasons is not
-             reviewable, it is just a number to trust or ignore. -->
+        <!-- Why the matcher scored it this way. A score with no reasons is only
+             a number to trust or ignore. -->
         <div class="reasons">
           <label>Scored on</label>
           <ul>
