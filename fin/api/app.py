@@ -486,7 +486,7 @@ def reset_demo(request: Request) -> dict:
     if os.environ.get("FINTO_DEMO_SEED") != "1":
         raise HTTPException(404, "not found")
     expected = os.environ.get("FINTO_DEMO_RESET_TOKEN", "")
-    provided = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    provided = request.headers.get("x-finto-demo-reset", "").strip()
     if not expected or not secrets.compare_digest(provided, expected):
         raise HTTPException(401, "invalid demo reset token")
 

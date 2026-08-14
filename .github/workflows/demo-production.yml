@@ -61,7 +61,7 @@ jobs:
 
           curl --fail --silent --show-error \
             --request POST \
-            --header "Authorization: Bearer $DEMO_RESET_TOKEN" \
+            --header "X-Finto-Demo-Reset: $DEMO_RESET_TOKEN" \
             "$demo_url/api/demo/reset" \
             | jq --exit-status '.ok and (.transactions > 0)' >/dev/null
 

@@ -84,7 +84,7 @@ def test_health(client):
 
 def test_demo_reset_is_disabled_by_default(client):
     response = client.post(
-        "/api/demo/reset", headers={"Authorization": "Bearer not-enabled"},
+        "/api/demo/reset", headers={"X-Finto-Demo-Reset": "not-enabled"},
     )
     assert response.status_code == 404
 
@@ -93,7 +93,7 @@ def test_demo_reset_rejects_an_invalid_token(client, monkeypatch):
     monkeypatch.setenv("FINTO_DEMO_SEED", "1")
     monkeypatch.setenv("FINTO_DEMO_RESET_TOKEN", "correct-reset-token")
     response = client.post(
-        "/api/demo/reset", headers={"Authorization": "Bearer wrong-reset-token"},
+        "/api/demo/reset", headers={"X-Finto-Demo-Reset": "wrong-reset-token"},
     )
     assert response.status_code == 401
 
