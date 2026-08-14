@@ -126,11 +126,14 @@
   --z-popover: 50;   /* a menu opened from inside an overlay */
   --z-auth: 100;     /* the sign-in screen covers everything */
 
-  /* Material is semantic, not decoration. Content stays opaque; only chrome
-     that floats over content uses translucency and blur to expose its depth. */
+  /* Material is semantic, not decoration. Persistent navigation and content
+     stay opaque. Blur belongs to an active modal relationship: the scrim
+     softens and dims the page while its sheet, drawer, or popover is open. */
   --glass-surface: color-mix(in srgb, var(--panel) 88%, transparent);
   --glass-strong: color-mix(in srgb, var(--panel) 94%, transparent);
   --glass-filter: blur(18px) saturate(1.12);
+  --modal-scrim: rgb(0 0 0 / .58);
+  --modal-scrim-filter: blur(8px) saturate(.82);
 
   color-scheme: dark;
 }
@@ -535,7 +538,10 @@ th.num, td.num {
   .amount-options-scrim {
     display: block; position: fixed; z-index: var(--z-scrim); inset: 0;
     width: 100%; height: 100%; min-height: 0; padding: 0; border: 0;
-    background: #000a; animation: options-scrim-in var(--motion-fast) var(--ease-out) both;
+    background: var(--modal-scrim);
+    -webkit-backdrop-filter: var(--modal-scrim-filter);
+    backdrop-filter: var(--modal-scrim-filter);
+    animation: options-scrim-in var(--motion-fast) var(--ease-out) both;
   }
   .amount-options {
     display: block; position: fixed; z-index: var(--z-overlay); inset: auto 0 0;
@@ -632,7 +638,7 @@ html { view-transition-name: none; }
 router-outlet + * { view-transition-name: page-content; }
 [data-scroll-surface] {
   overscroll-behavior: contain;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   -webkit-overflow-scrolling: touch;
 }
 /* view-transition-name creates a stacking context. Lift the routed page while

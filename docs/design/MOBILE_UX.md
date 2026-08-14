@@ -40,8 +40,9 @@ while using hierarchy, surface, and progressive disclosure to reduce chrome.
   compact **Options** sheet; on desktop they remain inline beside the totals.
   Both stay separate from transaction filters.
 - The app has one vertical page scroller. Subviews never inherit the previous
-  route's offset. Subtle scroll-edge fades communicate that content continues
-  and disappear exactly at the top or bottom. Horizontal chart exploration is
+  route's offset. A one-pixel scroll-edge rule communicates that content continues
+  and disappears exactly at the top or bottom without implying a floating layer.
+  Horizontal chart exploration is
   allowed inside the vertical page and uses an explicit cue.
 - Persistent navigation is excluded from route snapshots; changing pages never
   hides or fades the mobile tab bar or desktop sidebar. A sheet owns every
@@ -49,16 +50,18 @@ while using hierarchy, surface, and progressive disclosure to reduce chrome.
   so pull-to-refresh remains a page-only action.
 - A single-choice selector uses one trailing check with no checkbox container.
   Select, filter, calendar, category, and account sheets scroll independently
-  and use contained overscroll so reaching an edge does not refresh the page.
+  and use contained overscroll so reaching an edge does not refresh the page;
+  pinch zoom remains available on every modal surface.
 - Typography uses shared responsive tokens; labels are sentence case, figures
   and codes use mono only when alignment carries meaning, and reading sizes step
   up on compact screens. Spacing uses the shared scale; cards do not stretch to
   match unrelated grid neighbors or retain empty desktop height on mobile.
 - `--bg`, `--panel`, `--panel-2`, and hairlines express permanent hierarchy.
-  Translucency and backdrop blur are reserved for chrome that actually floats
-  over content — tab bar, menus, sheets, calendars, and drawers — and pair with
-  a scrim for an unambiguous z-axis. Ordinary cards remain opaque, so material
-  continues to mean elevation instead of becoming decorative noise.
+  Persistent navigation is opaque. Backdrop blur belongs to an active modal
+  relationship: opening a sheet, calendar, picker, or drawer applies the shared
+  darkened and blurred scrim to the page below it. Translucent material may remain
+  inside that elevated surface for its pinned header or floating actions. Ordinary
+  content never blurs, so material continues to mean elevation instead of noise.
 - Settings contains user-controlled preferences and account access, not system
   diagnostics or duplicate task links. Destructive session actions stay with
   identity; specialist API access is collapsed until requested. Copy names the
@@ -94,6 +97,12 @@ These choices follow Apple's official guidance on [layout](https://developer.app
 `npm --prefix web run capture:mobile` to validate and refresh images, or
 `npm --prefix web run test:mobile-ux` for assertions only.
 
+`npm --prefix web run capture:sanity` complements the focused acceptance pass.
+It captures every routable product page plus reachable drawers, sheets,
+selectors, disclosures, modes, and detail levels at 390×844 and 1440×960. The
+generated inventory is in `docs/design/sanity/manifest.json`; each authenticated
+mobile route must retain all five visible navigation destinations.
+
 | Concern | Automated evidence |
 |---|---|
 | Mobile sizing | Every core route at 390×844 @2x; no page overflow; every visible control ≥44px |
@@ -104,12 +113,12 @@ These choices follow Apple's official guidance on [layout](https://developer.app
 | Ledger semantics | No review progress or completion chrome; filters and amount display remain separate |
 | Detail/data viewer | Full-screen mobile transaction detail, currency, 44px back target, statement-data disclosure, and no overflow |
 | Account symmetry | Standalone and grouped headers differ by no more than 1px; group, subaccount, and standalone detail pages are exercised |
-| Scroll feedback | Top/bottom edge state is asserted at both extremes |
+| Scroll feedback | Top/bottom edge state is asserted at both extremes; the cue is one pixel with no blur |
 | Chart behavior | Below-fold chart waits for intersection, animates on entry, and becomes static under Reduced Motion |
-| Material hierarchy | Currency and Options sheets expose active backdrop blur; content surfaces remain opaque |
+| Material hierarchy | Every modal scrim is darkened and blurred; permanent navigation, scroll edges, and content remain opaque |
 | Settings relevance | No storage engine, connection status, workspace group, or duplicate Import link; API access starts collapsed |
 | Navigation continuity | Root and persistent navigation opt out of route snapshots; only routed content has a transition name |
-| Sheet gesture ownership | Overflowing selector scrolls; contained gesture leaves pull-to-refresh at rest |
+| Sheet gesture ownership | Overflowing selector scrolls; contained gesture leaves pull-to-refresh at rest; pinch zoom remains enabled |
 | Selector semantics | Selected single-choice row has an unboxed trailing check |
 | Chart stability | Donut is hidden before intersection and completes to visible on reveal |
 | Transaction actions | Mobile title bar is absent; detached Back and Edit targets remain at least 44px |

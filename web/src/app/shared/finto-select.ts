@@ -99,7 +99,7 @@ let instances = 0;
     .no-options { margin: 18px 10px; color: var(--fg-4); font-size: var(--t-meta); text-align: center; }
     @media (max-width: 880px) {
       .select-trigger, .select-option { min-height: 44px; }
-      .select-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: #000a; animation: sheet-fade var(--motion-fast) var(--ease-out) both; }
+      .select-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--modal-scrim); -webkit-backdrop-filter: var(--modal-scrim-filter); backdrop-filter: var(--modal-scrim-filter); animation: sheet-fade var(--motion-fast) var(--ease-out) both; }
       .select-menu, .up .select-menu {
         position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; width: 100%; max-width: none;
         max-height: min(76dvh, 660px); padding: 0 14px calc(14px + env(safe-area-inset-bottom));

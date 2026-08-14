@@ -13,7 +13,7 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
 
 /* Drawer ------------------------------------------------------------------ */
 
-.drawer-backdrop { position: fixed; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: #000a; z-index: var(--z-scrim); animation: inspector-fade-in var(--motion-fast) var(--ease-out); }
+.drawer-backdrop { position: fixed; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--modal-scrim); -webkit-backdrop-filter: var(--modal-scrim-filter); backdrop-filter: var(--modal-scrim-filter); z-index: var(--z-scrim); animation: inspector-fade-in var(--motion-fast) var(--ease-out); }
 .drawer {
   position: fixed;
   top: 0;
@@ -226,8 +226,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
     justify-content: space-between;
     align-items: baseline;
     padding: var(--s2) var(--s3);
-    background: color-mix(in srgb, var(--panel-2) 96%, transparent);
-    backdrop-filter: blur(10px);
+    background: var(--panel-2);
   }
   .table-wrap tr.daygroup td { display: block; }
   .table-wrap td.desc .primary { font-size: var(--t-data); line-height: 1.35; overflow-wrap: anywhere; }
@@ -439,7 +438,9 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   min-height: 0;
   padding: 0;
   border: 0;
-  background: #000a;
+  background: var(--modal-scrim);
+  -webkit-backdrop-filter: var(--modal-scrim-filter);
+  backdrop-filter: var(--modal-scrim-filter);
   animation: inspector-fade-in var(--motion-fast) var(--ease-out);
 }
 .picker {

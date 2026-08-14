@@ -94,8 +94,8 @@ export class FintoShareBar {
     .arc { opacity: 0; transform-origin: center; }
     :host(.finto-in-view) .arc { animation: donut-reveal var(--motion-slow) var(--ease-out) both; }
     @keyframes donut-reveal {
-      from { opacity: 0; transform: rotate(-12deg) scale(.9); }
-      to { opacity: 1; transform: none; }
+      from { opacity: 0; transform: rotate(-102deg) scale(.9); }
+      to { opacity: 1; transform: rotate(-90deg); }
     }
     .legend { display: flex; flex-direction: column; gap: var(--s2); flex: 1; min-width: 140px; }
     .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-data); }

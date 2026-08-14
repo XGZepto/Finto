@@ -142,6 +142,7 @@ local app running, refresh the gallery and run responsive checks with:
 
 ```bash
 npm --prefix web run capture:mobile
+npm --prefix web run capture:sanity
 ```
 
 ## Taxonomy maintenance

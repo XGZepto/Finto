@@ -9,6 +9,7 @@
     "start": "ng serve",
     "build": "ng build",
     "capture:mobile": "node scripts/capture-mobile.mjs",
+    "capture:sanity": "node scripts/capture-sanity.mjs",
     "test:mobile-ux": "node scripts/capture-mobile.mjs --check-only",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
