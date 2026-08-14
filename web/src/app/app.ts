@@ -1,8 +1,5 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, inject, signal } from '@angular/core';
-import {
-  NavigationCancel, NavigationEnd, NavigationError, NavigationStart, Router,
-  RouterLink, RouterLinkActive, RouterOutlet,
-} from '@angular/router';
+import { Component, inject, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Preferences } from './core/preferences.service';
 import { scrollPane } from './core/scroll';
 import { NavIcon } from './shared/nav-icon';
@@ -21,7 +18,7 @@ import { PullToRefresh } from './shared/pull-to-refresh';
     <div class="shell">
       <nav class="sidebar">
         <div class="brand">
-          <div class="brand-row"><img class="brand-logo" src="/favicon.svg?v=3" alt=""><div class="name">Finto@if (navigating()) { <span class="caret">▌</span> }</div></div>
+          <div class="brand-row"><img class="brand-logo" src="/favicon.svg?v=3" alt=""><div class="name">Finto</div></div>
         </div>
 
         <div class="nav" aria-label="Primary navigation">
@@ -46,16 +43,13 @@ import { PullToRefresh } from './shared/pull-to-refresh';
         </div>
       </nav>
 
-      <main #content class="content" (scroll)="updateScrollEdges()">
+      <main class="content">
         <finto-pull-to-refresh />
         @if (offline()) {
           <p class="offline" role="status">{{ preferences.text('offline', '離線') }}</p>
         }
         <router-outlet />
       </main>
-      <span class="scroll-edge top" [class.show]="canScrollUp()" aria-hidden="true"></span>
-      <span class="scroll-edge bottom" [class.show]="canScrollDown()" aria-hidden="true"></span>
-
       <nav class="mobile-nav" aria-label="Primary navigation">
         @for (item of primaryNav; track item.path) {
           <a [routerLink]="item.path" routerLinkActive="active">
@@ -74,7 +68,7 @@ import { PullToRefresh } from './shared/pull-to-refresh';
   `,
   styleUrl: './app.css',
 })
-export class App implements AfterViewInit, OnDestroy {
+export class App {
   private router = inject(Router);
   preferences = inject(Preferences);
 
@@ -97,12 +91,7 @@ export class App implements AfterViewInit, OnDestroy {
 
   /** Live, not a boot-time probe: connectivity is only worth showing while it changes. */
   offline = signal(!navigator.onLine);
-  navigating = signal(false);
-  canScrollUp = signal(false);
-  canScrollDown = signal(false);
   private lastPath = '';
-  private contentObserver?: MutationObserver;
-  @ViewChild('content') content?: ElementRef<HTMLElement>;
 
   constructor() {
     this.preferences.loadUser();
@@ -110,29 +99,8 @@ export class App implements AfterViewInit, OnDestroy {
       window.addEventListener(event, () => this.offline.set(!navigator.onLine));
     }
     this.router.events.subscribe((event) => {
-      if (event instanceof NavigationStart) this.navigating.set(true);
-      if (event instanceof NavigationEnd || event instanceof NavigationCancel || event instanceof NavigationError) {
-        this.navigating.set(false);
-      }
       if (event instanceof NavigationEnd) this.scrollOnPathChange(event.urlAfterRedirects);
     });
-  }
-
-  ngAfterViewInit(): void {
-    const content = this.content?.nativeElement;
-    if (!content) return;
-    this.contentObserver = new MutationObserver(() => requestAnimationFrame(() => this.updateScrollEdges()));
-    this.contentObserver.observe(content, { childList: true, subtree: true, characterData: true });
-    this.updateScrollEdges();
-  }
-
-  ngOnDestroy(): void { this.contentObserver?.disconnect(); }
-
-  updateScrollEdges(): void {
-    const pane = this.content?.nativeElement;
-    if (!pane) return;
-    this.canScrollUp.set(pane.scrollTop > 2);
-    this.canScrollDown.set(pane.scrollTop + pane.clientHeight < pane.scrollHeight - 2);
   }
 
   /**
@@ -148,10 +116,7 @@ export class App implements AfterViewInit, OnDestroy {
     // Reset immediately and after the incoming view has laid out. A clicked
     // row can otherwise be focus-scrolled after NavigationEnd and leak the
     // list's offset into its detail page.
-    const reset = () => {
-      scrollPane()?.scrollTo(0, 0);
-      this.updateScrollEdges();
-    };
+    const reset = () => scrollPane()?.scrollTo(0, 0);
     reset();
     requestAnimationFrame(() => requestAnimationFrame(reset));
   }

@@ -236,7 +236,9 @@ import { FintoDate } from './finto-date';
       .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .field.narrow { max-width: none; }
       .toggles { display: grid; grid-template-columns: 1fr; gap: 9px; }
-      .chips { margin-top: 8px; padding-top: 8px; }
+      /* The count on Filters is the compact summary. Repeating every active
+         value here turns the sticky search bar into a second form. */
+      .chips { display: none; }
     }
   `],
 })

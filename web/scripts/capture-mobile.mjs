@@ -91,8 +91,8 @@ try {
     page: getComputedStyle(document.querySelector('router-outlet + *')).viewTransitionName,
     nav: getComputedStyle(document.querySelector('.mobile-nav')).viewTransitionName,
   }));
-  if (shellTransition.root !== 'none' || shellTransition.page !== 'page-content' || shellTransition.nav !== 'none') {
-    throw new Error(`Persistent navigation participates in route transitions: ${JSON.stringify(shellTransition)}`);
+  if (shellTransition.page !== 'none' || shellTransition.nav !== 'none') {
+    throw new Error(`Route snapshots remain enabled: ${JSON.stringify(shellTransition)}`);
   }
   await shot('summary-after.png');
   const tickOverlap = await page.$$eval('.trend .tick', (nodes) => {
@@ -383,21 +383,7 @@ try {
   }
   await shot('reports-flow-after.png');
 
-  await visit('/reports', '.totals-card');
-  const edgesAtTop = await page.evaluate(() => ({
-    top: document.querySelector('.scroll-edge.top')?.classList.contains('show'),
-    bottom: document.querySelector('.scroll-edge.bottom')?.classList.contains('show'),
-    height: getComputedStyle(document.querySelector('.scroll-edge.bottom')).height,
-    filter: getComputedStyle(document.querySelector('.scroll-edge.bottom')).backdropFilter,
-  }));
-  if (edgesAtTop.top || !edgesAtTop.bottom || edgesAtTop.height !== '1px' || edgesAtTop.filter !== 'none') throw new Error(`Incorrect scroll edge material or state at top: ${JSON.stringify(edgesAtTop)}`);
-  await page.evaluate(() => document.querySelector('.content')?.scrollTo(0, document.querySelector('.content')?.scrollHeight ?? 0));
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  const edgesAtBottom = await page.evaluate(() => ({
-    top: document.querySelector('.scroll-edge.top')?.classList.contains('show'),
-    bottom: document.querySelector('.scroll-edge.bottom')?.classList.contains('show'),
-  }));
-  if (!edgesAtBottom.top || edgesAtBottom.bottom) throw new Error(`Incorrect scroll edge state at bottom: ${JSON.stringify(edgesAtBottom)}`);
+  if (await page.$('.scroll-edge')) throw new Error('Decorative scroll-edge chrome returned');
 
   // The compact treatment must not damage the wider information-dense layout.
   await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
@@ -451,6 +437,67 @@ try {
     throw new Error(`Desktop transaction actions are misaligned: ${JSON.stringify(desktopDrawer)}`);
   }
   await shot('blotter-transaction-desktop-after.png');
+
+  // The field screenshots came from a ~360 CSS-pixel Android viewport. Keep a
+  // dedicated regression pass at that width instead of assuming 390 is close.
+  await page.setViewport({ width: 360, height: 800, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await visit('/reports', '.totals-card');
+  const narrowReport = await page.evaluate(() => {
+    const figures = [...document.querySelectorAll('.totals-row b')];
+    const boxes = figures.map((node) => node.getBoundingClientRect());
+    return {
+      overflow: figures.map((node) => node.scrollWidth - node.clientWidth),
+      overlap: boxes.some((box, index) => boxes.some((other, otherIndex) =>
+        otherIndex > index && box.left < other.right && box.right > other.left &&
+        box.top < other.bottom && box.bottom > other.top)),
+    };
+  });
+  if (narrowReport.overlap || narrowReport.overflow.some((value) => value > 1)) {
+    throw new Error(`Narrow report figures collide: ${JSON.stringify(narrowReport)}`);
+  }
+  await shot('reports-narrow-after.png');
+
+  await visit('/blotter?from=2025-09-01&uncategorisedOnly=true', '.ledger-card');
+  const narrowFilter = await page.evaluate(() => ({
+    chips: getComputedStyle(document.querySelector('.filter-bar .chips')).display,
+    height: Math.round(document.querySelector('.filter-bar').getBoundingClientRect().height),
+  }));
+  if (narrowFilter.chips !== 'none' || narrowFilter.height > 112) {
+    throw new Error(`Active mobile filters consume the ledger: ${JSON.stringify(narrowFilter)}`);
+  }
+  await shot('blotter-active-filters-narrow-after.png');
+
+  await visit('/accounts', '.account-groups');
+  const narrowAccounts = await page.evaluate(() => ({
+    childMetadata: document.querySelectorAll('.account-child .child-main small').length,
+    tallestChild: Math.max(0, ...[...document.querySelectorAll('.account-child')]
+      .map((node) => Math.round(node.getBoundingClientRect().height))),
+  }));
+  if (narrowAccounts.childMetadata || narrowAccounts.tallestChild > 54) {
+    throw new Error(`Account rows remain crowded: ${JSON.stringify(narrowAccounts)}`);
+  }
+  await shot('accounts-narrow-after.png');
+
+  await visit('/summary', '.hero-figure');
+  if (await page.$('.hero-action')) throw new Error('Summary still contains the redundant month shortcut');
+  const navFrames = await page.evaluate(async () => {
+    document.querySelector('.mobile-nav a[href="/reports"]')?.click();
+    const frames = [];
+    for (let index = 0; index < 18; index++) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const nav = document.querySelector('.mobile-nav');
+      const box = nav.getBoundingClientRect();
+      frames.push({ top: Math.round(box.top), height: Math.round(box.height),
+        opacity: getComputedStyle(nav).opacity,
+        visible: [...nav.querySelectorAll('a')].filter((node) => node.getBoundingClientRect().height > 0).length });
+    }
+    return frames;
+  });
+  const firstFrame = navFrames[0];
+  if (navFrames.some((frame) => frame.top !== firstFrame.top || frame.height !== firstFrame.height ||
+      frame.opacity !== '1' || frame.visible !== 5)) {
+    throw new Error(`Persistent navigation flickers during routing: ${JSON.stringify(navFrames)}`);
+  }
 
   await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
   await page.goto(`${baseUrl}/summary`, { waitUntil: 'networkidle0' });

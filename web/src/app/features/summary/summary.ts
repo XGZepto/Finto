@@ -331,10 +331,6 @@ export class SummaryPage {
 
   go(path: string): void { this.router.navigate([path]); }
 
-  reviewThisMonth(): void {
-    this.router.navigate(['/blotter'], { queryParams: this.comparisonFilters().current });
-  }
-
   humanize(value: string): string {
     return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }

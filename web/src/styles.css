@@ -632,29 +632,16 @@ th.num, td.num {
 [fintoReveal].finto-in-view .sankey .node,
 [fintoReveal].finto-in-view .seg { animation-play-state: running !important; }
 
-/* The browser otherwise gives the document root an implicit transition name
-   and snapshots persistent navigation with the changing route. */
-html { view-transition-name: none; }
-router-outlet + * { view-transition-name: page-content; }
 [data-scroll-surface] {
   overscroll-behavior: contain;
   touch-action: pan-y pinch-zoom;
   -webkit-overflow-scrolling: touch;
 }
-/* view-transition-name creates a stacking context. Lift the routed page while
-   it owns an overlay so its sheet can cover the sibling tab bar. */
+/* Lift a routed overlay host above the sibling tab bar. */
 router-outlet + *:has(.select-root.open, .date-root.open, .filter-bar.sheet-open, .amount-options, .picker, .drawer.open) {
   position: relative;
   z-index: var(--z-overlay);
 }
-::view-transition-old(page-content) { animation: page-out var(--motion-fast) var(--ease) both; }
-::view-transition-new(page-content) { animation: page-in var(--motion) var(--ease-out) both; }
-@keyframes page-out { to { opacity: 0; transform: translateY(-3px); } }
-@keyframes page-in { from { opacity: 0; transform: translateY(7px); } }
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(page-content), ::view-transition-new(page-content) { animation: none; }
-}
-
 /* --- Compact overrides ---------------------------------------------------
    Last in the file on purpose. These override base rules, and CSS resolves a
    tie on source order — sitting above the rules they target, every one of
