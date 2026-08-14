@@ -29,6 +29,14 @@
 }
 
 .totals-card { display: flex; flex-direction: column; gap: var(--s4); margin-bottom: var(--s3); }
+.report-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, .7fr) minmax(0, 1.3fr);
+  gap: var(--s3);
+  align-items: start;
+  margin-bottom: var(--s3);
+}
+.report-grid > .card { min-width: 0; }
 .totals-row { display: flex; align-items: baseline; gap: var(--s5); flex-wrap: wrap; }
 .totals-row > span { display: flex; align-items: baseline; gap: var(--s2); }
 .totals-row label {
@@ -66,6 +74,7 @@
 .rank-list .share { color: var(--fg-4); text-align: right; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 880px) {
+  .report-grid { grid-template-columns: 1fr; }
   .totals-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
   .totals-row > span { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); min-width: 0; }
   .totals-row > span b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

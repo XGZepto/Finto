@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { EMPTY, Observable, catchError, concat, shareReplay, take, tap } from 'rxjs';
 import {
   Account, Card, CategorySuggestion, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
-  ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentDetail, InvestmentSnapshot, Job,
+  ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentDetail, InvestmentHistory, InvestmentSnapshot, Job,
   LedgerFilter, Money, Page, Position, QueryResult, StagePreview, StatementFreshness, SummaryRow,
   TotalRow, Txn,
 } from './models';
@@ -21,6 +21,7 @@ export function filterToParams(f: LedgerFilter): HttpParams {
   };
   put('from', f.from);
   put('to', f.to);
+  put('months', f.months);
   put('accounts', f.accounts);
   put('cards', f.cards);
   put('cardholders', f.cardholders);
@@ -291,6 +292,14 @@ addTag(id: string, tag: string): Observable<Txn> {
   investment(id: string): Observable<InvestmentDetail> {
     return this.cached<InvestmentDetail>(
       `${this.base}/investments/${id}`, this.computedTtl);
+  }
+
+  investmentHistory(scheme?: string, accountId?: string): Observable<InvestmentHistory> {
+    let p = new HttpParams();
+    if (scheme) p = p.set('scheme', scheme);
+    if (accountId) p = p.set('account_id', accountId);
+    return this.cached<InvestmentHistory>(
+      `${this.base}/investments/history?${p.toString()}`, this.computedTtl);
   }
 
   detailKeys(): Observable<{ keys: DetailKey[] }> {

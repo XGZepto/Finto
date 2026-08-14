@@ -31,6 +31,7 @@ export interface ConvertedMoney {
 export interface LedgerFilter {
   from?: string;
   to?: string;
+  months?: string[];
   accounts?: string[];
   cards?: string[];
   cardholders?: string[];
@@ -387,6 +388,12 @@ export interface InvestmentDetail extends InvestmentSnapshot {
     market_value: Money;
     allocation: string | null;
   }>;
+}
+
+export interface InvestmentHistory {
+  scheme: string | null;
+  account_id: string | null;
+  points: Array<{ as_of_date: string; value: Money }>;
 }
 
 

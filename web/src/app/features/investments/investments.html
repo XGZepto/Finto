@@ -1,87 +1,99 @@
-<div class="page-head">
-  <h1>Investments</h1>
+<div class="page-head investment-head">
+  <button type="button" class="bare back" (click)="back()" aria-label="Back to accounts">← Accounts</button>
+  <div><h1>{{ pageTitle() }}</h1></div>
 </div>
 
 @if (loading()) {
-  <finto-skeleton [rows]="6" label="Loading holdings" />
+  <finto-skeleton [rows]="6" label="Loading investments" />
 } @else if (!current()) {
   <div class="card empty-state">
-    <p class="muted">No snapshots imported.</p>
+    <p class="muted">No valuation snapshots imported.</p>
   </div>
 } @else if (current(); as snap) {
-  <div class="card">
-    <div class="toolbar">
-      <span class="small muted mono">{{ friendly(snap.scheme) }}</span>
-      @if (snapshots().length > 1) {
-        <finto-select ariaLabel="Snapshot" [options]="snapshots()" valueKey="id"
+  <section class="card valuation-card">
+    <div class="valuation-head">
+      <div>
+        <span class="eyebrow">Current value</span>
+        @if (displayedValue(); as value) {
+          <span class="figure">{{ value | money }}</span>
+        }
+        <span class="muted small">Valued {{ snap.as_of_date | shortDate }}</span>
+      </div>
+      @if (scopedSnapshots().length > 1) {
+        <finto-select ariaLabel="Valuation date" [options]="scopedSnapshots()" valueKey="id"
                       labelKey="as_of_date" [ngModel]="snap.id" (ngModelChange)="select($event)" />
       }
     </div>
 
-    <div class="total-hero">
-      <span class="figure">{{ snap.total | money }}</span>
-      <span class="muted small">as at {{ snap.as_of_date | shortDate }}</span>
-    </div>
-  </div>
+    @if (valueChange(); as change) {
+      <div class="change" [class.positive]="change.amount.amount >= 0"
+           [class.negative]="change.amount.amount < 0">
+        <span>{{ change.amount.amount >= 0 ? '+' : '' }}{{ change.amount | money }}</span>
+        @if (change.percent !== null) {
+          <span>{{ change.percent >= 0 ? '+' : '' }}{{ change.percent.toFixed(1) }}%</span>
+        }
+        <span class="muted">since previous valuation</span>
+      </div>
+    }
+  </section>
 
-  @if (snap.subaccounts.length) {
-    <div class="card">
-      <h3>Member accounts</h3>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Account</th>
-              <th>Member no.</th>
-              <th class="num">Share</th>
-              <th class="num">Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (s of snap.subaccounts; track s.account_id) {
-              <tr>
-                <td data-label="Account">{{ friendly(s.account_id) }}</td>
-                <td data-label="Member no." class="mono small muted">{{ s.member_no || '—' }}</td>
-                <td data-label="Share" class="num muted small">{{ percent(s.allocation) }}</td>
-                <td data-label="Balance" class="num">{{ s.balance | money }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
+  <section class="card history-card">
+    <div class="section-head">
+      <div>
+        <h2>Valuation history</h2>
+        <span class="small muted">{{ historyPoints().length }} dated {{ historyPoints().length === 1 ? 'value' : 'values' }}</span>
       </div>
     </div>
+    @if (historyPoints().length > 1) {
+      <finto-timeseries [points]="historyPoints()" label="Investment value over time" stroke="var(--pos)" />
+    } @else {
+      <p class="muted single-point">Import another statement to show change over time.</p>
+    }
+  </section>
+
+  @if (!accountId() && snap.subaccounts.length) {
+    <section class="card">
+      <div class="section-head">
+        <h2>Member accounts</h2>
+        <span class="small muted">{{ snap.subaccounts.length }}</span>
+      </div>
+      <div class="account-list">
+        @for (s of snap.subaccounts; track s.account_id) {
+          <button type="button" class="account-row" (click)="openAccount(snap.scheme, s.account_id)">
+            <span>
+              <strong>{{ accountLabel(s.account_id) }}</strong>
+              @if (s.allocation) { <small>{{ percent(s.allocation) }} of scheme</small> }
+            </span>
+            <span class="row-value">{{ s.balance | money }} <span aria-hidden="true">›</span></span>
+          </button>
+        }
+      </div>
+    </section>
   }
 
-  <div class="card">
-    <h3>Constituent funds</h3>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Fund</th>
-            <th class="num">Units</th>
-            <th class="num">Unit price</th>
-            <th class="num">Share</th>
-            <th class="num">Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (h of snap.holdings; track h.instrument) {
-            <tr>
-              <td data-label="Fund" class="fund">
-                <span class="bar" [style.width]="width(h.market_value.amount)"></span>
-                <span class="fund-name">{{ h.instrument }}</span>
-              </td>
-              <td data-label="Units" class="num mono small muted">{{ h.units || '—' }}</td>
-              <td data-label="Unit price" class="num mono small muted">{{ h.unit_price || '—' }}</td>
-              <td data-label="Share" class="num muted small">{{ percent(h.allocation) }}</td>
-              <td data-label="Value" class="num">{{ h.market_value | money }}</td>
-            </tr>
-          } @empty {
-            <tr><td colspan="5" class="empty">No fund breakdown in this snapshot</td></tr>
-          }
-        </tbody>
-      </table>
+  <section class="card">
+    <div class="section-head">
+      <h2>{{ accountId() ? 'Scheme allocation' : 'Fund allocation' }}</h2>
+      <span class="small muted">{{ snap.holdings.length }} funds</span>
     </div>
-  </div>
+    <div class="holding-list">
+      @for (h of snap.holdings; track h.instrument) {
+        <div class="holding-row">
+          <div class="holding-copy">
+            <strong>{{ h.instrument }}</strong>
+            <span class="small muted">
+              @if (h.allocation) { {{ percent(h.allocation) }} }
+              @if (h.units) { · {{ h.units }} units }
+            </span>
+          </div>
+          <span class="holding-value">{{ h.market_value | money }}</span>
+          <span class="allocation-track" aria-hidden="true">
+            <span [style.width]="width(h.market_value.amount)"></span>
+          </span>
+        </div>
+      } @empty {
+        <p class="empty">No fund allocation in this valuation.</p>
+      }
+    </div>
+  </section>
 }
