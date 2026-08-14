@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.3.0 — 2026-08-14
+
+- Add exact multi-month report selection with aggregate totals, breakdowns,
+  accessible chart state, and matching Blotter drill-down.
+- Add investment-specific scheme and member-account pages with valuation
+  history, previous-valuation change, and fund allocation.
+- Complete the compact mobile experience audit across navigation, selectors,
+  transaction detail, account hierarchy, charts, settings, and light mode.
+- Standardise mobile account gutters and remove decorative scroll-edge cues.
+- Publish responsive mobile and desktop evidence in the project wiki.
+- Deploy semantic release tags to Vercel Production through GitHub Actions.
+
 - Complete the compact mobile uplift with surface-led cards, a stronger ledger
   row hierarchy, human date bands, and exception-only currency labels.
 - Lead Summary with month-to-date spend versus the same elapsed period last
