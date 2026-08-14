@@ -326,7 +326,9 @@ export class BlotterPage implements OnDestroy {
     this.picking.set(null);
     this.api.patchTransaction(txn.id, {
       category,
-      subcategory: subcategory ?? undefined,
+      // A top-level choice replaces the previous taxonomy pair. Omitting the
+      // leaf would make the API validate it against the new parent.
+      subcategory: subcategory ?? null,
       merchant: merchant ?? undefined,
       review_state: 'confirmed',
     } as Partial<Txn>).subscribe({

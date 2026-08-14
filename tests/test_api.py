@@ -416,6 +416,29 @@ def test_patch_records_a_manual_annotation(client):
     assert again["notes"] == "team lunch"
 
 
+def test_patch_can_clear_subcategory_when_category_changes(client, conn):
+    txn_id = client.get("/api/transactions").json()["items"][0]["id"]
+    categorised = client.patch(
+        f"/api/transactions/{txn_id}",
+        json={"category": "dining", "subcategory": "coffee"},
+    )
+    assert categorised.status_code == 200
+
+    changed = client.patch(
+        f"/api/transactions/{txn_id}",
+        json={"category": "shopping", "subcategory": None},
+    )
+    assert changed.status_code == 200
+    assert changed.json()["category"] == "shopping"
+    assert changed.json()["subcategory"] is None
+    annotation = conn.execute(
+        "SELECT value,source FROM txn_annotation WHERE txn_id=%s AND field='subcategory'",
+        (txn_id,),
+    ).fetchone()
+    assert annotation["value"] is None
+    assert annotation["source"] == "manual"
+
+
 # ---------------------------------------------------------------------------
 # Currency discipline
 # ---------------------------------------------------------------------------

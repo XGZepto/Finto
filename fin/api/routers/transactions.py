@@ -107,9 +107,13 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
     or an LLM guess, and so `DELETE FROM txn_annotation WHERE source='llm'`
     remains a complete undo of everything the model touched.
     """
-    fields = patch.model_dump(exclude_none=True)
+    # PATCH distinguishes an omitted field from an explicit null. Optional
+    # annotations such as subcategory, notes, and merchant must be clearable.
+    fields = patch.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(400, "nothing to update")
+    if fields.get("category", ...) is None or fields.get("review_state", ...) is None:
+        raise HTTPException(422, "category and review_state cannot be cleared")
 
     row = conn.execute(
         "SELECT t.id,t.category,t.subcategory,a.user_id FROM txn t "
@@ -145,7 +149,7 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
                 "confidence, created_at) VALUES (%s,%s,%s,'manual',1.0,%s) "
                 "ON CONFLICT(txn_id, field) DO UPDATE SET value=excluded.value, "
                 "source='manual', confidence=1.0, created_at=excluded.created_at",
-                (txn_id, key, str(value), now))
+                (txn_id, key, value if value is None else str(value), now))
     if fields.get("merchant"):
         from ...taxonomy import register_merchant
 

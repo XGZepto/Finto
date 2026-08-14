@@ -114,6 +114,36 @@ try {
   }
   await shot('blotter-after.png');
 
+  // A new top-level category must replace the whole taxonomy pair. Otherwise
+  // the server validates the previous leaf under its new, incompatible parent.
+  const openedCategorisedPicker = await page.$$eval('tr.clickable', (rows) => {
+    const row = rows.find((item) => {
+      const category = item.querySelector('td.category')?.textContent?.trim().toLowerCase();
+      return category && !category.includes('uncategorised');
+    });
+    const button = row?.querySelector('.swipe-action button');
+    if (!button) return false;
+    button.click();
+    return true;
+  });
+  if (!openedCategorisedPicker) throw new Error('Could not open a categorised row picker');
+  await settle('.picker');
+  const categoryPatch = page.waitForResponse((response) =>
+    response.request().method() === 'PATCH' && /\/api\/transactions\/[^/]+$/.test(new URL(response.url()).pathname));
+  const changedCategory = await page.$$eval('.picker-grid button', (buttons) => {
+    const button = buttons.find((item) => !item.classList.contains('on'));
+    if (!button) return false;
+    button.click();
+    return true;
+  });
+  if (!changedCategory) throw new Error('Could not choose a replacement category');
+  const categoryResponse = await categoryPatch;
+  const categoryPayload = JSON.parse(categoryResponse.request().postData() ?? '{}');
+  if (!categoryResponse.ok() || categoryPayload.subcategory !== null) {
+    throw new Error(`Top-level category did not clear its old subcategory: ${JSON.stringify({ status: categoryResponse.status(), payload: categoryPayload })}`);
+  }
+  await settle('.ledger-card');
+
   await page.click('.amount-options-trigger');
   await settle('.amount-options');
   const optionsSheet = await page.$eval('.amount-options', (node) => {
@@ -269,8 +299,13 @@ try {
   if (!flowWaiting) throw new Error('Below-fold flow chart animated before entering the viewport');
   await page.$eval('finto-flow', (node) => node.scrollIntoView({ block: 'center' }));
   await settle('finto-flow.finto-in-view');
-  const flowRunning = await page.$eval('finto-flow .seg', (node) => getComputedStyle(node).animationPlayState);
-  if (flowRunning !== 'running') throw new Error(`Flow chart did not animate on entry: ${flowRunning}`);
+  const flowMotion = await page.$eval('finto-flow .seg', (node) => {
+    const style = getComputedStyle(node);
+    return { name: style.animationName, state: style.animationPlayState };
+  });
+  if (flowMotion.name === 'none' || flowMotion.state !== 'running') {
+    throw new Error(`Flow chart did not animate on entry: ${JSON.stringify(flowMotion)}`);
+  }
   await shot('reports-flow-after.png');
 
   await visit('/reports', '.totals-card');

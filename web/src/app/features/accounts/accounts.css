@@ -44,7 +44,7 @@
 .sankey .link.out { stroke: var(--fg-2); }
 .sankey .link.internal { stroke: var(--warn); opacity: .55; fill: none; }
 .sankey .internal-arrow { fill: var(--warn); }
-.sankey .link, .sankey .node, .detail-link, .detail-node { animation: account-chart-in var(--motion-base) var(--ease-out) both; }
+.sankey .link, .sankey .node, .detail-link, .detail-node { animation: account-chart-in var(--motion) var(--ease-out) both; }
 @keyframes account-chart-in { from { opacity: 0; transform: translateY(3px); } }
 .flow-mobile { display: block; }
 .flow-tools { display: flex; align-items: center; gap: 8px; }

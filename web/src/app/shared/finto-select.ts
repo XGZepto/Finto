@@ -103,7 +103,7 @@ let instances = 0;
         max-height: min(76dvh, 660px); padding: 0 14px calc(14px + env(safe-area-inset-bottom));
         border: 0; border-top: 1px solid var(--line-2); background: var(--glass-surface);
         -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
-        box-shadow: 0 -16px 42px #0008; animation: sheet-up var(--motion-base) var(--ease-out) both;
+        box-shadow: 0 -16px 42px #0008; animation: sheet-up var(--motion) var(--ease-out) both;
       }
       .sheet-head { position: sticky; z-index: 2; top: 0; display: flex; justify-content: space-between; align-items: center; min-height: 68px; margin: 0 -14px; padding: 10px 14px 8px; border-bottom: 1px solid var(--line); background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
       .sheet-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 32px; height: 3px; border-radius: 3px; background: var(--fg-4); transform: translateX(-50%); opacity: .6; }

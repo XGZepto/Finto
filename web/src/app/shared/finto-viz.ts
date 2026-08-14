@@ -34,7 +34,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
   `,
   styles: [`
     .share { display: flex; height: 8px; width: 100%; overflow: hidden; background: var(--panel-3); }
-    .share span { display: block; height: 100%; transform-origin: left; animation: share-reveal var(--motion-base) var(--ease-out) both; }
+    .share span { display: block; height: 100%; transform-origin: left; animation: share-reveal var(--motion) var(--ease-out) both; }
     @keyframes share-reveal { from { transform: scaleX(0); } }
     .legend { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s3); }
     .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-data); }
@@ -145,7 +145,7 @@ export class FintoDonut {
   styles: [`
     :host { display: block; }
     svg { display: block; width: 100%; height: 100%; }
-    .spark { stroke-dasharray: 1000; animation: spark-reveal var(--motion-base) var(--ease-out) both; }
+    .spark { stroke-dasharray: 1000; animation: spark-reveal var(--motion) var(--ease-out) both; }
     @keyframes spark-reveal { from { stroke-dashoffset: 1000; } }
     @media (prefers-reduced-motion: reduce) { .spark { animation: none; } }
   `],

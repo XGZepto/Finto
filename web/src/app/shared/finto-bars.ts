@@ -41,7 +41,7 @@ export interface Bar {
       padding: 0; border: 0; background: none;
     }
     .track { display: flex; align-items: flex-end; height: 100%; }
-    .fill { width: 100%; background: var(--fg-4); min-height: 1px; transform-origin: bottom; animation: bar-reveal var(--motion-base) var(--ease-out) both; transition: background var(--motion-fast) linear; }
+    .fill { width: 100%; background: var(--fg-4); min-height: 1px; transform-origin: bottom; animation: bar-reveal var(--motion) var(--ease-out) both; transition: background var(--motion-fast) linear; }
     @keyframes bar-reveal { from { transform: scaleY(0); } }
     .fill.peak { background: var(--info); }
     .col:hover .fill { background: var(--fg-2); }
