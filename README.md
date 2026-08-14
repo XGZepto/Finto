@@ -221,10 +221,14 @@ Required production variables:
 - `FINTO_AUTH_USERNAME`, `FINTO_AUTH_EMAIL`, and `FINTO_AUTH_PASSWORD` for the
   initial owner bootstrap when the database has no users
 
-```bash
-vercel deploy
-vercel deploy --prod
-```
+Pull requests and branch pushes continue to create Vercel previews. Pushing a
+semantic release tag such as `v0.3.0` runs
+`.github/workflows/release-production.yml`, builds with the Vercel production
+environment, and deploys the tagged commit to Vercel Production.
+
+The workflow requires the `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
+`VERCEL_PROJECT_ID` repository secrets. A manual production deployment remains
+available with `vercel deploy --prod`.
 
 Apply database migrations before deploying code that depends on them. Do not
 place database URLs or API keys in committed files.
