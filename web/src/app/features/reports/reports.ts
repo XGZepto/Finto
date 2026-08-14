@@ -42,6 +42,7 @@ export class ReportsPage {
   private filters = inject(FilterState);
   private preferences = inject(Preferences);
   readonly money = new MoneyPipe();
+  private loadVersion = 0;
 
   readonly dimensions = ['category', 'subcategory', 'tag', 'merchant',
                          'cardholder', 'account', 'kind'];
@@ -117,6 +118,7 @@ export class ReportsPage {
   }
 
   load(): void {
+    const version = ++this.loadVersion;
     this.loading.set(true);
     const convert = this.convertTo() || undefined;
     const { current, prior } = this.windows();
@@ -126,25 +128,28 @@ export class ReportsPage {
 
     this.api.summary(this.splitBy(), this.scope(view) as any, convert).subscribe({
       next: (res) => {
+        if (version !== this.loadVersion) return;
         this.rows.set(res.rows);
         this.headline.set(res.normalised?.total ?? null);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => { if (version === this.loadVersion) this.loading.set(false); },
     });
 
     if (selected.length <= 1) {
       this.api.summary('kind', this.scope(priorView, false) as any, convert).subscribe({
-        next: (res) => this.priorHeadline.set(res.normalised?.total ?? null),
-        error: () => this.priorHeadline.set(null),
+        next: (res) => {
+          if (version === this.loadVersion) this.priorHeadline.set(res.normalised?.total ?? null);
+        },
+        error: () => { if (version === this.loadVersion) this.priorHeadline.set(null); },
       });
     } else {
       this.priorHeadline.set(null);
     }
 
     this.api.summary('month', this.scope(current, false) as any, convert).subscribe({
-      next: (res) => this.monthRows.set(res.rows),
-      error: () => this.monthRows.set([]),
+      next: (res) => { if (version === this.loadVersion) this.monthRows.set(res.rows); },
+      error: () => { if (version === this.loadVersion) this.monthRows.set([]); },
     });
   }
 
