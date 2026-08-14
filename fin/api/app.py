@@ -56,10 +56,36 @@ app = FastAPI(
 
 def _ensure_live_schema() -> None:
     """Upgrade the live ledger once before serving a new release."""
+    from psycopg import sql
+
     from .. import db as dbm
 
     conn = dbm.connect()
     try:
+        if os.environ.get("FINTO_DEMO_SEED") == "1":
+            schema = os.environ.get("FINTO_DEMO_SCHEMA")
+            if schema != "finto_demo":
+                raise RuntimeError("demo deployments require FINTO_DEMO_SCHEMA=finto_demo")
+            conn.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
+                sql.Identifier(schema)
+            ))
+            conn.execute("SELECT set_config('search_path', %s, false)", (schema,))
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext('finto_demo_seed'))")
+            version = (
+                os.environ.get("VERCEL_DEPLOYMENT_ID")
+                or os.environ.get("VERCEL_GIT_COMMIT_SHA")
+                or "manual"
+            )
+            current_version = None
+            if conn.execute("SELECT to_regclass('setting') AS name").fetchone()["name"]:
+                row = conn.execute(
+                    "SELECT value FROM setting WHERE key='demo_seed_version'"
+                ).fetchone()
+                current_version = row["value"] if row else None
+            if current_version != version:
+                from ..demo import seed_demo
+
+                seed_demo(reset=True, schema=schema, conn=conn, version=version)
         ready = conn.execute(
             "SELECT to_regclass('app_user') IS NOT NULL AS users, "
             "to_regclass('account_acl') IS NOT NULL AS acl, "
@@ -405,6 +431,15 @@ async def authenticated_api_context(request: Request, call_next):
         conn = dbm.connect()
         try:
             user = _current_user(request, conn)
+            from ..demo import demo_write_blocked
+
+            if demo_write_blocked(request.method, path, user["id"]):
+                return Response(
+                    json.dumps({"detail": "the public demo is read-only"}),
+                    status_code=403,
+                    media_type="application/json",
+                    headers={"Cache-Control": "no-store"},
+                )
             request.state.user_id = user["id"]
             dbm.apply_acl(conn, user["id"])
             request.state.db_conn = conn

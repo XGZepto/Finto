@@ -1,0 +1,72 @@
+name: Deploy demo
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-demo-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy seeded demo to Vercel
+    runs-on: ubuntu-latest
+    environment: Demo
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DEMO_PROJECT_ID }}
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v7
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.0.0
+
+      - name: Pull demo production environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy demo
+        run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Verify refreshed demo data
+        shell: bash
+        env:
+          DEMO_PASSWORD: ${{ secrets.FINTO_DEMO_PASSWORD }}
+        run: |
+          demo_url="https://finto-demo.vercel.app"
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error "$demo_url/api/health" >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == "12" ]]; then
+              echo "Demo health check did not become ready."
+              exit 1
+            fi
+            sleep 5
+          done
+
+          curl --fail --silent --show-error \
+            --cookie-jar "$RUNNER_TEMP/finto-demo.cookies" \
+            --header 'Content-Type: application/json' \
+            --data "$(jq --null-input --arg password "$DEMO_PASSWORD" \
+              '{identifier: "demo", password: $password}')" \
+            "$demo_url/api/auth/login" \
+            | jq --exit-status '.ok and (.user.username == "demo")' >/dev/null
+
+          curl --fail --silent --show-error \
+            --cookie "$RUNNER_TEMP/finto-demo.cookies" \
+            "$demo_url/api/accounts" \
+            | jq --exit-status '.accounts | length > 0' >/dev/null
