@@ -405,9 +405,16 @@ app.add_middleware(
 async def authenticated_api_context(request: Request, call_next):
     """Verify the database session and attach its user to every private API call."""
     path = request.url.path
+    demo_reset_token = os.environ.get("FINTO_DEMO_RESET_TOKEN", "")
+    demo_reset_header = request.headers.get("x-finto-demo-reset", "").strip()
+    valid_demo_reset = (
+        os.environ.get("FINTO_DEMO_SEED") == "1"
+        and bool(demo_reset_token)
+        and secrets.compare_digest(demo_reset_header, demo_reset_token)
+    )
     public = (
         path in {"/api/auth/login", "/api/auth/logout", "/api/health"}
-        or path.startswith("/api/demo/reset")
+        or valid_demo_reset
         or path.startswith("/api/agent/")
     )
     if request.url.path.startswith("/api/") and not public:
