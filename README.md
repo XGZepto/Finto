@@ -221,8 +221,8 @@ Required production variables:
 - `FINTO_AUTH_USERNAME`, `FINTO_AUTH_EMAIL`, and `FINTO_AUTH_PASSWORD` for the
   initial owner bootstrap when the database has no users
 
-Pull requests and branch pushes continue to create Vercel previews. Pushing a
-semantic release tag such as `v0.3.0` runs
+Pull requests and non-production branch pushes continue to create Vercel
+previews. Pushing a semantic release tag such as `v0.3.0` runs
 `.github/workflows/release-production.yml`, builds with the Vercel production
 environment, and deploys the tagged commit to Vercel Production.
 
