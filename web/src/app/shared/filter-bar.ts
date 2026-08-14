@@ -43,7 +43,7 @@ import { FintoDate } from './finto-date';
                 aria-label="Close filters"></button>
       }
 
-      <div class="advanced" [class.open]="expanded()">
+      <div class="advanced" data-scroll-surface [class.open]="expanded()">
         <div class="advanced-inner">
         <div class="controls">
 

@@ -626,7 +626,15 @@ th.num, td.num {
 [fintoReveal].finto-in-view .sankey .node,
 [fintoReveal].finto-in-view .seg { animation-play-state: running !important; }
 
+/* The browser otherwise gives the document root an implicit transition name
+   and snapshots persistent navigation with the changing route. */
+html { view-transition-name: none; }
 router-outlet + * { view-transition-name: page-content; }
+[data-scroll-surface] {
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
 /* view-transition-name creates a stacking context. Lift the routed page while
    it owns an overlay so its sheet can cover the sibling tab bar. */
 router-outlet + *:has(.select-root.open, .date-root.open, .filter-bar.sheet-open, .amount-options, .picker, .drawer.open) {

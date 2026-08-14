@@ -43,6 +43,13 @@ while using hierarchy, surface, and progressive disclosure to reduce chrome.
   route's offset. Subtle scroll-edge fades communicate that content continues
   and disappear exactly at the top or bottom. Horizontal chart exploration is
   allowed inside the vertical page and uses an explicit cue.
+- Persistent navigation is excluded from route snapshots; changing pages never
+  hides or fades the mobile tab bar or desktop sidebar. A sheet owns every
+  gesture that begins inside it, including downward movement at its top edge,
+  so pull-to-refresh remains a page-only action.
+- A single-choice selector uses one trailing check with no checkbox container.
+  Select, filter, calendar, category, and account sheets scroll independently
+  and use contained overscroll so reaching an edge does not refresh the page.
 - Typography uses shared responsive tokens; labels are sentence case, figures
   and codes use mono only when alignment carries meaning, and reading sizes step
   up on compact screens. Spacing uses the shared scale; cards do not stretch to
@@ -64,6 +71,10 @@ while using hierarchy, surface, and progressive disclosure to reduce chrome.
   colour is never the only signal.
 - Motion is brief and purposeful, never blocks input, runs only on first entry,
   and is disabled under `prefers-reduced-motion`.
+- Reveal-on-entry charts have a stable hidden first frame and an explicit visible
+  final frame; asynchronous layout can never flash a complete chart and then
+  remove it. Mobile transaction detail uses detached Back and Edit controls over
+  the surface instead of spending vertical space on a fixed top bar.
 
 These choices follow Apple's official guidance on [layout](https://developer.apple.com/design/human-interface-guidelines/layout),
 [lists and tables](https://developer.apple.com/design/human-interface-guidelines/lists-and-tables),
@@ -97,6 +108,11 @@ These choices follow Apple's official guidance on [layout](https://developer.app
 | Chart behavior | Below-fold chart waits for intersection, animates on entry, and becomes static under Reduced Motion |
 | Material hierarchy | Currency and Options sheets expose active backdrop blur; content surfaces remain opaque |
 | Settings relevance | No storage engine, connection status, workspace group, or duplicate Import link; API access starts collapsed |
+| Navigation continuity | Root and persistent navigation opt out of route snapshots; only routed content has a transition name |
+| Sheet gesture ownership | Overflowing selector scrolls; contained gesture leaves pull-to-refresh at rest |
+| Selector semantics | Selected single-choice row has an unboxed trailing check |
+| Chart stability | Donut is hidden before intersection and completes to visible on reveal |
+| Transaction actions | Mobile title bar is absent; detached Back and Edit targets remain at least 44px |
 
 ## Current screens
 

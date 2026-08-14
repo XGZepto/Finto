@@ -16,7 +16,7 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
       </button>
       @if (open()) {
         <button type="button" class="date-scrim" aria-label="Close date picker" (click)="close()"></button>
-        <div class="calendar" role="dialog" [attr.aria-label]="ariaLabel">
+        <div class="calendar" data-scroll-surface role="dialog" [attr.aria-label]="ariaLabel">
           <div class="sheet-head"><strong>Choose date</strong><button type="button" aria-label="Close" (click)="close()">×</button></div>
           <header>
             <button type="button" class="month-step" (click)="move(-1)" aria-label="Previous month">←</button>

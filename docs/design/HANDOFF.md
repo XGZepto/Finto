@@ -197,6 +197,17 @@ copy. Identity now owns Sign out, preferences stand alone, and specialist API
 access starts behind a disclosure. `capture-mobile.mjs` makes the material and
 settings relevance constraints executable.
 
+### 3.14 Complete — mobile interaction continuity
+Persistent navigation opts out of the browser's document snapshot so route
+transitions affect routed content only. Modal surfaces carry a shared scroll
+boundary and pull-to-refresh ignores gestures originating in them; account,
+filter, date, currency, and category sheets can therefore scroll in either
+direction without refreshing the page. Single-select rows use an unboxed
+trailing check rather than checkbox geometry. The Summary donut now begins from
+a stable hidden state and explicitly completes visible when intersected. On
+compact transaction detail, the fixed title bar is removed and Back/Edit are
+detached frosted controls; the desktop drawer retains its dense header.
+
 ---
 
 ## 4. Conventions

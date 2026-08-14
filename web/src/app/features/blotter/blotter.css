@@ -241,16 +241,31 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
     border-left: 0;
   }
   .drawer header {
-    top: calc(-14px - env(safe-area-inset-top));
-    margin: calc(-14px - env(safe-area-inset-top)) -14px 14px;
-    grid-template-columns: 44px 1fr 60px;
-    padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+    top: calc(10px + env(safe-area-inset-top));
+    height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    pointer-events: none;
   }
-  .mobile-back { display: grid; margin: 0; font-size: var(--t-hero); font-weight: 300; }
+  .mobile-back, .bar-action {
+    position: absolute;
+    top: 0;
+    pointer-events: auto;
+    border: 1px solid var(--line-2);
+    background: var(--glass-strong);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+    box-shadow: 0 5px 18px #0005;
+  }
+  .mobile-back { display: grid; left: 0; margin: 0; font-size: var(--t-hero); font-weight: 300; }
+  .bar-action { right: 0; min-width: 58px; padding: 0 12px; }
   .desktop-close { display: none; }
-  .bar-title { justify-self: center; }
-  .bar-action { justify-self: end; padding: 0 8px; }
-  .transaction-hero { padding-top: 8px; }
+  .bar-title { display: none; }
+  .transaction-hero { padding-top: 14px; }
   .drawer-overview > div { padding-block: 14px; }
   .data-disclosure > summary { min-height: 64px; }
   .drawer button, .drawer input, .drawer textarea { touch-action: manipulation; }

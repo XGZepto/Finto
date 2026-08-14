@@ -73,6 +73,14 @@ try {
   }
 
   await visit('/summary', '.hero-figure');
+  const shellTransition = await page.evaluate(() => ({
+    root: getComputedStyle(document.documentElement).viewTransitionName,
+    page: getComputedStyle(document.querySelector('router-outlet + *')).viewTransitionName,
+    nav: getComputedStyle(document.querySelector('.mobile-nav')).viewTransitionName,
+  }));
+  if (shellTransition.root !== 'none' || shellTransition.page !== 'page-content' || shellTransition.nav !== 'none') {
+    throw new Error(`Persistent navigation participates in route transitions: ${JSON.stringify(shellTransition)}`);
+  }
   await shot('summary-after.png');
   const tickOverlap = await page.$$eval('.trend .tick', (nodes) => {
     const boxes = nodes.filter((node) => getComputedStyle(node).display !== 'none')
@@ -80,6 +88,27 @@ try {
     return boxes.some((box, index) => index > 0 && box.left < boxes[index - 1].right);
   });
   if (tickOverlap) throw new Error('Summary chart labels overlap');
+  const donut = await page.$('finto-donut[fintoReveal]');
+  if (donut) {
+    const waitingDonut = await donut.evaluate((node) => ({
+      revealed: node.classList.contains('finto-in-view'),
+      opacity: getComputedStyle(node.querySelector('.arc')).opacity,
+    }));
+    if (!waitingDonut.revealed && waitingDonut.opacity !== '0') {
+      throw new Error(`Summary donut flashes before reveal: ${JSON.stringify(waitingDonut)}`);
+    }
+    await donut.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+    await settle('finto-donut.finto-in-view');
+    const revealedDonut = await donut.evaluate((node) => {
+      const style = getComputedStyle(node.querySelector('.arc'));
+      return { name: style.animationName, opacity: Number(style.opacity) };
+    });
+    if (revealedDonut.name === 'none' || revealedDonut.opacity <= 0) {
+      throw new Error(`Summary donut did not reveal stably: ${JSON.stringify(revealedDonut)}`);
+    }
+    await page.evaluate(() => document.querySelector('.content')?.scrollTo(0, 0));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
   await page.click('finto-select.currency-select .select-trigger');
   await settle('.select-menu');
   const sheet = await page.$eval('.select-menu', (node) => {
@@ -95,6 +124,13 @@ try {
   const selectedCurrencyCopy = await page.$eval('.select-menu .select-option.selected', (node) => node.textContent ?? '');
   if ((selectedCurrencyCopy.match(/USD/g) ?? []).length !== 1 || !selectedCurrencyCopy.includes('US Dollar')) {
     throw new Error(`Currency identity is repetitive or incomplete: ${selectedCurrencyCopy.trim()}`);
+  }
+  const singleSelectMark = await page.$eval('.select-menu .select-option.selected .selection-mark', (node) => {
+    const style = getComputedStyle(node);
+    return { border: style.borderStyle, background: style.backgroundColor, text: node.textContent?.trim() };
+  });
+  if (singleSelectMark.border !== 'none' || singleSelectMark.text !== '✓') {
+    throw new Error(`Single select still resembles multi-select: ${JSON.stringify(singleSelectMark)}`);
   }
   await shot('summary-currency-sheet-after.png');
 
@@ -175,12 +211,14 @@ try {
   await settle('.drawer .transaction-hero');
   const detailAudit = await page.$eval('.drawer', (node) => ({
     overflow: node.scrollWidth - node.clientWidth,
-    bar: node.querySelector('.bar-title')?.textContent?.trim(),
+    barVisible: getComputedStyle(node.querySelector('.bar-title')).display !== 'none',
+    headerBackground: getComputedStyle(node.querySelector('.transaction-bar')).backgroundColor,
     disclosure: !!node.querySelector('.data-disclosure'),
     backTarget: Math.round(node.querySelector('.mobile-back')?.getBoundingClientRect().height ?? 0),
+    editTarget: Math.round(node.querySelector('.bar-action')?.getBoundingClientRect().height ?? 0),
     amountHasCurrency: /[A-Z]{3}/.test(node.querySelector('.amount-hero')?.textContent ?? ''),
   }));
-  if (detailAudit.overflow > 1 || detailAudit.bar !== 'Transaction' || !detailAudit.disclosure || detailAudit.backTarget < 44 || !detailAudit.amountHasCurrency) {
+  if (detailAudit.overflow > 1 || detailAudit.barVisible || detailAudit.headerBackground !== 'rgba(0, 0, 0, 0)' || !detailAudit.disclosure || detailAudit.backTarget < 44 || detailAudit.editTarget < 44 || !detailAudit.amountHasCurrency) {
     throw new Error(`Transaction detail failed mobile audit: ${JSON.stringify(detailAudit)}`);
   }
   await shot('blotter-transaction-after.png');
@@ -201,6 +239,24 @@ try {
   await clickText('button', 'Filters');
   await settle('.advanced.open');
   await shot('blotter-filters-after.png');
+  await page.click('.advanced.open finto-select[ariaLabel="Category"] .select-trigger');
+  await settle('.select-menu');
+  const sheetGesture = await page.$eval('.select-menu', (node) => {
+    node.scrollTop = 0;
+    const touch = (type, y) => node.dispatchEvent(new TouchEvent(type, {
+      bubbles: true, cancelable: true, touches: type === 'touchend' ? [] : [new Touch({ identifier: 1, target: node, clientX: 100, clientY: y })],
+      changedTouches: [new Touch({ identifier: 1, target: node, clientX: 100, clientY: y })],
+    }));
+    touch('touchstart', 260); touch('touchmove', 120); touch('touchend', 120);
+    node.scrollTop = Math.min(80, node.scrollHeight - node.clientHeight);
+    const ptr = document.querySelector('finto-pull-to-refresh .ptr');
+    return { scrollTop: node.scrollTop, overflow: node.scrollHeight - node.clientHeight,
+      refreshTransform: ptr ? getComputedStyle(ptr).transform : '' };
+  });
+  if (sheetGesture.overflow <= 0 || sheetGesture.scrollTop <= 0 || !['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(sheetGesture.refreshTransform)) {
+    throw new Error(`Sheet gesture leaked to page refresh or cannot scroll: ${JSON.stringify(sheetGesture)}`);
+  }
+  await page.click('.select-menu .sheet-head button');
   await page.click('finto-date .date-trigger');
   await settle('finto-date .calendar');
   const calendarBox = await page.$eval('finto-date .calendar', (node) => {

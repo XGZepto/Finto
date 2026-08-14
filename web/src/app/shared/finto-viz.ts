@@ -91,14 +91,18 @@ export class FintoShareBar {
   styles: [`
     .donut-wrap { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; }
     svg { width: 116px; height: 116px; flex: none; }
-    .arc { animation: donut-reveal var(--motion-slow) var(--ease-out) both; transform-origin: center; }
-    @keyframes donut-reveal { from { opacity: 0; transform: rotate(-12deg) scale(.9); } }
+    .arc { opacity: 0; transform-origin: center; }
+    :host(.finto-in-view) .arc { animation: donut-reveal var(--motion-slow) var(--ease-out) both; }
+    @keyframes donut-reveal {
+      from { opacity: 0; transform: rotate(-12deg) scale(.9); }
+      to { opacity: 1; transform: none; }
+    }
     .legend { display: flex; flex-direction: column; gap: var(--s2); flex: 1; min-width: 140px; }
     .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-data); }
     .dot { width: 8px; height: 8px; flex: none; }
     .name { flex: 1; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pct { font-variant-numeric: tabular-nums; color: var(--fg-3); }
-    @media (prefers-reduced-motion: reduce) { .arc { animation: none; } }
+    @media (prefers-reduced-motion: reduce) { .arc { opacity: 1; animation: none; } }
   `],
 })
 export class FintoDonut {
