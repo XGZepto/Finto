@@ -102,6 +102,10 @@ export class PullToRefresh implements OnDestroy {
   private onStart = (event: TouchEvent): void => {
     // Only from a resting top. Starting mid-scroll would hijack a flick back up.
     if (this.refresh.running() || (this.pane?.scrollTop ?? 0) > 0) return;
+    const origin = event.target instanceof Element ? event.target : null;
+    // A modal surface owns its vertical gesture, including a downward drag at
+    // its own top edge. Refresh belongs only to bare page content.
+    if (origin?.closest('[data-scroll-surface], [role="dialog"], [role="listbox"], [aria-modal="true"], .amount-options')) return;
     this.startY = event.touches[0].clientY;
     this.tracking = true;
   };

@@ -112,12 +112,14 @@
 
 .scroll-edge {
   position: fixed; z-index: calc(var(--z-status) - 1); left: 218px; right: 0;
-  height: 18px; opacity: 0; pointer-events: none;
+  height: 1px; opacity: 0; pointer-events: none;
+  background: var(--line-strong);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--fg) 8%, transparent);
   transition: opacity var(--motion-fast) var(--ease);
 }
 .scroll-edge.show { opacity: 1; }
-.scroll-edge.top { top: 0; background: linear-gradient(var(--bg), transparent); backdrop-filter: blur(1px); }
-.scroll-edge.bottom { bottom: 0; background: linear-gradient(transparent, var(--bg)); backdrop-filter: blur(1px); }
+.scroll-edge.top { top: 0; }
+.scroll-edge.bottom { bottom: 0; }
 
 .mobile-nav { display: none; }
 
@@ -142,9 +144,7 @@
     min-height: calc(64px + env(safe-area-inset-bottom));
     padding: 6px 6px env(safe-area-inset-bottom);
     border-top: 1px solid var(--line-2);
-    background: var(--glass-strong);
-    -webkit-backdrop-filter: var(--glass-filter);
-    backdrop-filter: var(--glass-filter);
+    background: var(--panel);
     isolation: isolate;
     overscroll-behavior: contain;
   }

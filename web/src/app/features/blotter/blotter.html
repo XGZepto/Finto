@@ -179,7 +179,7 @@
 @if (optionsOpen()) {
   <button type="button" class="amount-options-scrim" (click)="closeOptions()"
           aria-label="Close display options"></button>
-  <section #amountOptions class="amount-options" role="dialog" aria-modal="true"
+  <section #amountOptions class="amount-options" data-scroll-surface role="dialog" aria-modal="true"
            aria-labelledby="amount-options-title" tabindex="-1" (keydown)="trapOptionsFocus($event)">
     <header>
       <h2 id="amount-options-title">Display options</h2>
@@ -205,7 +205,7 @@
 @if (picking(); as txn) {
   <button type="button" class="picker-scrim" (click)="picking.set(null)"
           aria-label="Cancel"></button>
-  <div class="picker" role="dialog" aria-modal="true" aria-label="Choose a category">
+  <div class="picker" data-scroll-surface role="dialog" aria-modal="true" aria-label="Choose a category">
     <p class="picker-head">
       <span>{{ txn.merchant || txn.description }}</span>
       <b class="mono" [class.pos]="txn.booked.amount > 0">{{ txn.booked | money }}</b>
@@ -231,7 +231,7 @@
      in a file you downloaded, and you can read that line. -->
 @if (selected(); as txn) {
   <button type="button" class="drawer-backdrop" (click)="close()" aria-label="Close transaction details"></button>
-  <aside #drawer class="drawer" role="dialog" aria-modal="true" aria-labelledby="transaction-title"
+  <aside #drawer class="drawer" data-scroll-surface role="dialog" aria-modal="true" aria-labelledby="transaction-title"
          tabindex="-1" [attr.aria-busy]="detailLoading()" (keydown)="trapFocus($event)">
     <header class="transaction-bar">
       <button class="bare close mobile-back" (click)="close()" aria-label="Back to blotter">‹</button>

@@ -51,6 +51,12 @@ transaction detail, statement-data disclosure, chart entry, scroll edges, the
 reduced-motion path, and refreshes
 `docs/design/mobile/*-after.png`.
 
+`npm --prefix web run capture:sanity` is the exhaustive route/action companion.
+It captures all routable product pages and the reachable interaction states in
+`docs/design/sanity/{mobile,desktop}` at 390×844 and 1440×960, writes a machine-
+readable manifest, checks horizontal overflow, and requires five visible mobile
+navigation destinations on every authenticated route.
+
 ---
 
 ## 2. What the design system now guarantees
@@ -189,13 +195,28 @@ money flow and history. Inactive accounts collapse redundant empty charts and
 tables to one compact ledger-activity message.
 
 The shell owns vertical scrolling, resets it on every real route change, and
-shows subtle top/bottom edge feedback. Charts reveal on entry; navigation and
-floating chrome use the shared translucent material, while permanent content
-hierarchy uses opaque panel surfaces. The Settings audit removed the storage
+shows a crisp one-pixel top/bottom continuation rule. Charts reveal on entry;
+permanent navigation is opaque, while an active sheet, picker, calendar, or
+drawer darkens and blurs the page through the shared modal scrim. The Settings audit removed the storage
 engine and connection status, duplicate Import navigation, and filler session
 copy. Identity now owns Sign out, preferences stand alone, and specialist API
 access starts behind a disclosure. `capture-mobile.mjs` makes the material and
 settings relevance constraints executable.
+
+### 3.14 Complete — mobile interaction continuity
+Persistent navigation opts out of the browser's document snapshot so route
+transitions affect routed content only. Modal surfaces carry a shared scroll
+boundary and pull-to-refresh ignores gestures originating in them; account,
+filter, date, currency, and category sheets can therefore scroll in either
+direction without refreshing the page while retaining pinch zoom. Single-select
+rows use an unboxed trailing check rather than checkbox geometry. The Summary
+donut now begins from a stable hidden state and explicitly completes visible
+when intersected. On
+compact transaction detail, the fixed title bar is removed and Back/Edit are
+detached frosted controls; the desktop drawer retains its dense header.
+The acceptance capture also opens the desktop drawer: the mobile Back control
+must compute to `display:none`, Edit and Close must share a centre line, and the
+header cannot grow into a wrapped second row.
 
 ---
 
@@ -271,6 +292,8 @@ comes back stale.
 ## 7. Context worth reading
 
 - `docs/design/mobile/*.png` — before/after captures from the last round.
+- `docs/design/sanity/{mobile,desktop}/*.png` — exhaustive responsive route and
+  reachable-action captures; `manifest.json` records the exact inventory.
 - `docs/design/MOBILE_UX.md` — product hierarchy, platform references, QA
   matrix, and the current screenshot gallery.
 - Commit messages on `456bb00`, `b3362cc` and `e4bcbaa` carry the reasoning for

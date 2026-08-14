@@ -43,7 +43,7 @@ import { FintoDate } from './finto-date';
                 aria-label="Close filters"></button>
       }
 
-      <div class="advanced" [class.open]="expanded()">
+      <div class="advanced" data-scroll-surface [class.open]="expanded()">
         <div class="advanced-inner">
         <div class="controls">
 
@@ -228,7 +228,9 @@ import { FintoDate } from './finto-date';
         min-height: 0;
         padding: 0;
         border: 0;
-        background: #0009;
+        background: var(--modal-scrim);
+        -webkit-backdrop-filter: var(--modal-scrim-filter);
+        backdrop-filter: var(--modal-scrim-filter);
       }
       .advanced-inner { overflow: visible; }
       .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }

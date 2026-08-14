@@ -20,7 +20,7 @@ let instances = 0;
       </button>
       @if (open()) {
         <button type="button" class="select-scrim" aria-label="Close {{ ariaLabel }}" (click)="close()"></button>
-        <div class="select-menu" role="listbox" [id]="id + '-list'" [attr.aria-label]="ariaLabel">
+        <div class="select-menu" data-scroll-surface role="listbox" [id]="id + '-list'" [attr.aria-label]="ariaLabel">
           <div class="sheet-head">
             <strong>{{ ariaLabel }}</strong>
             <button type="button" aria-label="Close" (click)="close()">×</button>
@@ -85,10 +85,12 @@ let instances = 0;
     .option-code { display: grid; place-items: center; width: 42px; height: 30px; background: var(--panel-3); border: 1px solid var(--line); color: var(--fg-2); font-size: var(--t-label); }
     .option-copy { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
     .option-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font: 520 var(--t-meta)/1.2 var(--sans); }
-    .selection-mark { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--line-2); color: transparent; font-size: var(--t-label); }
+    /* A trailing check is the platform convention for one selected row. A
+       boxed mark reads as a checkbox and falsely promises multi-selection. */
+    .selection-mark { display: grid; place-items: center; width: 22px; height: 22px; color: transparent; font-size: var(--t-data); font-weight: 650; }
     .select-option.active { background: var(--panel-3); color: var(--fg); }
     .select-option.selected { color: var(--fg); }
-    .select-option.selected .selection-mark { border-color: var(--fg); background: var(--fg); color: var(--bg); }
+    .select-option.selected .selection-mark { color: var(--fg); }
     .select-search { display: flex; align-items: center; gap: 8px; margin: 4px; padding: 0 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg-4); }
     .select-search input { width: 100%; min-height: 38px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--fg); font: var(--t-meta)/1 var(--sans); }
     .select-search input::placeholder { color: var(--fg-4); }
@@ -97,7 +99,7 @@ let instances = 0;
     .no-options { margin: 18px 10px; color: var(--fg-4); font-size: var(--t-meta); text-align: center; }
     @media (max-width: 880px) {
       .select-trigger, .select-option { min-height: 44px; }
-      .select-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: #000a; animation: sheet-fade var(--motion-fast) var(--ease-out) both; }
+      .select-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--modal-scrim); -webkit-backdrop-filter: var(--modal-scrim-filter); backdrop-filter: var(--modal-scrim-filter); animation: sheet-fade var(--motion-fast) var(--ease-out) both; }
       .select-menu, .up .select-menu {
         position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; width: 100%; max-width: none;
         max-height: min(76dvh, 660px); padding: 0 14px calc(14px + env(safe-area-inset-bottom));

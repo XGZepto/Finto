@@ -16,7 +16,7 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
       </button>
       @if (open()) {
         <button type="button" class="date-scrim" aria-label="Close date picker" (click)="close()"></button>
-        <div class="calendar" role="dialog" [attr.aria-label]="ariaLabel">
+        <div class="calendar" data-scroll-surface role="dialog" [attr.aria-label]="ariaLabel">
           <div class="sheet-head"><strong>Choose date</strong><button type="button" aria-label="Close" (click)="close()">×</button></div>
           <header>
             <button type="button" class="month-step" (click)="move(-1)" aria-label="Previous month">←</button>
@@ -63,7 +63,7 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
     footer button { font-family: var(--sans); font-size: var(--t-label); letter-spacing: 0; text-transform: none; }
     @media (max-width: 880px) {
       .date-trigger { min-height: 44px; }
-      .date-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: #000a; animation: date-fade var(--motion-fast) var(--ease-out) both; }
+      .date-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--modal-scrim); -webkit-backdrop-filter: var(--modal-scrim-filter); backdrop-filter: var(--modal-scrim-filter); animation: date-fade var(--motion-fast) var(--ease-out) both; }
       .calendar { position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; width: auto; padding: 0 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--line-2); background: var(--glass-surface); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); box-shadow: 0 -16px 42px #0008; animation: date-up var(--motion) var(--ease-out) both; }
       .sheet-head { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: 54px; margin: 0 -12px 4px; padding: 0 12px; border-bottom: 1px solid var(--line); }
       .sheet-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 32px; height: 3px; border-radius: 3px; background: var(--fg-4); transform: translateX(-50%); opacity: .6; }
