@@ -244,8 +244,6 @@
       <button class="bare close desktop-close" (click)="close()" aria-label="Close">×</button>
     </header>
 
-    @if (detailLoading()) { <div class="drawer-loading" aria-live="polite">Loading</div> }
-
     <section class="transaction-hero">
       <span class="detail-glyph" aria-hidden="true">
         <finto-icon kind="merchant" [name]="txn.merchant || txn.description"

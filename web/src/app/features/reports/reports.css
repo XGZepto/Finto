@@ -75,5 +75,25 @@
   .rank-list .share { display: none; }
 }
 
+@media (max-width: 520px) {
+  .controls-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+  }
+  .control-pair, .control-pair:has(finto-select) { width: 100%; min-width: 0; }
+  .control-pair:first-child { grid-column: 1 / -1; min-width: 0; }
+  .control-pair:last-child { grid-column: 1 / -1; }
+  .control-pair finto-select { width: 100%; }
+  .totals-card { padding-inline: var(--s3); }
+  .totals-row { column-gap: var(--s3); row-gap: var(--s4); }
+  .totals-row b {
+    max-width: 100%;
+    font-size: clamp(18px, 5.4vw, var(--t-fig-sm));
+    letter-spacing: -.035em;
+  }
+  .totals-row em { max-width: 100%; font-size: var(--t-label); }
+}
+
 .focus-chip { color: var(--info); font-family: var(--mono); font-size: var(--t-meta); letter-spacing: .04em; }
 .focus-chip:hover { color: var(--fg); }

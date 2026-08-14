@@ -12,8 +12,6 @@
 .hero-change small { margin-left: var(--s1); color: var(--fg-4); font-weight: 400; }
 .hero-change.better { color: var(--pos); }
 .hero-change.worse { color: var(--neg); }
-.hero-action { align-self: flex-start; min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line-2); background: var(--panel-2); color: var(--fg-2); }
-.hero-action:hover { border-color: var(--fg-3); background: var(--panel-3); color: var(--fg); }
 .page-head .currency-select { width: 92px; }
 .flow-controls { display: flex; align-items: center; gap: var(--s2); }
 .hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3); flex-wrap: wrap; }

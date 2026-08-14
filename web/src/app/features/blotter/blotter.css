@@ -37,8 +37,6 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
 .mobile-back.close { display: none; }
 .close { display: grid; place-items: center; min-width: 44px; min-height: 44px; margin: -10px -10px 0 0; font-size: var(--t-figure); line-height: 1; touch-action: manipulation; }
 .desktop-close { margin: 0; color: var(--fg-3); }
-.drawer-loading { margin: -4px 0 10px; color: var(--fg-4); font: var(--t-label)/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-
 .amount-hero {
   font-family: var(--mono);
   font-size: var(--t-fig-lg);

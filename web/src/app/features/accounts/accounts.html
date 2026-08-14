@@ -260,21 +260,21 @@
           @if (g.children.length === 1) {
             <button class="single-account" (click)="open(g.children[0].account.id)">
               <span class="issuer-mark"><finto-icon kind="issuer" [name]="g.institution" /></span>
-              <span class="child-main"><span class="eyebrow mono">{{ humanize(g.institution) }} · {{ humanize(g.children[0].account.account_type) }}@if (g.children[0].cards) { · {{ g.children[0].cards }} card{{ g.children[0].cards > 1 ? 's' : '' }} }</span><strong>{{ g.name }}</strong></span>
+              <span class="child-main"><span class="eyebrow">{{ humanize(g.children[0].account.account_type) }}</span><strong>{{ g.name }}</strong></span>
               <span class="group-totals">@for (total of g.totals; track total.currency) { <span class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money: 'bare' }} <small>{{ total.currency }}</small></span> }</span>
               <span class="arrow">→</span>
             </button>
           } @else {
             <button class="group-header" (click)="openGroup(g.key)">
               <span class="issuer-mark"><finto-icon kind="issuer" [name]="g.institution" /></span>
-              <span class="child-main"><span class="eyebrow mono">{{ humanize(g.institution) }} · {{ g.children.length }} subaccounts</span><strong>{{ g.name }}</strong></span>
+              <span class="child-main"><span class="eyebrow">{{ g.children.length }} accounts</span><strong>{{ g.name }}</strong></span>
               <div class="group-totals">@for (total of g.totals; track total.currency) { <span class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money: 'bare' }} <small>{{ total.currency }}</small></span> }</div>
               <span class="arrow">→</span>
             </button>
             <div class="children">
               @for (r of g.children; track r.account.id) {
                 <button class="account-child" (click)="open(r.account.id)">
-                  <span class="child-main"><strong>{{ r.account.display_name }}</strong><small>{{ humanize(r.account.account_type) }} @if (r.cards) { · {{ r.cards }} card{{ r.cards > 1 ? 's' : '' }} }</small></span>
+                  <span class="child-main"><strong>{{ r.account.display_name }}</strong></span>
                   <span class="child-balances">@for (p of r.positions; track p.currency) { <span class="mono" [class.neg]="p.balance.amount < 0" [class.pos]="p.balance.amount > 0">{{ p.balance | money: 'bare' }} <small>{{ p.currency }}</small></span> } @empty { <span class="dim">—</span> }</span>
                   <span class="arrow">→</span>
                 </button>
