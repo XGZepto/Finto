@@ -509,7 +509,7 @@ def test_import_capabilities_come_from_registered_formats(client):
     assert any(item["id"] == "generic_csv" for item in body["formats"])
     assert any(item["id"] == "hsbc_hk_savings" for item in body["formats"])
     assert all(item["label"] for item in body["formats"])
-    assert body["contribution"]["guide"].endswith("docs/STATEMENT_FORMATS.md")
+    assert body["contribution"]["guide"].endswith("wiki/Statement-Formats")
 
 def test_stage_previews_without_importing(client):
     before = client.get("/api/transactions").json()["total"]

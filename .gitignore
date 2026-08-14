@@ -46,6 +46,9 @@ build/
 # JavaScript
 node_modules/
 
+# Local visual QA output; published design evidence lives in the wiki.
+.artifacts/
+
 # Editors / OS
 .DS_Store
 .idea/
