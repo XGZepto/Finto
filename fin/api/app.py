@@ -56,10 +56,20 @@ app = FastAPI(
 
 def _ensure_live_schema() -> None:
     """Upgrade the live ledger once before serving a new release."""
+    from psycopg import sql
+
     from .. import db as dbm
 
     conn = dbm.connect()
     try:
+        if os.environ.get("FINTO_DEMO_SEED") == "1":
+            schema = os.environ.get("FINTO_DEMO_SCHEMA")
+            if schema != "finto_demo":
+                raise RuntimeError("demo deployments require FINTO_DEMO_SCHEMA=finto_demo")
+            conn.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
+                sql.Identifier(schema)
+            ))
+            conn.execute("SELECT set_config('search_path', %s, false)", (schema,))
         ready = conn.execute(
             "SELECT to_regclass('app_user') IS NOT NULL AS users, "
             "to_regclass('account_acl') IS NOT NULL AS acl, "
@@ -396,7 +406,7 @@ async def authenticated_api_context(request: Request, call_next):
     """Verify the database session and attach its user to every private API call."""
     path = request.url.path
     public = (
-        path in {"/api/auth/login", "/api/auth/logout", "/api/health"}
+        path in {"/api/auth/login", "/api/auth/logout", "/api/demo/reset", "/api/health"}
         or path.startswith("/api/agent/")
     )
     if request.url.path.startswith("/api/") and not public:
@@ -468,6 +478,22 @@ def health() -> dict:
         return {"status": "ok", "storage": "postgresql"}
     finally:
         conn.close()
+
+
+@app.post("/api/demo/reset", include_in_schema=False)
+def reset_demo(request: Request) -> dict:
+    """Refresh the isolated public demo after its deployment completes."""
+    if os.environ.get("FINTO_DEMO_SEED") != "1":
+        raise HTTPException(404, "not found")
+    expected = os.environ.get("FINTO_DEMO_RESET_TOKEN", "")
+    provided = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not expected or not secrets.compare_digest(provided, expected):
+        raise HTTPException(401, "invalid demo reset token")
+
+    from ..demo import seed_demo
+
+    inserted = seed_demo(reset=True, schema=os.environ.get("FINTO_DEMO_SCHEMA"))
+    return {"ok": True, "transactions": inserted}
 
 
 def _bounded_transfer_rebuild(conn, month: str, start_day: int, end_day: int,
