@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const output = path.join(root, 'docs/design/sanity');
+const output = path.join(root, '.artifacts/design/sanity');
 const baseUrl = process.env.FINTO_CAPTURE_URL || 'http://127.0.0.1:4200';
 const username = process.env.FINTO_CAPTURE_USER || 'owner';
 const password = process.env.FINTO_CAPTURE_PASSWORD || 'local-dev';

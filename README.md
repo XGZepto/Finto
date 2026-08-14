@@ -22,7 +22,7 @@ No financial data or production credentials are stored in this repository.
 - Vercel deployment in the Tokyo region
 
 The Import page lists every active format directly from the parser and PDF
-template registries. See [`docs/STATEMENT_FORMATS.md`](docs/STATEMENT_FORMATS.md)
+template registries. See the wiki's [statement-format guide](https://github.com/XGZepto/Finto/wiki/Statement-Formats)
 to add or request a format.
 
 ## Architecture
@@ -133,12 +133,12 @@ python scripts/migrate_sqlite_to_postgres.py /path/to/legacy.sqlite --reset
 After a successful migration, use PostgreSQL only. Runtime code has no SQLite
 fallback.
 
-See [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for user administration,
-backups, maintenance, and deployment.
+See the wiki's [operations guide](https://github.com/XGZepto/Finto/wiki/Operations)
+for user administration, backups, maintenance, and deployment.
 
 The compact interaction and visual rules, QA matrix, and screenshot gallery are
-in [`docs/design/MOBILE_UX.md`](docs/design/MOBILE_UX.md). With the populated
-local app running, refresh the gallery and run responsive checks with:
+in the wiki's [mobile experience guide](https://github.com/XGZepto/Finto/wiki/Mobile-Experience).
+With the populated local app running, generate local responsive evidence with:
 
 ```bash
 npm --prefix web run capture:mobile
@@ -244,4 +244,4 @@ vercel.json              production build and routing configuration
 ```
 
 Release history is in [`CHANGELOG.md`](CHANGELOG.md). HTTP authentication and
-maintenance endpoints are documented in [`docs/API.md`](docs/API.md).
+maintenance endpoints are documented in the wiki's [API guide](https://github.com/XGZepto/Finto/wiki/API).

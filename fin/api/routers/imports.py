@@ -90,7 +90,7 @@ def import_capabilities(conn=Depends(get_conn)) -> dict:
         "extensions": list(supported_extensions()),
         "formats": formats,
         "contribution": {
-            "guide": f"{repository}/blob/main/docs/STATEMENT_FORMATS.md",
+            "guide": f"{repository}/wiki/Statement-Formats",
             "request": f"{repository}/issues/new?labels=statement-format",
         },
     }

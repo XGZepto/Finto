@@ -12,7 +12,7 @@ Nothing here is real. Every merchant, amount and cardholder is invented.
     export DATABASE_URL='postgresql://127.0.0.1:55432/postgres'
     .venv/bin/python scripts/seed_demo.py
 
-See docs/design/HANDOFF.md for the rest of the local setup.
+See https://github.com/XGZepto/Finto/wiki/Mobile-Experience for the visual QA setup.
 """
 from __future__ import annotations
 
