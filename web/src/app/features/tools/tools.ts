@@ -62,7 +62,7 @@ import { NavIcon } from '../../shared/nav-icon';
       .tool-group { margin: 0 0 var(--s5); }
       .tool-group h2 { margin: 0 0 var(--s2); color: var(--fg-4); font-size: var(--t-label); }
       .tool-grid { display: block; border: 1px solid var(--line); background: var(--panel); }
-      .tool { min-height: 68px; padding: var(--s3); border: 0; border-bottom: 1px solid var(--line); background: transparent; }
+      .tool { min-height: 60px; padding: var(--s3); border: 0; border-bottom: 1px solid var(--line); background: transparent; }
       .tool:last-child { border-bottom: 0; }
       .tool-note { font-size: var(--t-meta); }
     }

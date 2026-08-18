@@ -105,13 +105,13 @@ let instances = 0;
         -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
         box-shadow: var(--shadow-sheet); animation: sheet-up var(--motion) var(--ease-out) both;
       }
-      .sheet-head { position: sticky; z-index: 2; top: 0; display: flex; justify-content: space-between; align-items: center; min-height: 68px; margin: 0 -14px; padding: 10px 14px 8px; border-bottom: 1px solid var(--line); background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
+      .sheet-head { position: sticky; z-index: 2; top: 0; display: flex; justify-content: space-between; align-items: center; min-height: 56px; margin: 0 -14px; padding: 8px 14px 6px; border-bottom: 1px solid var(--line); background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
       .sheet-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 32px; height: 3px; border-radius: 3px; background: var(--fg-4); transform: translateX(-50%); opacity: .6; }
       .sheet-head strong { font: 600 var(--t-data)/1 var(--sans); }
       .sheet-head button { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--fg-3); font-size: 24px; }
-      .select-search { position: sticky; z-index: 1; top: 68px; margin: 10px 0 6px; background: var(--panel-2); }
+      .select-search { position: sticky; z-index: 1; top: 56px; margin: 8px 0 6px; background: var(--panel-2); }
       .select-search input { min-height: 44px; }
-      .select-option { min-height: 56px; padding-inline: 4px; border-bottom: 1px solid var(--line); }
+      .select-option { min-height: 48px; padding-inline: 4px; border-bottom: 1px solid var(--line); }
       .select-option:last-child { border-bottom: 0; }
       @keyframes sheet-up { from { transform: translateY(100%); } }
       @keyframes sheet-fade { from { opacity: 0; } }

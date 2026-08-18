@@ -65,7 +65,7 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
       .date-trigger { min-height: 44px; }
       .date-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--modal-scrim); -webkit-backdrop-filter: var(--modal-scrim-filter); backdrop-filter: var(--modal-scrim-filter); animation: date-fade var(--motion-fast) var(--ease-out) both; }
       .calendar { position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; width: auto; padding: 0 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--line-2); background: var(--glass-surface); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); box-shadow: var(--shadow-sheet); animation: date-up var(--motion) var(--ease-out) both; }
-      .sheet-head { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: 54px; margin: 0 -12px 4px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+      .sheet-head { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: 48px; margin: 0 -12px 4px; padding: 0 12px; border-bottom: 1px solid var(--line); }
       .sheet-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 32px; height: 3px; border-radius: 3px; background: var(--fg-4); transform: translateX(-50%); opacity: .6; }
       .sheet-head strong { font: 550 var(--t-data)/1 var(--sans); }
       .sheet-head button { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--fg-3); font-size: 24px; }

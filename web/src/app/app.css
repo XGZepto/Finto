@@ -125,8 +125,8 @@
     flex: none;
     z-index: var(--z-nav);
     grid-template-columns: repeat(5, 1fr);
-    min-height: calc(64px + env(safe-area-inset-bottom));
-    padding: 6px 6px env(safe-area-inset-bottom);
+    min-height: calc(56px + env(safe-area-inset-bottom));
+    padding: 4px 6px env(safe-area-inset-bottom);
     border-top: 1px solid var(--line-2);
     background: var(--panel);
     contain: layout paint;
@@ -138,10 +138,10 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 3px;
+    gap: 2px;
     min-width: 0;
-    min-height: 48px;
-    padding: 3px;
+    min-height: 44px;
+    padding: 2px;
     border: 0;
     background: transparent;
     color: var(--fg-3);
@@ -155,15 +155,15 @@
   }
   .mobile-nav a.active, .mobile-nav button.active { color: var(--fg); }
   .mobile-nav a.active::after, .mobile-nav button.active::after {
-    content: ''; position: absolute; top: -7px; width: 28px; height: 2px; background: var(--fg);
+    content: ''; position: absolute; top: -5px; width: 28px; height: 2px; background: var(--fg);
   }
   .mobile-icon {
     display: grid;
     place-items: center;
     position: relative;
-    width: 32px;
-    height: 28px;
-    padding: 5px 6px;
+    width: 28px;
+    height: 24px;
+    padding: 4px 5px;
     font-size: var(--t-lede);
     line-height: 1;
   }

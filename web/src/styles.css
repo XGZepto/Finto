@@ -543,10 +543,10 @@ th.num, td.num {
     animation: options-sheet-in var(--motion) var(--ease-out) both;
   }
   .amount-options:has(finto-select.sheet-open) { transform: none; }
-  .amount-options header { display: flex; align-items: center; justify-content: space-between; min-height: 64px; border-bottom: 1px solid var(--line); }
+  .amount-options header { display: flex; align-items: center; justify-content: space-between; min-height: 56px; border-bottom: 1px solid var(--line); }
   .amount-options header h2 { margin: 0; font-size: var(--t-lede); }
   .amount-options header button { min-width: 44px; min-height: 44px; padding: 0; font-size: var(--t-figure); }
-  .amount-option-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: var(--s3); min-height: 68px; border-bottom: 1px solid var(--line); }
+  .amount-option-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: var(--s3); min-height: 60px; border-bottom: 1px solid var(--line); }
   .amount-option-row:last-child { border-bottom: 0; }
   .amount-option-row label { margin: 0; color: var(--fg-3); }
   .amount-option-row .seg { display: flex; }
