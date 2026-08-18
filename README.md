@@ -214,6 +214,7 @@ Deployments can use `FINTO_LLM_ENABLED`, `FINTO_LLM_MODEL`, and
 
 ```bash
 .venv/bin/pytest -q
+npm --prefix web test
 npm --prefix web run build
 ```
 

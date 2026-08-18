@@ -2,7 +2,7 @@ import {
   ApplicationConfig, provideBrowserGlobalErrorListeners, provideZoneChangeDetection,
 } from '@angular/core';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
-import { PreloadAllModules, provideRouter, withComponentInputBinding, withInMemoryScrolling, withPreloading } from '@angular/router';
+import { PreloadAllModules, provideRouter, withComponentInputBinding, withInMemoryScrolling, withPreloading, withRouterConfig } from '@angular/router';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth-interceptor';
@@ -12,7 +12,8 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes, withComponentInputBinding(), withPreloading(PreloadAllModules),
-      withInMemoryScrolling({ scrollPositionRestoration: 'disabled', anchorScrolling: 'enabled' })),
+      withInMemoryScrolling({ scrollPositionRestoration: 'disabled', anchorScrolling: 'enabled' }),
+      withRouterConfig({ onSameUrlNavigation: 'reload' })),
     provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
   ],
 };

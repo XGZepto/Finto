@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -10,8 +11,14 @@ const baseUrl = process.env.FINTO_CAPTURE_URL || 'http://127.0.0.1:4200';
 const username = process.env.FINTO_CAPTURE_USER || 'owner';
 const password = process.env.FINTO_CAPTURE_PASSWORD || 'local-dev';
 const checkOnly = process.argv.includes('--check-only');
-const executablePath = process.env.CHROME_PATH ||
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const executablePath = process.env.CHROME_PATH || [
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/chromium',
+].find((candidate) => existsSync(candidate));
+if (!executablePath) throw new Error('Set CHROME_PATH to a Chrome or Chromium binary');
 
 await fs.mkdir(output, { recursive: true });
 const browser = await puppeteer.launch({ executablePath, headless: true });
@@ -70,10 +77,26 @@ async function assertMobileBasics(route) {
       .map((node) => ({ label: node.getAttribute('aria-label') || node.textContent?.trim().slice(0, 32) || node.tagName,
         height: Math.round(node.getBoundingClientRect().height) }))
       .filter((item) => item.height < 44);
-    return { overflow: doc.scrollWidth - doc.clientWidth, shortTargets };
+    const overflow = doc.scrollWidth - doc.clientWidth;
+    const content = document.querySelector('.content');
+    const page = document.querySelector('router-outlet + *');
+    const nav = document.querySelector('.mobile-nav');
+    const navBox = nav?.getBoundingClientRect();
+    return {
+      overflow,
+      shortTargets,
+      contentHeight: Math.round(content?.clientHeight ?? 0),
+      hasPage: !!page && page.getBoundingClientRect().height > 0,
+      navVisible: !!navBox && navBox.height > 0 && getComputedStyle(nav).display !== 'none',
+    };
   });
   if (audit.overflow > 1) throw new Error(`${route}: horizontal overflow of ${audit.overflow}px`);
   if (audit.shortTargets.length) throw new Error(`${route}: touch targets below 44px: ${JSON.stringify(audit.shortTargets)}`);
+  if (!audit.navVisible || !audit.hasPage || audit.contentHeight < 32) {
+    throw new Error(`${route}: shell painted without a page: ${JSON.stringify({
+      contentHeight: audit.contentHeight, hasPage: audit.hasPage, navVisible: audit.navVisible,
+    })}`);
+  }
 }
 
 try {
@@ -86,6 +109,22 @@ try {
   }
 
   await visit('/summary', '.hero-figure');
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await settle('.hero-figure');
+  const afterResume = await page.evaluate(() => ({
+    hero: !!document.querySelector('.hero-figure'),
+    contentHeight: Math.round(document.querySelector('.content')?.clientHeight ?? 0),
+  }));
+  if (!afterResume.hero || afterResume.contentHeight < 32) {
+    throw new Error(`Summary went blank after a PWA resume: ${JSON.stringify(afterResume)}`);
+  }
   const shellTransition = await page.evaluate(() => ({
     root: getComputedStyle(document.documentElement).viewTransitionName,
     page: getComputedStyle(document.querySelector('router-outlet + *')).viewTransitionName,

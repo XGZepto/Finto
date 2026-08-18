@@ -28,4 +28,10 @@ export class Refresh {
     await new Promise((resolve) => setTimeout(resolve, 450));
     this.running.set(false);
   }
+
+  /** Re-issue reads after a PWA freeze without flashing the pull indicator. */
+  recover(): void {
+    this.api.invalidateReads();
+    this.token.update((n) => n + 1);
+  }
 }

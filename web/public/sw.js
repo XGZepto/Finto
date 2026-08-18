@@ -1,4 +1,4 @@
-const CACHE = 'finto-shell-v3';
+const CACHE = 'finto-shell-v4';
 const LOGOS = 'finto-logos-v1';
 const LOGO_HOSTS = ['www.google.com'];
 const SHELL = ['/index.html', '/manifest.webmanifest', '/favicon.svg?v=3', '/icon-192.png', '/icon-512.png'];
@@ -56,11 +56,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (['script', 'style', 'font'].includes(request.destination)) {
+  /* WebKit often leaves destination empty on dynamic import(), so match by
+     path as well. Cache-first with a network fallback: an installed PWA can
+     paint the shell before the radio is up, and without a cached lazy chunk
+     the outlet stays blank. Keep the matcher in step with isHashedAssetRequest. */
+  const hashedAsset = ['script', 'style', 'font'].includes(request.destination)
+    || /\.(?:js|css|woff2?)$/.test(url.pathname);
+  if (hashedAsset) {
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-        if (response.ok) caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
-        return response;
+      caches.open(CACHE).then((cache) => cache.match(request).then((cached) => {
+        const network = fetch(request).then((response) => {
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        }).catch(() => cached);
+        return cached || network;
       })),
     );
   }

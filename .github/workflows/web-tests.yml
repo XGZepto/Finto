@@ -1,0 +1,33 @@
+name: Web tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit tests and production build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install web dependencies
+        run: npm --prefix web ci
+
+      - name: Run PWA unit tests
+        run: npm --prefix web test
+
+      - name: Production build
+        run: npm --prefix web run build

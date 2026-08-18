@@ -1,12 +1,13 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { EMPTY, Observable, catchError, concat, shareReplay, take, tap } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 import {
   Account, Card, CategorySuggestion, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
   ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentDetail, InvestmentHistory, InvestmentSnapshot, Job,
   LedgerFilter, Money, Page, Position, QueryResult, StagePreview, StatementFreshness, SummaryRow,
   TotalRow, Txn,
 } from './models';
+import { ReadCache } from './read-cache';
 
 /** Serialise a LedgerFilter into query params, omitting anything unset. */
 export function filterToParams(f: LedgerFilter): HttpParams {
@@ -45,7 +46,7 @@ export function filterToParams(f: LedgerFilter): HttpParams {
 export class Api {
   private http = inject(HttpClient);
   private base = '/api';
-  private reads = new Map<string, { at: number; value: Observable<unknown> }>();
+  private reads = new ReadCache();
   private cacheVersion = Number(localStorage.getItem('finto.cacheVersion') || 0);
 
   private readonly activityTtl = 5 * 60_000;
@@ -56,21 +57,9 @@ export class Api {
    * emitted once while a fresh request runs, preventing route revisits from
    * collapsing into a loading state. Mutations and user changes clear the map. */
   private cached<T>(url: string, ttlMs = 30_000): Observable<T> {
-    const hit = this.reads.get(url);
-    if (hit && Date.now() - hit.at < ttlMs) return hit.value as Observable<T>;
     const separator = url.includes('?') ? '&' : '?';
-    const request = this.http.get<T>(`${url}${separator}_cv=${this.cacheVersion}`).pipe(
-      shareReplay({ bufferSize: 1, refCount: false }),
-    );
-    const value = hit
-      ? concat(
-          (hit.value as Observable<T>).pipe(take(1)),
-          request.pipe(catchError(() => EMPTY)),
-        ).pipe(shareReplay({ bufferSize: 1, refCount: false }))
-      : request;
-    this.reads.set(url, { at: Date.now(), value });
-    if (this.reads.size > 200) this.reads.delete(this.reads.keys().next().value!);
-    return value;
+    return this.reads.get(url, ttlMs, () =>
+      this.http.get<T>(`${url}${separator}_cv=${this.cacheVersion}`));
   }
 
   /** Drop every cached read. Mutations call this; so does a manual refresh. */

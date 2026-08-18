@@ -224,7 +224,8 @@
 
 * { box-sizing: border-box; }
 
-html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
+html, body, app-root { margin: 0; padding: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
+app-root { display: block; }
 
 body {
   background: var(--bg);
