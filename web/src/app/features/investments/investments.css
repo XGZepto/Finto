@@ -20,7 +20,7 @@
 
 .account-list, .holding-list { border-top: 1px solid var(--line); }
 .account-row {
-  width: 100%; min-height: 64px; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%; min-height: 56px; display: grid; grid-template-columns: minmax(0, 1fr) auto;
   align-items: center; gap: var(--s3); padding: var(--s3) 0; border: 0;
   border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left;
 }

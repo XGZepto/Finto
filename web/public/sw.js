@@ -1,4 +1,4 @@
-const CACHE = 'finto-shell-v3';
+const CACHE = 'finto-shell-v4';
 const LOGOS = 'finto-logos-v1';
 const LOGO_HOSTS = ['www.google.com'];
 const SHELL = ['/index.html', '/manifest.webmanifest', '/favicon.svg?v=3', '/icon-192.png', '/icon-512.png'];
@@ -56,11 +56,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (['script', 'style', 'font'].includes(request.destination)) {
+  /* Hashed JS/CSS/fonts, including module requests with an empty destination.
+     Serve cache, then network; network miss falls back to cache. */
+  const hashedAsset = ['script', 'style', 'font'].includes(request.destination)
+    || /\.(?:js|css|woff2?)$/.test(url.pathname);
+  if (hashedAsset) {
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-        if (response.ok) caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
-        return response;
+      caches.open(CACHE).then((cache) => cache.match(request).then((cached) => {
+        const network = fetch(request).then((response) => {
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        }).catch(() => cached);
+        return cached || network;
       })),
     );
   }

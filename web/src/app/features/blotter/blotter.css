@@ -259,7 +259,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   .bar-title { display: none; }
   .transaction-hero { padding-top: 14px; }
   .drawer-overview > div { padding-block: 14px; }
-  .data-disclosure > summary { min-height: 64px; }
+  .data-disclosure > summary { min-height: 56px; }
   .drawer button, .drawer input, .drawer textarea { touch-action: manipulation; }
 }
 
@@ -462,7 +462,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   align-items: center;
   gap: var(--s3);
   width: 100%;
-  min-height: 66px;
+  min-height: 58px;
   margin-bottom: var(--s3);
   padding: var(--s2) var(--s3);
   border: 0;
@@ -481,7 +481,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 .picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
 .picker-grid button {
   justify-content: flex-start;
-  min-height: 48px;
+  min-height: 44px;
   padding-inline: var(--s3);
   font-family: var(--sans);
   font-size: var(--t-meta);

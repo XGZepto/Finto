@@ -1,6 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, inject, signal, viewChild } from '@angular/core';
+import { NavigationEnd, NavigationError, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Preferences } from './core/preferences.service';
+import { isCollapsedContentPane, isDeadChunkError, recoverAction } from './core/pwa-lifecycle';
+import { Refresh } from './core/refresh.service';
 import { scrollPane } from './core/scroll';
 import { NavIcon } from './shared/nav-icon';
 import { PullToRefresh } from './shared/pull-to-refresh';
@@ -70,6 +72,8 @@ import { PullToRefresh } from './shared/pull-to-refresh';
 })
 export class App {
   private router = inject(Router);
+  private refreshes = inject(Refresh);
+  private outlet = viewChild(RouterOutlet);
   preferences = inject(Preferences);
 
   readonly nav = [
@@ -92,15 +96,68 @@ export class App {
   /** Live, not a boot-time probe: connectivity is only worth showing while it changes. */
   offline = signal(!navigator.onLine);
   private lastPath = '';
+  private hiddenAt = Date.now();
 
   constructor() {
     this.preferences.loadUser();
+    this.syncViewport();
     for (const event of ['online', 'offline']) {
       window.addEventListener(event, () => this.offline.set(!navigator.onLine));
     }
+    window.addEventListener('resize', this.syncViewport);
+    window.addEventListener('orientationchange', this.syncViewport);
+    document.addEventListener('visibilitychange', this.onVisibility);
     this.router.events.subscribe((event) => {
-      if (event instanceof NavigationEnd) this.scrollOnPathChange(event.urlAfterRedirects);
+      if (event instanceof NavigationEnd) {
+        sessionStorage.removeItem('finto.chunkReload');
+        this.scrollOnPathChange(event.urlAfterRedirects);
+      }
+      if (event instanceof NavigationError) this.reloadOnDeadChunk(event);
     });
+  }
+
+  /**
+   * Resume after the document was hidden.
+   */
+  private onVisibility = (): void => {
+    if (document.visibilityState === 'hidden') {
+      this.hiddenAt = Date.now();
+      return;
+    }
+    this.recoverForeground();
+  };
+
+  private recoverForeground(): void {
+    this.syncViewport();
+    const pane = document.querySelector<HTMLElement>('.content');
+    const outlet = this.outlet();
+    const action = recoverAction({
+      contentHeight: pane?.clientHeight ?? 0,
+      outletActivated: outlet ? outlet.isActivated : null,
+      hiddenMs: Date.now() - this.hiddenAt,
+    });
+    if (action === 'reload') {
+      requestAnimationFrame(() => {
+        this.syncViewport();
+        const height = document.querySelector<HTMLElement>('.content')?.clientHeight ?? 0;
+        if (isCollapsedContentPane(height)) location.reload();
+      });
+      return;
+    }
+    this.refreshes.recover();
+    if (action === 'remount') void this.router.navigateByUrl(this.router.url);
+  }
+
+  private syncViewport = (): void => {
+    document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+  };
+
+  /** Reload once on a failed lazy-chunk navigation. */
+  private reloadOnDeadChunk(event: NavigationError): void {
+    if (!isDeadChunkError(event.error)) return;
+    if (sessionStorage.getItem('finto.chunkReload')) return;
+    sessionStorage.setItem('finto.chunkReload', '1');
+    location.reload();
   }
 
   /**
