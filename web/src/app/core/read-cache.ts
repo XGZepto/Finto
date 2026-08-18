@@ -3,9 +3,9 @@ import { Observable, concat, shareReplay, tap } from 'rxjs';
 /**
  * In-session GET cache.
  *
- * Only a request that has already produced a value is reused. An in-flight or
- * failed observable is not — iOS freezes installed PWAs and aborts `fetch`,
- * and concatenating that hung stream made every later visit wait on it.
+ * Reuses a value that has already arrived and is still inside its TTL.
+ * In-flight and failed requests start a new factory call.
+ * After TTL, emits the previous value then the new request.
  */
 export class ReadCache {
   private reads = new Map<string, { at: number; value: Observable<unknown>; settled: boolean }>();

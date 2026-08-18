@@ -123,7 +123,7 @@ try {
     contentHeight: Math.round(document.querySelector('.content')?.clientHeight ?? 0),
   }));
   if (!afterResume.hero || afterResume.contentHeight < 32) {
-    throw new Error(`Summary went blank after a PWA resume: ${JSON.stringify(afterResume)}`);
+    throw new Error(`Summary missing .hero-figure after visibility change: ${JSON.stringify(afterResume)}`);
   }
   const shellTransition = await page.evaluate(() => ({
     root: getComputedStyle(document.documentElement).viewTransitionName,

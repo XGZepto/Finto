@@ -1,17 +1,16 @@
-/** Below this, the tab bar still paints but the pane has collapsed. */
+/** Content pane shorter than this is treated as collapsed. */
 export const COLLAPSED_PANE_PX = 32;
-/** Long enough to be an app switch, short enough to recover before the user stares. */
+/** Hidden duration that remounts the current route on return. */
 export const REMOUNT_AFTER_MS = 8_000;
 
 export type RecoverAction = 'reload' | 'remount' | 'refresh';
 
 /**
- * What to do when an installed PWA returns to the foreground.
+ * Foreground resume policy.
  *
- * The shell lives in the main bundle, so a dead lazy route or a zero-height
- * pane still shows the nav. Reload only when the layout itself is gone;
- * remount when the outlet never attached or the freeze was long; otherwise
- * just drop hung reads and ask the current page to fetch again.
+ * `reload` when the content pane has no height.
+ * `remount` when the outlet is inactive or the hide exceeded REMOUNT_AFTER_MS.
+ * `refresh` otherwise.
  */
 export function recoverAction(opts: {
   contentHeight: number;
@@ -33,7 +32,7 @@ export function isDeadChunkError(error: unknown): boolean {
   return /chunk|dynamically imported|Loading module|Failed to fetch/i.test(message);
 }
 
-/** Keep in step with public/sw.js — WebKit often leaves destination empty. */
+/** Scripts, styles, fonts, and same-origin .js/.css/.woff2 paths. Matches public/sw.js. */
 export function isHashedAssetRequest(destination: string, pathname: string): boolean {
   return ['script', 'style', 'font'].includes(destination)
     || /\.(?:js|css|woff2?)$/.test(pathname);

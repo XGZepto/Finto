@@ -4,7 +4,7 @@ import { Subject, of, throwError } from 'rxjs';
 import { ReadCache } from './read-cache.ts';
 
 describe('ReadCache', () => {
-  it('reuses a settled value inside the TTL without calling the factory again', () => {
+  it('reuses a settled value inside the TTL', () => {
     const cache = new ReadCache();
     let calls = 0;
     const factory = () => {
@@ -20,25 +20,25 @@ describe('ReadCache', () => {
     assert.deepEqual(second, [{ n: 1 }]);
   });
 
-  it('does not wait on an in-flight request that never settled', () => {
+  it('starts a new factory while an earlier request is still open', () => {
     const cache = new ReadCache();
-    const hung = new Subject<unknown>();
+    const pending = new Subject<unknown>();
     let calls = 0;
     const seen: unknown[] = [];
     cache.get('stats', 60_000, () => {
       calls += 1;
-      return calls === 1 ? hung : of({ recovered: true });
+      return calls === 1 ? pending : of({ n: 2 });
     }).subscribe();
     cache.get('stats', 60_000, () => {
       calls += 1;
-      return calls === 1 ? hung : of({ recovered: true });
+      return calls === 1 ? pending : of({ n: 2 });
     }).subscribe((value) => seen.push(value));
     assert.equal(calls, 2);
-    assert.deepEqual(seen, [{ recovered: true }]);
-    assert.equal(hung.observed, true);
+    assert.deepEqual(seen, [{ n: 2 }]);
+    assert.equal(pending.observed, true);
   });
 
-  it('retries after an aborted or failed read instead of replaying the error', () => {
+  it('starts a new factory after a failed read', () => {
     const cache = new ReadCache();
     let calls = 0;
     const errors: unknown[] = [];

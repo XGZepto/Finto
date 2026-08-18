@@ -5,7 +5,7 @@ import {
 } from './pwa-lifecycle.ts';
 
 describe('recoverAction', () => {
-  it('reloads when the content pane has collapsed under the tab bar', () => {
+  it('reloads when contentHeight is below COLLAPSED_PANE_PX', () => {
     assert.equal(recoverAction({
       contentHeight: COLLAPSED_PANE_PX - 1,
       outletActivated: true,
@@ -13,7 +13,7 @@ describe('recoverAction', () => {
     }), 'reload');
   });
 
-  it('remounts when the shell is up but the lazy route never attached', () => {
+  it('remounts when the outlet is inactive', () => {
     assert.equal(recoverAction({
       contentHeight: 600,
       outletActivated: false,
@@ -21,7 +21,7 @@ describe('recoverAction', () => {
     }), 'remount');
   });
 
-  it('remounts after a long freeze so hung subscriptions are discarded', () => {
+  it('remounts when hiddenMs exceeds REMOUNT_AFTER_MS', () => {
     assert.equal(recoverAction({
       contentHeight: 600,
       outletActivated: true,
@@ -29,7 +29,7 @@ describe('recoverAction', () => {
     }), 'remount');
   });
 
-  it('refreshes in place after a short backgrounding of a healthy page', () => {
+  it('refreshes when the outlet is active and hiddenMs is short', () => {
     assert.equal(recoverAction({
       contentHeight: 600,
       outletActivated: true,
@@ -44,7 +44,7 @@ describe('recoverAction', () => {
 });
 
 describe('isDeadChunkError', () => {
-  it('matches failed lazy imports and ignores unrelated navigation errors', () => {
+  it('matches lazy-import failures', () => {
     assert.equal(isDeadChunkError(new Error('Failed to fetch dynamically imported module')), true);
     assert.equal(isDeadChunkError(new Error('Loading chunk 17 failed')), true);
     assert.equal(isDeadChunkError(new Error('Loading module /chunk.js failed')), true);
@@ -54,7 +54,7 @@ describe('isDeadChunkError', () => {
 });
 
 describe('isHashedAssetRequest', () => {
-  it('treats WebKit dynamic imports with an empty destination as scripts', () => {
+  it('matches .js/.css/.woff2 paths with an empty destination', () => {
     assert.equal(isHashedAssetRequest('', '/chunk-OMJ4Q2G2.js'), true);
     assert.equal(isHashedAssetRequest('script', '/main-HIU3YEL5.js'), true);
     assert.equal(isHashedAssetRequest('style', '/styles-BYDBHGVK.css'), true);

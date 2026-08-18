@@ -117,9 +117,7 @@ export class App {
   }
 
   /**
-   * Installed PWAs keep this process around when you leave. WebKit aborts
-   * in-flight lazy imports and fetch() calls, and on some resumes `100dvh`
-   * collapses the content pane to zero while the tab bar still paints.
+   * Resume after the document was hidden.
    */
   private onVisibility = (): void => {
     if (document.visibilityState === 'hidden') {
@@ -154,9 +152,7 @@ export class App {
     document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
   };
 
-  /** A deploy (or a freeze mid-import) leaves the shell in the DOM and nothing
-   * in the outlet. One reload is enough to pick up the hashed files the HTML
-   * actually names; a loop would mean we are offline, so stop. */
+  /** Reload once on a failed lazy-chunk navigation. */
   private reloadOnDeadChunk(event: NavigationError): void {
     if (!isDeadChunkError(event.error)) return;
     if (sessionStorage.getItem('finto.chunkReload')) return;

@@ -26,7 +26,7 @@ jobs:
       - name: Install web dependencies
         run: npm --prefix web ci
 
-      - name: Run PWA unit tests
+      - name: Run unit tests
         run: npm --prefix web test
 
       - name: Production build

@@ -83,7 +83,7 @@ async function dispatchFetch(worker, request) {
 }
 
 describe('service worker', () => {
-  it('serves a cached lazy chunk when dynamic import has no destination and the network is down', async () => {
+  it('serves a cached .js file with an empty destination', async () => {
     const chunk = 'https://finto.app/chunk-OMJ4Q2G2.js';
     const worker = loadWorker({
       cacheSeed: new Map([[chunk, new FakeResponse('lazy-summary')]]),
@@ -99,7 +99,7 @@ describe('service worker', () => {
     assert.equal(worker.fetches.length, 1);
   });
 
-  it('does not intercept API reads so the app can recover them itself', async () => {
+  it('leaves /api/ requests unhandled', async () => {
     const worker = loadWorker();
     const response = await dispatchFetch(worker, {
       method: 'GET',

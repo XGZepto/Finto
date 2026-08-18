@@ -56,10 +56,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  /* WebKit often leaves destination empty on dynamic import(), so match by
-     path as well. Cache-first with a network fallback: an installed PWA can
-     paint the shell before the radio is up, and without a cached lazy chunk
-     the outlet stays blank. Keep the matcher in step with isHashedAssetRequest. */
+  /* Hashed JS/CSS/fonts, including module requests with an empty destination.
+     Serve cache, then network; network miss falls back to cache. */
   const hashedAsset = ['script', 'style', 'font'].includes(request.destination)
     || /\.(?:js|css|woff2?)$/.test(url.pathname);
   if (hashedAsset) {

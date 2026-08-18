@@ -50,7 +50,7 @@ try {
 
   const loaded = await auditShell();
   if (!loaded.navVisible || !loaded.hasPage || !loaded.hero || loaded.contentHeight < 32) {
-    throw new Error(`Summary loaded as a blank shell: ${JSON.stringify(loaded)}`);
+    throw new Error(`Summary missing page content: ${JSON.stringify(loaded)}`);
   }
 
   await page.evaluate(() => {
@@ -64,7 +64,7 @@ try {
   await settle('.hero-figure');
   const resumed = await auditShell();
   if (!resumed.navVisible || !resumed.hasPage || !resumed.hero || resumed.contentHeight < 32) {
-    throw new Error(`Summary went blank after resume: ${JSON.stringify(resumed)}`);
+    throw new Error(`Summary missing page content after visibility change: ${JSON.stringify(resumed)}`);
   }
 
   console.log('PWA shell checks passed.');

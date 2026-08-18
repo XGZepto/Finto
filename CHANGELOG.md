@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Recover installed PWA sessions that resumed with a live tab bar and an empty
-  content pane after WebKit froze lazy routes and in-flight reads.
+- Reload, remount, or refetch the current route when an installed PWA returns
+  to the foreground.
 
 ## 0.3.0 — 2026-08-14
 

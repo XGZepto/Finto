@@ -29,7 +29,7 @@ export class Refresh {
     this.running.set(false);
   }
 
-  /** Re-issue reads after a PWA freeze without flashing the pull indicator. */
+  /** Invalidate cached reads and bump `token` without the pull indicator. */
   recover(): void {
     this.api.invalidateReads();
     this.token.update((n) => n + 1);
