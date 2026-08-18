@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.1 — 2026-08-19
+
 - Reload, remount, or refetch the current route when an installed PWA returns
   to the foreground.
 - Tighten compact sheet headers, option rows, and the tab bar.
