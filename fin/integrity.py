@@ -22,7 +22,7 @@ def record_balance(conn, *, account_id: str, as_of, balance: Money,
     conn.execute(
         "INSERT INTO balance_assertion (id, account_id, as_of_date, "
         "balance, currency, kind, statement_file_id) VALUES (%s,%s,%s,%s,%s,%s,%s) "
-        "ON CONFLICT (id) DO NOTHING",
+        "ON CONFLICT (account_id,as_of_date,kind,currency) DO NOTHING",
         (str(uuid.uuid4()), account_id,
          as_of.isoformat() if hasattr(as_of, "isoformat") else str(as_of),
          balance.amount, balance.currency, kind, statement_file_id),

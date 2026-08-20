@@ -312,6 +312,24 @@ def test_taxonomy_is_closed_and_consistent():
 # Integrity
 # ---------------------------------------------------------------------------
 
+def test_duplicate_statement_balance_keeps_first_assertion(conn):
+    record_balance(
+        conn, account_id="acct1", as_of=date(2025, 3, 31),
+        balance=Money(amount=80000, currency="HKD"), kind="closing",
+    )
+    record_balance(
+        conn, account_id="acct1", as_of=date(2025, 3, 31),
+        balance=Money(amount=80000, currency="HKD"), kind="closing",
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT COUNT(*) AS count FROM balance_assertion "
+        "WHERE account_id='acct1' AND as_of_date='2025-03-31' "
+        "AND kind='closing' AND currency='HKD'"
+    ).fetchone()
+    assert row["count"] == 1
+
+
 def test_balance_check_passes_when_transactions_reconcile(conn):
     _seed_file(conn)
     record_balance(conn, account_id="acct1", as_of=date(2025, 3, 1),
