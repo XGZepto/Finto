@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.4.0 — 2026-08-20
+
+- Add validated LLM fallback and force modes for changing HSBC MPF/eMPF PDF
+  layouts while retaining exact balance and holding reconciliation.
+- Expose bearer-key import history, investment snapshot/activity reads, and
+  integrity verification for end-to-end agent ledger maintenance.
+- Accelerate transaction search with PostgreSQL trigram indexes, exclude noisy
+  raw PDF lines from user search, and reduce transaction/facet query round trips.
+- Reuse currency rates across position conversion and avoid repeated net-worth
+  conversion queries during account-page loading.
+
 ## 0.3.5 — 2026-08-20
 
 - Bound existing-statement reprocessing to its transaction period so production

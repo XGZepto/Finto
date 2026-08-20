@@ -199,7 +199,8 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
             "(t.description_raw ILIKE %s OR t.description_norm ILIKE %s "
             " OR COALESCE(t.merchant,'') ILIKE %s OR COALESCE(t.counterparty,'') ILIKE %s "
             " OR EXISTS (SELECT 1 FROM txn_detail d "
-            "            WHERE d.txn_id = t.id AND d.value ILIKE %s))")
+            "            WHERE d.txn_id = t.id AND d.key NOT LIKE 'raw.%%' "
+            "              AND d.value ILIKE %s))")
         params.extend([f"%{term}%"] * 5)
 
     return " AND ".join(clauses), params
@@ -766,45 +767,45 @@ def transactions(conn, *, filters: dict | None = None, limit: int = 100,
     order = _SORTABLE.get(sort, _SORTABLE["date"])
     dirn = "ASC" if str(direction).lower() == "asc" else "DESC"
 
-    total = conn.execute(
-        f"SELECT COUNT(*) n FROM txn t JOIN account a ON a.id=t.account_id "
-        f"WHERE {where}", params).fetchone()["n"]
+    review = review_totals(conn, filters=filters)
+    total = review["total"]
 
     sql = f"""
         SELECT t.*, a.display_name AS account_name, a.institution_id,
                a.primary_currency AS account_currency,
-               c.cardholder_name, c.last4
+               c.cardholder_name, c.last4,
+               COALESCE(detail_rows.details, '{{}}'::jsonb) AS page_details,
+               COALESCE(tag_rows.tags, '[]'::jsonb) AS page_tags
         FROM txn t
         JOIN account a ON a.id = t.account_id
         LEFT JOIN card c ON c.id = t.card_id
+        LEFT JOIN LATERAL (
+          SELECT jsonb_object_agg(d.key, d.value) AS details
+          FROM txn_detail d
+          WHERE d.txn_id=t.id AND d.key NOT LIKE 'raw.%'
+        ) detail_rows ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT jsonb_agg(tg.tag ORDER BY tg.tag) AS tags
+          FROM txn_tag tg WHERE tg.txn_id=t.id
+        ) tag_rows ON TRUE
         WHERE {where}
         ORDER BY {order} {dirn}, t.id
         LIMIT %s OFFSET %s
     """
     rows = list(conn.execute(sql, [*params, int(limit), int(offset)]))
-    ids = [r["id"] for r in rows]
-
-    details: dict[str, dict[str, str]] = {}
-    if ids:
-        q = ",".join(["%s"] * len(ids))
-        for d in conn.execute(
-                f"SELECT txn_id, key, value FROM txn_detail WHERE txn_id IN ({q})",
-                ids):
-            details.setdefault(d["txn_id"], {})[d["key"]] = d["value"]
-
-    from . import db as _dbm
-    tags = _dbm.load_tags(conn, ids)
 
     return {
         "total": total,
         "limit": limit,
         "offset": offset,
-        "items": [_txn_dict(r, details.get(r["id"], {}), tags.get(r["id"], []))
-                  for r in rows],
+        "items": [
+            _txn_dict(r, r["page_details"], r["page_tags"])
+            for r in rows
+        ],
         # The filtered set, not the page: the question a filter asks is what
         # the matching rows come to.
         "totals": totals(conn, filters=filters),
-        "review": review_totals(conn, filters=filters),
+        "review": review,
     }
 
 
@@ -936,27 +937,55 @@ def transaction_detail(conn, txn_id: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def facets(conn) -> dict:
-    def col(sql: str) -> list:
-        return [r["item_value"] for r in conn.execute(sql) if r["item_value"] is not None]
-
+    row = conn.execute("""
+        SELECT
+          COALESCE((
+            SELECT jsonb_agg(to_jsonb(items) ORDER BY items.display_name)
+            FROM (
+              SELECT id,display_name,institution_id,account_type,primary_currency
+              FROM account
+            ) items
+          ), '[]'::jsonb) AS accounts,
+          COALESCE((
+            SELECT jsonb_agg(to_jsonb(items) ORDER BY items.cardholder_name)
+            FROM (
+              SELECT id,account_id,cardholder_name,last4,replaces_card_id
+              FROM card
+            ) items
+          ), '[]'::jsonb) AS cards,
+          COALESCE((
+            SELECT jsonb_agg(to_jsonb(items) ORDER BY items.display_name)
+            FROM (SELECT id,display_name,country FROM institution) items
+          ), '[]'::jsonb) AS institutions,
+          COALESCE((
+            SELECT jsonb_agg(item_value ORDER BY item_value)
+            FROM (SELECT DISTINCT category AS item_value FROM txn
+                  WHERE category IS NOT NULL) items
+          ), '[]'::jsonb) AS categories,
+          COALESCE((
+            SELECT jsonb_agg(item_value ORDER BY item_value)
+            FROM (SELECT DISTINCT kind AS item_value FROM txn) items
+          ), '[]'::jsonb) AS kinds,
+          COALESCE((
+            SELECT jsonb_agg(item_value ORDER BY item_value)
+            FROM (SELECT DISTINCT currency_booked AS item_value FROM txn) items
+          ), '[]'::jsonb) AS currencies,
+          COALESCE((
+            SELECT jsonb_agg(item_value ORDER BY item_value)
+            FROM (SELECT DISTINCT key AS item_value FROM txn_detail) items
+          ), '[]'::jsonb) AS detail_keys,
+          (SELECT MIN(txn_date) FROM txn) AS min_date,
+          (SELECT MAX(txn_date) FROM txn) AS max_date
+    """).fetchone()
     return {
-        "accounts": [dict(r) for r in conn.execute(
-            "SELECT id, display_name, institution_id, account_type, primary_currency "
-            "FROM account ORDER BY display_name")],
-        "cards": [dict(r) for r in conn.execute(
-            "SELECT id, account_id, cardholder_name, last4, replaces_card_id "
-            "FROM card ORDER BY cardholder_name")],
-        "institutions": [dict(r) for r in conn.execute(
-            "SELECT id, display_name, country FROM institution ORDER BY display_name")],
-        "categories": col("SELECT DISTINCT category AS item_value FROM txn "
-                          "WHERE category IS NOT NULL ORDER BY category"),
-        "kinds": col("SELECT DISTINCT kind AS item_value FROM txn ORDER BY kind"),
-        "currencies": col("SELECT DISTINCT currency_booked AS item_value FROM txn "
-                          "ORDER BY currency_booked"),
-        "detail_keys": col("SELECT DISTINCT key AS item_value FROM txn_detail ORDER BY key"),
-        "date_range": dict(conn.execute(
-            "SELECT MIN(txn_date) AS min_date, MAX(txn_date) AS max_date "
-            "FROM txn").fetchone() or {}),
+        "accounts": row["accounts"],
+        "cards": row["cards"],
+        "institutions": row["institutions"],
+        "categories": row["categories"],
+        "kinds": row["kinds"],
+        "currencies": row["currencies"],
+        "detail_keys": row["detail_keys"],
+        "date_range": {"min_date": row["min_date"], "max_date": row["max_date"]},
     }
 
 

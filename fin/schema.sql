@@ -3,6 +3,8 @@
 -- Scope: 2025-01-01 onward. Multi-currency: native + booked.
 -- ============================================================================
 
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- ---------------------------------------------------------------------------
 -- 1. Users, institutions & accounts
 -- ---------------------------------------------------------------------------
@@ -237,6 +239,17 @@ CREATE INDEX IF NOT EXISTS idx_txn_plan         ON txn(installment_plan_id);
 CREATE INDEX IF NOT EXISTS idx_txn_refund       ON txn(refund_of_id);
 CREATE INDEX IF NOT EXISTS idx_txn_date         ON txn(txn_date);
 CREATE INDEX IF NOT EXISTS idx_txn_category     ON txn(category, subcategory);
+CREATE INDEX IF NOT EXISTS idx_txn_live_date
+    ON txn(txn_date DESC, id)
+    WHERE duplicate_of_id IS NULL AND status <> 'void';
+CREATE INDEX IF NOT EXISTS idx_txn_description_raw_trgm
+    ON txn USING gin (description_raw gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_txn_description_norm_trgm
+    ON txn USING gin (description_norm gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_txn_merchant_trgm
+    ON txn USING gin ((COALESCE(merchant, '')) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_txn_counterparty_trgm
+    ON txn USING gin ((COALESCE(counterparty, '')) gin_trgm_ops);
 
 -- The ledger you actually query: duplicates filtered out.
 CREATE OR REPLACE VIEW v_ledger AS
@@ -386,6 +399,9 @@ CREATE TABLE IF NOT EXISTS txn_detail (
 
 CREATE INDEX IF NOT EXISTS idx_detail_key   ON txn_detail(key, value);
 CREATE INDEX IF NOT EXISTS idx_detail_value ON txn_detail(value);
+CREATE INDEX IF NOT EXISTS idx_detail_value_trgm
+    ON txn_detail USING gin (value gin_trgm_ops)
+    WHERE key NOT LIKE 'raw.%';
 
 -- ---------------------------------------------------------------------------
 -- 4. Transfers between accounts you own

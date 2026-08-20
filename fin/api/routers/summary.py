@@ -132,23 +132,37 @@ def get_positions(convert_to: str | None = Query(None),
         "declared_currencies": reporting.declared_currencies(conn),
     }
     if convert_to:
-        payload["positions"] = fxm.convert_rows(
+        converted_rows = fxm.convert_rows(
             conn, rows, fields=("balance", "inflow", "outflow"),
             to_currency=convert_to, on=as_of)
+        payload["positions"] = converted_rows
+        target = convert_to.upper()
+        net_worth = 0
+        by_type: dict[str, int] = {}
+        unconvertible: set[str] = set()
+        for row in converted_rows:
+            converted = row.get("balance_converted") or {}
+            if converted.get("ok"):
+                net_worth += converted["amount"]
+                account_type = row["account_type"]
+                by_type[account_type] = by_type.get(account_type, 0) + converted["amount"]
+            elif row["balance"]["amount"]:
+                unconvertible.add(row["balance"]["currency"])
         payload["conversion"] = {
-            "to": convert_to.upper(),
-            "unconvertible_currencies": fxm.missing_pairs(conn, convert_to),
+            "to": target,
+            "unconvertible_currencies": sorted(unconvertible),
         }
-        net_worth = reporting.rollup(
-            conn, rows, fields=("balance",), to_currency=convert_to, on=as_of)
-        by_type = reporting.rollup(
-            conn, rows, fields=("balance",), to_currency=convert_to,
-            key="account_type", on=as_of)
         payload["normalised"] = {
-            "to": convert_to.upper(),
-            "net_worth": net_worth["balance"],
-            "by_type": by_type["rows"],
-            "unconvertible_currencies": net_worth["unconvertible_currencies"],
+            "to": target,
+            "net_worth": reporting.money(net_worth, target),
+            "by_type": [
+                {
+                    "account_type": account_type,
+                    "balance": reporting.money(amount, target),
+                }
+                for account_type, amount in sorted(by_type.items())
+            ],
+            "unconvertible_currencies": sorted(unconvertible),
         }
     return payload
 
