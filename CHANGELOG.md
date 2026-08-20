@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.3 — 2026-08-20
+
+- Make repeated balance figures within consolidated statements idempotent so
+  verified Chase checking/savings PDFs import without a uniqueness failure.
+
 ## 0.3.2 — 2026-08-20
 
 - Replace server-local upload staging and background import jobs with stateless
