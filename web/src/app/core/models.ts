@@ -110,7 +110,7 @@ export interface Txn {
 }
 
 export interface Page<T> {
-  total: number;
+  total?: number | null;
   /** What every matching row comes to, not just this page. */
   totals?: TotalRow[];
   normalised?: {

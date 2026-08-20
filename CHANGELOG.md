@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.3 — 2026-08-21
+
+- Keep blotter infinite scroll moving on phones: paginate transaction ids
+  before attaching details, skip repeated aggregates on later pages, and only
+  show the tail spinner while a page is actually in flight.
+
 ## 0.4.2 — 2026-08-21
 
 - Recreate the ledger view when adding derived transaction columns so existing

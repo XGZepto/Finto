@@ -1,6 +1,7 @@
 import { Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { Api } from '../../core/api.service';
 import { Refresh } from '../../core/refresh.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
@@ -62,14 +63,18 @@ export class BlotterPage implements OnDestroy {
    */
   @ViewChild('sentinel') set sentinel(el: ElementRef<HTMLElement> | undefined) {
     this.tailObserver?.disconnect();
+    this.sentinelEl = el?.nativeElement ?? null;
     if (!el) return;
+    const root = scrollPane() ?? this.host.nativeElement.closest('.content');
     this.tailObserver = new IntersectionObserver(
       (entries) => { if (entries.some((e) => e.isIntersecting)) this.loadMore(); },
-      { root: scrollPane(), rootMargin: '600px 0px' },
+      { root: root instanceof HTMLElement ? root : null, rootMargin: '240px 0px' },
     );
     this.tailObserver.observe(el.nativeElement);
   }
+  private sentinelEl: HTMLElement | null = null;
   private tailObserver?: IntersectionObserver;
+  private inflight?: Subscription;
 
   loading = signal(true);
   rows = signal<Txn[]>([]);
@@ -176,6 +181,7 @@ export class BlotterPage implements OnDestroy {
   load(): void {
     this.offset.set(0);
     this.loading.set(true);
+    this.loadingMore.set(false);
     this.fetch(true);
   }
 
@@ -188,7 +194,8 @@ export class BlotterPage implements OnDestroy {
   }
 
   private fetch(reset: boolean): void {
-    this.api
+    this.inflight?.unsubscribe();
+    this.inflight = this.api
       .transactions(this.filters.filter(), {
         limit: this.limit(),
         offset: this.offset(),
@@ -199,17 +206,33 @@ export class BlotterPage implements OnDestroy {
       .subscribe({
         next: (page) => {
           this.rows.update((rows) => (reset ? page.items : [...rows, ...page.items]));
-          this.total.set(page.total);
-          this.scopeTotals.set(page.totals ?? []);
-          this.normalised.set(page.normalised ?? null);
+          if (page.total != null) this.total.set(page.total);
+          else if (!reset && !page.items.length) this.total.set(this.rows().length);
+          if (page.totals) this.scopeTotals.set(page.totals);
+          if (page.normalised !== undefined) this.normalised.set(page.normalised ?? null);
           this.loading.set(false);
           this.loadingMore.set(false);
+          this.queueTailCheck();
         },
         error: () => {
           this.loading.set(false);
           this.loadingMore.set(false);
         },
       });
+  }
+
+  /** IntersectionObserver only fires on a change. After a page lands, the
+   * sentinel may still be on screen — especially on a phone — so check again. */
+  private queueTailCheck(): void {
+    requestAnimationFrame(() => {
+      const el = this.sentinelEl;
+      const pane = scrollPane() ?? this.host.nativeElement.closest('.content');
+      if (!el || this.loading() || this.loadingMore() || !this.hasMore()) return;
+      const root = pane instanceof HTMLElement ? pane.getBoundingClientRect() : {
+        bottom: window.innerHeight,
+      };
+      if (el.getBoundingClientRect().top < root.bottom + 240) this.loadMore();
+    });
   }
 
   setAggregation(mode: 'normalised' | 'native'): void {
@@ -459,6 +482,7 @@ export class BlotterPage implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.inflight?.unsubscribe();
     this.filterObserver?.disconnect();
     this.tailObserver?.disconnect();
     const pane = scrollPane();
