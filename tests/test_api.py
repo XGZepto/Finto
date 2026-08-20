@@ -584,7 +584,7 @@ def test_stage_then_confirm_imports(client, tmp_path):
             },
         ).json()
     assert result["import"]["status"] == "imported"
-    assert result["reconcile"]["range"]
+    assert result["reconcile"]["transactions"] > 0
 
     found = client.get("/api/transactions?q=NEW MERCHANT").json()
     assert found["total"] == 1
