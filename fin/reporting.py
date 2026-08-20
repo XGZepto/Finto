@@ -782,7 +782,7 @@ def transactions(conn, *, filters: dict | None = None, limit: int = 100,
         LEFT JOIN LATERAL (
           SELECT jsonb_object_agg(d.key, d.value) AS details
           FROM txn_detail d
-          WHERE d.txn_id=t.id AND d.key NOT LIKE 'raw.%'
+          WHERE d.txn_id=t.id AND d.key NOT LIKE 'raw.%%'
         ) detail_rows ON TRUE
         LEFT JOIN LATERAL (
           SELECT jsonb_agg(tg.tag ORDER BY tg.tag) AS tags
