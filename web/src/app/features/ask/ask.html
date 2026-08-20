@@ -155,7 +155,7 @@
         <div class="section-head">
           <h2>Matching rows</h2>
           <span class="small muted mono">
-            showing {{ r.transactions!.items.length }} of {{ r.transactions!.total }}
+            showing {{ r.transactions!.items.length }} of {{ r.transactions!.total ?? r.transactions!.items.length }}
           </span>
         </div>
         <div class="table-wrap">
@@ -184,7 +184,7 @@
             </tbody>
           </table>
         </div>
-        @if (r.transactions!.total > r.transactions!.items.length) {
+        @if ((r.transactions!.total ?? 0) > r.transactions!.items.length) {
           <p class="small muted note">
             <button class="bare" (click)="openInBlotter()">Open all {{ r.transactions!.total }} in the blotter →</button>
           </p>
