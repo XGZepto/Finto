@@ -50,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.4.0",
+    version="0.4.1",
 )
 
 
@@ -107,7 +107,7 @@ def _ensure_live_schema() -> None:
             "EXISTS (SELECT 1 FROM information_schema.columns "
             "WHERE table_schema=current_schema() AND table_name='investment_snapshot' "
             "AND column_name='user_id') AS investment_ownership, "
-            "to_regclass('idx_detail_value_trgm') IS NOT NULL AS search_indexes"
+            "to_regclass('idx_txn_search_text_trgm') IS NOT NULL AS search_indexes"
         ).fetchone()
         if not all(ready.values()):
             dbm.init_db(conn)
