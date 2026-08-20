@@ -442,14 +442,23 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     target_txn TEXT;
+    relevant BOOLEAN;
 BEGIN
-    target_txn := COALESCE(NEW.txn_id, OLD.txn_id);
-    IF TG_OP = 'INSERT' AND NEW.key NOT LIKE 'raw.%' THEN
+    IF TG_OP = 'DELETE' THEN
+        target_txn := OLD.txn_id;
+        relevant := OLD.key NOT LIKE 'raw.%';
+    ELSIF TG_OP = 'INSERT' THEN
+        target_txn := NEW.txn_id;
+        relevant := NEW.key NOT LIKE 'raw.%';
+    ELSE
+        target_txn := NEW.txn_id;
+        relevant := NEW.key NOT LIKE 'raw.%' OR OLD.key NOT LIKE 'raw.%';
+    END IF;
+    IF TG_OP <> 'DELETE' AND NEW.key NOT LIKE 'raw.%' THEN
         INSERT INTO detail_key_catalog (key) VALUES (NEW.key)
         ON CONFLICT (key) DO NOTHING;
     END IF;
-    IF COALESCE(NEW.key, '') NOT LIKE 'raw.%'
-       OR COALESCE(OLD.key, '') NOT LIKE 'raw.%' THEN
+    IF relevant THEN
         UPDATE txn
         SET search_text=concat_ws(
             ' ',
@@ -465,7 +474,7 @@ BEGIN
         )
         WHERE id=target_txn;
     END IF;
-    RETURN COALESCE(NEW, OLD);
+    RETURN NULL;
 END
 $$;
 
