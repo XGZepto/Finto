@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.4 — 2026-08-20
+
+- Read card metadata from normalized transaction details when reprocessing
+  existing statements, restoring scoped card re-attribution.
+
 ## 0.3.3 — 2026-08-20
 
 - Make repeated balance figures within consolidated statements idempotent so

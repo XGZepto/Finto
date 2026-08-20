@@ -430,19 +430,18 @@ def reattribute_cards(conn, *, statement_file_id: str | None = None) -> int:
     updates: list[tuple[str | None, str]] = []
     query = (
         "SELECT t.id, t.account_id, t.txn_date, t.card_id, t.description_raw, "
-        "       t.details, rr.payload "
+        "       rr.payload "
         "FROM txn t LEFT JOIN raw_record rr ON rr.id = t.raw_record_id"
     )
     params: tuple = ()
     if statement_file_id:
         query += " WHERE t.statement_file_id=%s"
         params = (statement_file_id,)
-    for r in conn.execute(query, params):
+    rows = list(conn.execute(query, params))
+    details_by_txn = dbm.load_txn_details(conn, [row["id"] for row in rows])
+    for r in rows:
         payload = json.loads(r["payload"]) if r["payload"] else {}
-        details = (
-            r["details"] if isinstance(r["details"], dict)
-            else json.loads(r["details"] or "{}")
-        )
+        details = details_by_txn.get(r["id"], {})
         number = (
             details.get("card.number")
             or payload.get("card.number")
