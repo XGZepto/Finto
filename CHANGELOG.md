@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.5 — 2026-08-20
+
+- Bound existing-statement reprocessing to its transaction period so production
+  reconciliation completes within a serverless request.
+
 ## 0.3.4 — 2026-08-20
 
 - Read card metadata from normalized transaction details when reprocessing

@@ -289,7 +289,25 @@ def _reprocess(conn, statement_file_id: str) -> dict:
     if not statement:
         raise HTTPException(404, "statement file not found")
     cards_updated = reattribute_cards(conn, statement_file_id=statement_file_id)
-    summary = reconcile(conn)
+    start = statement["period_start"]
+    end = statement["period_end"]
+    if not start or not end:
+        txn_range = conn.execute(
+            "SELECT MIN(txn_date) AS period_start, MAX(txn_date) AS period_end "
+            "FROM txn WHERE statement_file_id=%s",
+            (statement_file_id,),
+        ).fetchone()
+        start = start or txn_range["period_start"]
+        end = end or txn_range["period_end"]
+    if not start or not end:
+        raise HTTPException(422, "statement has no transaction date range to reprocess")
+    start_date = start if isinstance(start, date) else date.fromisoformat(str(start)[:10])
+    end_date = end if isinstance(end, date) else date.fromisoformat(str(end)[:10])
+    summary = reconcile(
+        conn,
+        from_date=start_date - timedelta(days=45),
+        to_date=end_date + timedelta(days=45),
+    )
     return {
         "statement": dict(statement),
         "cards_updated": cards_updated,

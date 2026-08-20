@@ -590,6 +590,34 @@ def test_stage_then_confirm_imports(client, tmp_path):
     assert found["total"] == 1
 
 
+def test_existing_statement_reprocess_is_bounded(
+    client, database_url, monkeypatch,
+):
+    conn = dbm.connect(database_url)
+    statement = conn.execute(
+        "SELECT id,period_start,period_end FROM statement_file "
+        "WHERE period_start IS NOT NULL AND period_end IS NOT NULL LIMIT 1"
+    ).fetchone()
+    conn.close()
+    captured = {}
+
+    from fin.api.routers import imports as imports_router
+
+    def bounded_reconcile(conn, **kwargs):
+        captured.update(kwargs)
+        return {"range": [
+            kwargs["from_date"].isoformat(),
+            kwargs["to_date"].isoformat(),
+        ]}
+
+    monkeypatch.setattr(imports_router, "reconcile", bounded_reconcile)
+    response = client.post(f"/api/imports/{statement['id']}/reprocess")
+
+    assert response.status_code == 200
+    assert captured["from_date"].isoformat() < str(statement["period_start"])
+    assert captured["to_date"].isoformat() > str(statement["period_end"])
+
+
 def test_staging_a_scanned_pdf_explains_the_problem(client, tmp_path):
     blank = write_pdf(tmp_path / "scan.pdf", [])
     with blank.open("rb") as f:
