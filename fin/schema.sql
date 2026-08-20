@@ -252,7 +252,8 @@ DROP INDEX IF EXISTS idx_txn_merchant_trgm;
 DROP INDEX IF EXISTS idx_txn_counterparty_trgm;
 
 -- The ledger you actually query: duplicates filtered out.
-CREATE OR REPLACE VIEW v_ledger AS
+DROP VIEW IF EXISTS v_ledger;
+CREATE VIEW v_ledger AS
 SELECT t.*, a.display_name AS account_name, a.institution_id
 FROM txn t JOIN account a ON a.id = t.account_id
 WHERE t.duplicate_of_id IS NULL AND t.status <> 'void';
