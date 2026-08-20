@@ -595,8 +595,10 @@ def test_existing_statement_reprocess_is_bounded(
 ):
     conn = dbm.connect(database_url)
     statement = conn.execute(
-        "SELECT id,period_start,period_end FROM statement_file "
-        "WHERE period_start IS NOT NULL AND period_end IS NOT NULL LIMIT 1"
+        "SELECT sf.id,MIN(t.txn_date) AS period_start,"
+        "MAX(t.txn_date) AS period_end "
+        "FROM statement_file sf JOIN txn t ON t.statement_file_id=sf.id "
+        "GROUP BY sf.id LIMIT 1"
     ).fetchone()
     conn.close()
     captured = {}
