@@ -15,7 +15,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
+from .llm.provider import LLMProvider
 from .models import Money
 
 
@@ -202,20 +204,218 @@ def _parse_contribution_history(path: str | Path) -> list[InvestmentActivity]:
     return activities
 
 
+_MPF_LLM_SYSTEM = """You extract HSBC MPF/eMPF financial documents into JSON.
+The PDF text may change layout, split rows across lines, or use revised labels.
+Copy facts exactly; never estimate, calculate missing money, or invent rows.
+Amounts are decimal HKD strings without currency symbols. Dates are YYYY-MM-DD.
+
+Return one JSON object:
+{
+  "document_type": "member_returns" | "account_returns" | "contribution_history",
+  "reported_date": "YYYY-MM-DD" | null,
+  "valuation_date": "YYYY-MM-DD" | null,
+  "account_role": "regular" | "personal" | "tdvc" | null,
+  "member_no": "string" | null,
+  "total_balance": "1234.56" | null,
+  "holdings": [{
+    "instrument": "exact fund name",
+    "units": "decimal" | null,
+    "unit_price": "decimal" | null,
+    "market_value": "1234.56"
+  }],
+  "activities": [{
+    "date": "YYYY-MM-DD",
+    "contribution_type": "exact displayed contribution type",
+    "activity_type": "regular_contribution" | "transfer_in" | "rebate",
+    "amount": "1234.56"
+  }]
+}
+
+Member Returns must contain the aggregate total and every displayed holding.
+Account Returns must contain its role, member number, and total balance.
+Contribution History must contain its role/member number and every displayed row.
+Use null/empty arrays when a field is absent."""
+
+_LLM_ROLE_ACCOUNTS = {
+    "regular": "hsbc_mpf_regular",
+    "personal": "hsbc_mpf_personal",
+    "tdvc": "hsbc_mpf_tdvc",
+}
+
+
+def _llm_decimal(value: Any, *, field_name: str) -> Decimal:
+    if value is None or isinstance(value, bool):
+        raise ValueError(f"LLM MPF extraction omitted {field_name}")
+    try:
+        return Decimal(str(value).replace(",", ""))
+    except Exception as error:
+        raise ValueError(f"LLM MPF extraction returned invalid {field_name}") from error
+
+
+def _llm_date(value: Any, *, field_name: str, required: bool = True) -> date | None:
+    if value in (None, "") and not required:
+        return None
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"LLM MPF extraction returned invalid {field_name}") from error
+
+
+def _parse_hsbc_mpf_pdf_llm(
+    path: str | Path, provider: LLMProvider,
+) -> tuple[str, InvestmentSnapshot | SubaccountBalance | list[InvestmentActivity], dict]:
+    """Extract a changed MPF PDF with an LLM, then validate typed financial facts."""
+    from .pdf.extract import extract_document
+
+    document = extract_document(path)
+    response = provider.complete_json(
+        _MPF_LLM_SYSTEM,
+        f"Filename: {Path(path).name}\n\nExtracted PDF text:\n{document.text}",
+        max_tokens=6000,
+    )
+    data = response.data
+    if not isinstance(data, dict):
+        raise ValueError(f"{Path(path).name}: LLM returned no MPF document object")
+    kind = str(data.get("document_type") or "")
+    metadata = {
+        "parser": "llm",
+        "model": response.model,
+        "reported_date": data.get("reported_date"),
+        "valuation_date": data.get("valuation_date"),
+    }
+    if kind == "member_returns":
+        reported = _llm_date(data.get("reported_date"), field_name="reported_date")
+        valuation = _llm_date(
+            data.get("valuation_date"),
+            field_name="valuation_date",
+            required=False,
+        ) or reported
+        holdings = []
+        for row in data.get("holdings") or []:
+            if not isinstance(row, dict) or not str(row.get("instrument") or "").strip():
+                raise ValueError(f"{Path(path).name}: invalid LLM MPF holding")
+            holdings.append(FundHolding(
+                instrument=str(row["instrument"]).strip(),
+                units=(
+                    _llm_decimal(row["units"], field_name="holding units")
+                    if row.get("units") is not None else None
+                ),
+                unit_price=(
+                    _llm_decimal(row["unit_price"], field_name="holding unit price")
+                    if row.get("unit_price") is not None else None
+                ),
+                market_value=Money.from_decimal(
+                    _llm_decimal(row.get("market_value"), field_name="holding value"),
+                    "HKD",
+                ),
+            ))
+        if not holdings:
+            raise ValueError(f"{Path(path).name}: LLM found no MPF holdings")
+        snapshot = InvestmentSnapshot(
+            as_of_date=valuation,
+            scheme="hsbc_mpf",
+            currency="HKD",
+            total_value=Money.from_decimal(
+                _llm_decimal(data.get("total_balance"), field_name="total balance"),
+                "HKD",
+            ),
+            source="hsbc_mpf_pdf_llm",
+            holdings=holdings,
+            notes=(
+                f"Reported {reported.isoformat()}; holdings valued "
+                f"{valuation.isoformat()}; extracted by {response.model}"
+            ),
+        )
+        return kind, snapshot, metadata
+    if kind == "account_returns":
+        role = str(data.get("account_role") or "").lower()
+        if role not in _LLM_ROLE_ACCOUNTS:
+            raise ValueError(f"{Path(path).name}: LLM returned unknown MPF account role")
+        member_no = str(data.get("member_no") or "").strip()
+        if not member_no:
+            raise ValueError(f"{Path(path).name}: LLM omitted MPF member number")
+        return kind, SubaccountBalance(
+            account_id=_LLM_ROLE_ACCOUNTS[role],
+            member_no=member_no,
+            balance=Money.from_decimal(
+                _llm_decimal(data.get("total_balance"), field_name="account balance"),
+                "HKD",
+            ),
+        ), metadata
+    if kind == "contribution_history":
+        role = str(data.get("account_role") or "").lower()
+        if role not in _LLM_ROLE_ACCOUNTS:
+            raise ValueError(f"{Path(path).name}: LLM returned unknown MPF account role")
+        member_no = str(data.get("member_no") or "").strip()
+        if not member_no:
+            raise ValueError(f"{Path(path).name}: LLM omitted MPF member number")
+        activities = []
+        for row in data.get("activities") or []:
+            if not isinstance(row, dict):
+                raise ValueError(f"{Path(path).name}: invalid LLM MPF activity")
+            activity_type = str(row.get("activity_type") or "").lower()
+            if activity_type not in {"regular_contribution", "transfer_in", "rebate"}:
+                raise ValueError(f"{Path(path).name}: invalid MPF activity type")
+            activities.append(InvestmentActivity(
+                account_id=_LLM_ROLE_ACCOUNTS[role],
+                member_no=member_no,
+                activity_date=_llm_date(row.get("date"), field_name="activity date"),
+                contribution_type=str(row.get("contribution_type") or "").strip(),
+                activity_type=activity_type,
+                amount=Money.from_decimal(
+                    _llm_decimal(row.get("amount"), field_name="activity amount"),
+                    "HKD",
+                ),
+                source_hash=document.content_hash,
+            ))
+        if not activities:
+            raise ValueError(f"{Path(path).name}: LLM found no MPF activities")
+        return kind, activities, metadata
+    raise ValueError(f"{Path(path).name}: LLM returned unknown MPF document type")
+
+
 def parse_hsbc_mpf_pdf_bundle(
     paths: list[str | Path],
+    *, llm_provider: LLMProvider | None = None, force_llm: bool = False,
 ) -> tuple[InvestmentSnapshot, list[InvestmentActivity], list[dict]]:
-    """Parse and cross-check one member, three account, and activity PDFs."""
-    classified = [(Path(path), classify_hsbc_mpf_pdf(path)) for path in paths]
-    member_paths = [path for path, kind in classified if kind == "member_returns"]
-    account_paths = [path for path, kind in classified if kind == "account_returns"]
-    activity_paths = [path for path, kind in classified if kind == "contribution_history"]
-    if len(member_paths) != 1 or len(account_paths) != 3 or not activity_paths:
+    """Parse and cross-check MPF PDFs, with a validated LLM layout fallback."""
+    parsed = []
+    for raw_path in paths:
+        path = Path(raw_path)
+        if force_llm:
+            if llm_provider is None:
+                raise ValueError("LLM MPF parsing requested but no provider is configured")
+            kind, value, metadata = _parse_hsbc_mpf_pdf_llm(path, llm_provider)
+        else:
+            try:
+                kind = classify_hsbc_mpf_pdf(path)
+                if kind == "member_returns":
+                    value = _parse_member_returns(path)
+                elif kind == "account_returns":
+                    value = _parse_account_returns(path)
+                else:
+                    value = _parse_contribution_history(path)
+                metadata = {"parser": "deterministic", "model": None}
+            except ValueError:
+                if llm_provider is None:
+                    raise
+                kind, value, metadata = _parse_hsbc_mpf_pdf_llm(path, llm_provider)
+        parsed.append((path, kind, value, metadata))
+
+    member_docs = [item for item in parsed if item[1] == "member_returns"]
+    account_docs = [item for item in parsed if item[1] == "account_returns"]
+    activity_docs = [item for item in parsed if item[1] == "contribution_history"]
+    if len(member_docs) != 1 or len(account_docs) != 3 or not activity_docs:
         raise ValueError(
             "MPF bundle needs one Member Returns, three Account Returns, "
             "and at least one Contribution History PDF")
-    snapshot = _parse_member_returns(member_paths[0])
-    snapshot.subaccounts = [_parse_account_returns(path) for path in account_paths]
+    snapshot = member_docs[0][2]
+    if not isinstance(snapshot, InvestmentSnapshot):
+        raise ValueError("MPF member returns extraction produced the wrong data type")
+    subaccounts = [item[2] for item in account_docs]
+    if not all(isinstance(item, SubaccountBalance) for item in subaccounts):
+        raise ValueError("MPF account returns extraction produced the wrong data type")
+    snapshot.subaccounts = subaccounts
     if len({item.account_id for item in snapshot.subaccounts}) != 3:
         raise ValueError("MPF bundle contains duplicate or missing member accounts")
     sub_total = sum(item.balance.amount for item in snapshot.subaccounts)
@@ -226,15 +426,28 @@ def parse_hsbc_mpf_pdf_bundle(
             f"accounts={sub_total}, holdings={holding_total}")
     # Account Returns explicitly state their holdings use 18 Aug prices; retain
     # the 19 Aug reporting date in notes but value the coherent snapshot at 18 Aug.
-    snapshot.notes = (
-        f"Reported {snapshot.as_of_date.isoformat()}; holdings valued "
-        f"{(snapshot.as_of_date - timedelta(days=1)).isoformat()}"
-    )
-    snapshot.as_of_date -= timedelta(days=1)
-    activities = [
-        activity for path in activity_paths for activity in _parse_contribution_history(path)
+    if not snapshot.notes:
+        snapshot.notes = (
+            f"Reported {snapshot.as_of_date.isoformat()}; holdings valued "
+            f"{(snapshot.as_of_date - timedelta(days=1)).isoformat()}"
+        )
+        snapshot.as_of_date -= timedelta(days=1)
+    activities = []
+    for _path, _kind, values, _metadata in activity_docs:
+        if not isinstance(values, list) or not all(
+            isinstance(item, InvestmentActivity) for item in values
+        ):
+            raise ValueError("MPF contribution extraction produced the wrong data type")
+        activities.extend(values)
+    docs = [
+        {
+            "filename": path.name,
+            "classification": kind,
+            "parser": metadata["parser"],
+            "model": metadata["model"],
+        }
+        for path, kind, _value, metadata in parsed
     ]
-    docs = [{"filename": path.name, "classification": kind} for path, kind in classified]
     return snapshot, activities, docs
 
 

@@ -24,6 +24,7 @@ from ...investment import (
     snapshot_detail,
     valuation_history,
 )
+from ...llm.provider import LLMUnavailable, NullProvider, build_provider
 from ..deps import get_conn, write_conn
 
 router = APIRouter(tags=["investments"])
@@ -54,6 +55,44 @@ def get_investment_activities(
         conn, account_id=account_id, limit=min(max(limit, 1), 1000))}
 
 
+@router.get("/agent/investments")
+def agent_list_investment_snapshots(request: Request) -> dict:
+    from .imports import _agent_owner
+
+    user_id = _agent_owner(request, "ledger:read")
+    with write_conn(user_id) as conn:
+        return {"snapshots": list_snapshots(conn)}
+
+
+@router.get("/agent/investments/activities")
+def agent_get_investment_activities(
+    request: Request,
+    account_id: str | None = None,
+    limit: int = 200,
+) -> dict:
+    from .imports import _agent_owner
+
+    user_id = _agent_owner(request, "ledger:read")
+    with write_conn(user_id) as conn:
+        return {"activities": list_activities(
+            conn,
+            account_id=account_id,
+            limit=min(max(limit, 1), 1000),
+        )}
+
+
+@router.get("/agent/investments/{snapshot_id}")
+def agent_get_investment_snapshot(snapshot_id: str, request: Request) -> dict:
+    from .imports import _agent_owner
+
+    user_id = _agent_owner(request, "ledger:read")
+    with write_conn(user_id) as conn:
+        found = snapshot_detail(conn, snapshot_id)
+        if found is None:
+            raise HTTPException(404, "snapshot not found")
+        return found
+
+
 async def _read_bundle(files: list[UploadFile]) -> list[tuple[str, bytes, str]]:
     if not 1 <= len(files) <= 12:
         raise HTTPException(400, "upload between 1 and 12 MPF PDFs")
@@ -74,14 +113,29 @@ def _bundle_sha256(bundle: list[tuple[str, bytes, str]]) -> str:
     return hashlib.sha256(hashes.encode()).hexdigest()
 
 
-def _parse_bundle(bundle: list[tuple[str, bytes, str]]):
+def _parse_bundle(bundle: list[tuple[str, bytes, str]], analysis_mode: str = "auto"):
+    if analysis_mode not in {"auto", "deterministic", "llm"}:
+        raise ValueError("analysis_mode must be auto, deterministic, or llm")
+    provider = None
+    if analysis_mode != "deterministic":
+        candidate = build_provider(purpose="analysis")
+        provider = None if isinstance(candidate, NullProvider) else candidate
+    if analysis_mode == "llm" and provider is None:
+        raise ValueError("LLM MPF parsing is not configured")
     with tempfile.TemporaryDirectory(prefix="finto-mpf-") as directory:
         paths = []
         for index, (name, data, _digest) in enumerate(bundle):
             path = Path(directory) / f"{index:02d}-{name}"
             path.write_bytes(data)
             paths.append(path)
-        return parse_hsbc_mpf_pdf_bundle(paths)
+        try:
+            return parse_hsbc_mpf_pdf_bundle(
+                paths,
+                llm_provider=provider,
+                force_llm=analysis_mode == "llm",
+            )
+        except LLMUnavailable as error:
+            raise ValueError(f"LLM MPF parsing unavailable: {error}") from error
 
 
 def _preview_payload(bundle, snapshot, activities, documents) -> dict:
@@ -116,21 +170,26 @@ def _preview_payload(bundle, snapshot, activities, documents) -> dict:
 
 
 @router.post("/investments/imports/preview")
-async def preview_mpf_bundle(files: list[UploadFile] = File(...)) -> dict:
+async def preview_mpf_bundle(
+    files: list[UploadFile] = File(...),
+    analysis_mode: str = Form("auto"),
+) -> dict:
     bundle = await _read_bundle(files)
     try:
-        snapshot, activities, documents = _parse_bundle(bundle)
+        snapshot, activities, documents = _parse_bundle(bundle, analysis_mode)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     return _preview_payload(bundle, snapshot, activities, documents)
 
 
-def _save_bundle(conn, bundle, expected_bundle_sha256: str) -> dict:
+def _save_bundle(
+    conn, bundle, expected_bundle_sha256: str, analysis_mode: str = "auto",
+) -> dict:
     actual = _bundle_sha256(bundle)
     if not hmac.compare_digest(expected_bundle_sha256.lower(), actual.lower()):
         raise HTTPException(409, "MPF bundle does not match the preview SHA-256")
     try:
-        snapshot, activities, documents = _parse_bundle(bundle)
+        snapshot, activities, documents = _parse_bundle(bundle, analysis_mode)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     existing = conn.execute(
@@ -159,21 +218,24 @@ async def confirm_mpf_bundle(
     request: Request,
     files: list[UploadFile] = File(...),
     expected_bundle_sha256: str = Form(...),
+    analysis_mode: str = Form("auto"),
 ) -> dict:
     bundle = await _read_bundle(files)
     with write_conn(request.state.user_id) as conn:
-        return _save_bundle(conn, bundle, expected_bundle_sha256)
+        return _save_bundle(conn, bundle, expected_bundle_sha256, analysis_mode)
 
 
 @router.post("/agent/investments/imports/preview")
 async def agent_preview_mpf_bundle(
-    request: Request, files: list[UploadFile] = File(...),
+    request: Request,
+    files: list[UploadFile] = File(...),
+    analysis_mode: str = Form("auto"),
 ) -> dict:
     from .imports import _agent_owner
     _agent_owner(request, "imports:write")
     bundle = await _read_bundle(files)
     try:
-        snapshot, activities, documents = _parse_bundle(bundle)
+        snapshot, activities, documents = _parse_bundle(bundle, analysis_mode)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     return _preview_payload(bundle, snapshot, activities, documents)
@@ -184,12 +246,13 @@ async def agent_confirm_mpf_bundle(
     request: Request,
     files: list[UploadFile] = File(...),
     expected_bundle_sha256: str = Form(...),
+    analysis_mode: str = Form("auto"),
 ) -> dict:
     from .imports import _agent_owner
     user_id = _agent_owner(request, "imports:write")
     bundle = await _read_bundle(files)
     with write_conn(user_id) as conn:
-        return _save_bundle(conn, bundle, expected_bundle_sha256)
+        return _save_bundle(conn, bundle, expected_bundle_sha256, analysis_mode)
 
 
 @router.get("/investments/{snapshot_id}")

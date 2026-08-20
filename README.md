@@ -186,6 +186,24 @@ curl -fsS -X POST \
   "$FINTO_URL/api/agent/ledger/rebuild-transfers?month=2026-07&start_day=24&end_day=24"
 ```
 
+Statement agents use `/api/agent/imports/preview` and
+`/api/agent/imports/confirm`: confirm re-uploads the same PDF with the preview's
+`sha256`. MPF/eMPF bundles use `/api/agent/investments/imports/preview` and
+`/api/agent/investments/imports/confirm`. Their multipart `analysis_mode` may be
+`auto` (deterministic parser with validated LLM fallback), `deterministic`, or
+`llm`. Every mode must reconcile the aggregate, all subaccounts, and all fund
+holdings exactly before confirm can write.
+
+Agents can verify committed state through:
+
+```text
+GET /api/agent/imports/history
+GET /api/agent/investments
+GET /api/agent/investments/{snapshot_id}
+GET /api/agent/investments/activities
+GET /api/agent/integrity
+```
+
 Each maintenance operation is recorded in PostgreSQL. API keys are scoped to
 their owner and can be revoked without changing the login password.
 

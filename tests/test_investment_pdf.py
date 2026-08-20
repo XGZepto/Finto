@@ -8,6 +8,7 @@ from fin.investment import (
     save_activities,
     save_snapshot,
 )
+from fin.llm.provider import EchoProvider
 from fin.models import Account
 
 
@@ -75,6 +76,89 @@ def test_hsbc_mpf_pdf_bundle_reconciles_snapshot_and_activities(tmp_path):
     assert {item["classification"] for item in documents} == {
         "member_returns", "account_returns", "contribution_history",
     }
+
+
+def test_hsbc_mpf_bundle_can_use_validated_llm_extraction(tmp_path):
+    paths = _mpf_bundle(tmp_path)
+    provider = EchoProvider({
+        "member.pdf": {
+            "document_type": "member_returns",
+            "reported_date": "2026-08-19",
+            "valuation_date": "2026-08-18",
+            "total_balance": "180523.93",
+            "holdings": [
+                {"instrument": "Alpha Fund", "units": "1", "unit_price": "60000",
+                 "market_value": "60000.00"},
+                {"instrument": "Beta Fund", "units": "1", "unit_price": "40000",
+                 "market_value": "40000.00"},
+                {"instrument": "Gamma Fund", "units": "1", "unit_price": "80523.93",
+                 "market_value": "80523.93"},
+            ],
+        },
+        "regular.pdf": {
+            "document_type": "account_returns",
+            "account_role": "regular",
+            "member_no": "65841230",
+            "total_balance": "63849.84",
+        },
+        "personal.pdf": {
+            "document_type": "account_returns",
+            "account_role": "personal",
+            "member_no": "15921678",
+            "total_balance": "47775.61",
+        },
+        "tdvc.pdf": {
+            "document_type": "account_returns",
+            "account_role": "tdvc",
+            "member_no": "84303079",
+            "total_balance": "68898.48",
+        },
+        "regular-history.pdf": {
+            "document_type": "contribution_history",
+            "account_role": "regular",
+            "member_no": "65841230",
+            "activities": [{
+                "date": "2026-08-12",
+                "contribution_type": "Employee mandatory contributions",
+                "activity_type": "regular_contribution",
+                "amount": "1500.00",
+            }],
+        },
+        "personal-history.pdf": {
+            "document_type": "contribution_history",
+            "account_role": "personal",
+            "member_no": "15921678",
+            "activities": [{
+                "date": "2026-04-28",
+                "contribution_type": "Mandatory contributions from former employment(s)",
+                "activity_type": "transfer_in",
+                "amount": "30345.26",
+            }],
+        },
+        "tdvc-history.pdf": {
+            "document_type": "contribution_history",
+            "account_role": "tdvc",
+            "member_no": "84303079",
+            "activities": [{
+                "date": "2026-03-27",
+                "contribution_type": "Tax Deductible Voluntary Contributions",
+                "activity_type": "regular_contribution",
+                "amount": "60000.00",
+            }],
+        },
+    })
+
+    snapshot, activities, documents = parse_hsbc_mpf_pdf_bundle(
+        paths,
+        llm_provider=provider,
+        force_llm=True,
+    )
+
+    assert snapshot.as_of_date.isoformat() == "2026-08-18"
+    assert snapshot.total_value.amount == 18052393
+    assert len(activities) == 3
+    assert all(item["parser"] == "llm" for item in documents)
+    assert len(provider.calls) == 7
 
 
 def test_mpf_activity_import_is_deterministically_idempotent(conn, tmp_path):
