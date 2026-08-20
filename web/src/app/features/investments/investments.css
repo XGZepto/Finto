@@ -17,6 +17,16 @@
 .section-head h2 { margin-bottom: 3px; }
 .history-card finto-timeseries { margin-top: var(--s3); }
 .single-point { margin: var(--s3) 0 0; }
+.button-like { cursor: pointer; padding: 9px 14px; border: 1px solid var(--line); font: var(--t-label)/1 var(--mono); }
+.bundle-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); margin-top: var(--s3); }
+.bundle-summary > div { display: grid; gap: 3px; padding: var(--s3); background: var(--surface-2); }
+.bundle-summary strong, .figure-small { font: 600 var(--t-fig-sm)/1.2 var(--mono); }
+.bundle-summary small, .activity-row small { color: var(--fg-4); }
+.document-list { display: grid; gap: var(--s2); margin: var(--s3) 0; font-size: var(--t-small); }
+.import-actions { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); }
+.import-message { margin-top: var(--s3); padding: var(--s3); border-left: 3px solid var(--info); background: var(--surface-2); }
+.import-message.error { border-color: var(--neg); }
+.import-message.success { border-color: var(--pos); }
 
 .account-list, .holding-list { border-top: 1px solid var(--line); }
 .account-row {
@@ -38,6 +48,12 @@
 .allocation-track { grid-column: 1 / -1; height: 3px; overflow: hidden; background: var(--surface-3); }
 .allocation-track span { display: block; height: 100%; background: var(--info); }
 .empty-state, .empty { padding: var(--s4); }
+.activity-list { border-top: 1px solid var(--line); }
+.activity-row {
+  display: grid; grid-template-columns: 100px minmax(0, 1fr) auto;
+  align-items: center; gap: var(--s3); padding: var(--s3) 0; border-bottom: 1px solid var(--line);
+}
+.activity-row > span:nth-child(2) { display: grid; gap: 3px; }
 
 @media (max-width: 680px) {
   .valuation-head { display: grid; }
@@ -46,4 +62,8 @@
   .holding-row { grid-template-columns: minmax(0, 1fr); }
   .holding-value { grid-row: 2; }
   .allocation-track { grid-column: 1; }
+  .bundle-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .import-actions { align-items: stretch; flex-direction: column; }
+  .activity-row { grid-template-columns: 1fr auto; }
+  .activity-row > span:first-child { grid-column: 1 / -1; }
 }

@@ -13,15 +13,18 @@ six months later.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 import tempfile
-import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
-from ...ingest import ingest_file, reconcile
-from ...jobs import runner
+from ...ingest import ingest_file, reattribute_cards, reconcile
 from ...parsers.base import (
     ParseContext,
     all_parsers,
@@ -33,11 +36,6 @@ from ...pdf.registry import available_templates
 from ..deps import get_conn, write_conn
 
 router = APIRouter(tags=["imports"])
-
-# Staged uploads live here until confirmed or discarded.
-STAGING = Path(tempfile.gettempdir()) / "finto-staging"
-STAGING.mkdir(exist_ok=True)
-STAGED_OWNERS: dict[str, str] = {}
 
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 
@@ -96,68 +94,63 @@ def import_capabilities(conn=Depends(get_conn)) -> dict:
     }
 
 
-@router.post("/imports/stage")
-async def stage_upload(
-    request: Request,
-    file: UploadFile = File(...),
-    institution_id: str | None = Form(None),
-    account_id: str | None = Form(None),
-    currency: str | None = Form(None),
-    conn=Depends(get_conn),
-) -> dict:
-    """Accept a file, parse it in memory, and return what *would* be imported."""
+async def _uploaded_file(file: UploadFile) -> tuple[str, bytes, str]:
     name = Path(file.filename or "upload").name
     allowed_suffixes = set(supported_extensions())
     if Path(name).suffix.lower() not in allowed_suffixes:
         raise HTTPException(
             400, f"unsupported file type — expected one of "
                  f"{sorted(allowed_suffixes)}")
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "file too large")
+    return name, data, hashlib.sha256(data).hexdigest()
 
-    staged_id = str(uuid.uuid4())
-    STAGED_OWNERS[staged_id] = request.state.user_id
-    target = STAGING / f"{staged_id}__{name}"
-    size = 0
-    with target.open("wb") as out:
-        while chunk := await file.read(1 << 20):
-            size += len(chunk)
-            if size > MAX_UPLOAD_BYTES:
-                out.close()
-                target.unlink(missing_ok=True)
-                raise HTTPException(413, "file too large")
-            out.write(chunk)
 
-    ctx = ParseContext(path=target, institution_id=institution_id,
+@contextmanager
+def _request_file(name: str, data: bytes) -> Iterator[Path]:
+    """Expose upload bytes as a path only for the current request."""
+    suffix = Path(name).suffix.lower()
+    with tempfile.NamedTemporaryFile(prefix="finto-", suffix=suffix, delete=False) as out:
+        out.write(data)
+        path = Path(out.name)
+    try:
+        yield path
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def _preview(
+    conn, path: Path, *, name: str, size: int, digest: str,
+    institution_id: str | None, account_id: str | None, currency: str | None,
+) -> dict:
+    ctx = ParseContext(path=path, institution_id=institution_id,
                        account_id=account_id, default_currency=currency,
                        connection=conn)
     parser = select_parser(ctx)
-
     preview: dict = {
-        "staged_id": staged_id,
         "filename": name,
         "size_bytes": size,
+        "sha256": digest,
         "parser": parser.parser_id if parser else None,
         "parser_version": parser.version if parser else None,
         "institution_id": institution_id,
         "account_id": account_id,
         "currency": currency,
     }
-
     if parser is None:
-        suffix = Path(name).suffix.lower()
         preview["error"] = (
             "No parser recognised this file."
             + (" PDFs need a text layer — a scanned statement cannot be read."
-               if suffix == ".pdf" else "")
-            )
+               if Path(name).suffix.lower() == ".pdf" else "")
+        )
         return preview
-
     try:
-        header, rows = read_csv_rows(target)
+        header, rows = read_csv_rows(path)
         preview["header"] = header
         preview["first_row"] = rows[0] if rows else None
     except Exception:
-        preview["header"] = None       # not a CSV — a PDF, for instance
-
+        preview["header"] = None
     result = parser.parse(ctx)
     preview.update({
         "txn_count": len(result.txns),
@@ -165,8 +158,6 @@ async def stage_upload(
         "period_start": str(result.period_start) if result.period_start else None,
         "period_end": str(result.period_end) if result.period_end else None,
         "warnings": result.warnings[:20],
-        # The point of the preview: see the parsed dates, signs and amounts
-        # before anything is written.
         "sample": [{
             "date": str(t.txn_date),
             "description": t.description_raw[:80],
@@ -176,82 +167,163 @@ async def stage_upload(
             "details": t.details,
         } for t in result.txns[:10]],
     })
-    if not result.txns:
+    if not result.txns and not result.allow_empty:
         preview["error"] = (
             "Parsed zero transactions. The file is not being recorded, so you "
             "can re-import once this is resolved.")
     return preview
 
 
-@router.post("/imports/{staged_id}/confirm")
-def confirm_import(staged_id: str, request: Request,
-                   institution_id: str | None = Form(None),
-                   account_id: str | None = Form(None),
-                   currency: str | None = Form(None)) -> dict:
-    """Commit a staged file, then reconcile the whole ledger."""
-    if STAGED_OWNERS.get(staged_id) != request.state.user_id:
-        raise HTTPException(404, "staged file not found — re-upload it")
-    matches = list(STAGING.glob(f"{staged_id}__*"))
-    if not matches:
-        raise HTTPException(404, "staged file not found — re-upload it")
-    path = matches[0]
+@router.post("/imports/preview")
+@router.post("/imports/stage", include_in_schema=False)
+async def preview_upload(
+    file: UploadFile = File(...),
+    institution_id: str | None = Form(None),
+    account_id: str | None = Form(None),
+    currency: str | None = Form(None),
+    conn=Depends(get_conn),
+) -> dict:
+    """Parse an upload without retaining bytes or changing the ledger."""
+    name, data, digest = await _uploaded_file(file)
+    with _request_file(name, data) as path:
+        return _preview(conn, path, name=name, size=len(data), digest=digest,
+                        institution_id=institution_id, account_id=account_id,
+                        currency=currency)
 
-    def work(job):
-        with write_conn(request.state.user_id) as conn:
-            job.progress = "importing"
-            result = ingest_file(conn, path, institution_id=institution_id,
-                                 account_id=account_id, default_currency=currency)
-            # Reconcile always runs over the full ledger: a duplicate or a
-            # transfer counterpart usually lives in a different file from a
-            # different institution.
-            job.progress = "reconciling"
+
+def _confirm(
+    conn, path: Path, *, expected_sha256: str, actual_sha256: str,
+    source_name: str, institution_id: str | None,
+    account_id: str | None, currency: str | None,
+) -> dict:
+    if not expected_sha256 or not hmac.compare_digest(
+            expected_sha256.lower(), actual_sha256.lower()):
+        raise HTTPException(409, "upload does not match the preview SHA-256")
+    result = ingest_file(conn, path, institution_id=institution_id,
+                         account_id=account_id, default_currency=currency,
+                         source_name=source_name)
+    if result["status"] == "error":
+        raise HTTPException(422, result["reason"])
+    summary = None
+    if result["status"] == "imported":
+        start = result.get("period_start")
+        end = result.get("period_end")
+        if start and end:
+            summary = reconcile(
+                conn,
+                from_date=date.fromisoformat(start) - timedelta(days=45),
+                to_date=date.fromisoformat(end) + timedelta(days=45),
+            )
+        else:
             summary = reconcile(conn)
-        path.unlink(missing_ok=True)
-        STAGED_OWNERS.pop(staged_id, None)
-        return {"import": result, "reconcile": summary}
-
-    return runner.submit("import", work, user_id=request.state.user_id).as_dict()
+    return {"import": result, "reconcile": summary}
 
 
-@router.delete("/imports/{staged_id}")
-def discard_staged(staged_id: str, request: Request) -> dict:
-    if STAGED_OWNERS.get(staged_id) != request.state.user_id:
-        raise HTTPException(404, "staged file not found")
-    for p in STAGING.glob(f"{staged_id}__*"):
-        p.unlink(missing_ok=True)
-    STAGED_OWNERS.pop(staged_id, None)
-    return {"discarded": staged_id}
+@router.post("/imports/confirm")
+async def confirm_import(
+    request: Request,
+    file: UploadFile = File(...),
+    expected_sha256: str = Form(...),
+    institution_id: str | None = Form(None),
+    account_id: str | None = Form(None),
+    currency: str | None = Form(None),
+) -> dict:
+    """Re-upload verified bytes, import, and synchronously return the result."""
+    name, data, digest = await _uploaded_file(file)
+    with _request_file(name, data) as path, write_conn(request.state.user_id) as conn:
+        return _confirm(conn, path, expected_sha256=expected_sha256,
+                        actual_sha256=digest, institution_id=institution_id,
+                        source_name=name, account_id=account_id, currency=currency)
+
+
+def _agent_owner(request: Request, scope: str) -> str:
+    # Imported lazily to avoid a module cycle while the app registers routers.
+    from ..app import _api_key_owner
+    return _api_key_owner(request, scope)[0]
+
+
+@router.post("/agent/imports/preview")
+async def agent_preview_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    institution_id: str | None = Form(None),
+    account_id: str | None = Form(None),
+    currency: str | None = Form(None),
+) -> dict:
+    user_id = _agent_owner(request, "imports:write")
+    name, data, digest = await _uploaded_file(file)
+    with _request_file(name, data) as path, write_conn(user_id) as conn:
+        return _preview(conn, path, name=name, size=len(data), digest=digest,
+                        institution_id=institution_id, account_id=account_id,
+                        currency=currency)
+
+
+@router.post("/agent/imports/confirm")
+async def agent_confirm_import(
+    request: Request,
+    file: UploadFile = File(...),
+    expected_sha256: str = Form(...),
+    institution_id: str | None = Form(None),
+    account_id: str | None = Form(None),
+    currency: str | None = Form(None),
+) -> dict:
+    user_id = _agent_owner(request, "imports:write")
+    name, data, digest = await _uploaded_file(file)
+    with _request_file(name, data) as path, write_conn(user_id) as conn:
+        return _confirm(conn, path, expected_sha256=expected_sha256,
+                        actual_sha256=digest, institution_id=institution_id,
+                        source_name=name, account_id=account_id, currency=currency)
 
 
 @router.post("/reconcile")
 def run_reconcile(request: Request) -> dict:
-    def work(job):
-        with write_conn(request.state.user_id) as conn:
-            job.progress = "reconciling"
-            return reconcile(conn)
+    with write_conn(request.state.user_id) as conn:
+        return reconcile(conn)
 
-    return runner.submit("reconcile", work, user_id=request.state.user_id).as_dict()
+
+def _reprocess(conn, statement_file_id: str) -> dict:
+    statement = conn.execute(
+        "SELECT id,source_path,period_start,period_end,row_count "
+        "FROM statement_file WHERE id=%s", (statement_file_id,),
+    ).fetchone()
+    if not statement:
+        raise HTTPException(404, "statement file not found")
+    cards_updated = reattribute_cards(conn, statement_file_id=statement_file_id)
+    summary = reconcile(conn)
+    return {
+        "statement": dict(statement),
+        "cards_updated": cards_updated,
+        "reconcile": summary,
+    }
+
+
+@router.post("/imports/{statement_file_id}/reprocess")
+def reprocess_import(statement_file_id: str, request: Request) -> dict:
+    """Re-derive automatic links and attribution for an imported statement."""
+    with write_conn(request.state.user_id) as conn:
+        return _reprocess(conn, statement_file_id)
+
+
+@router.post("/agent/imports/{statement_file_id}/reprocess")
+def agent_reprocess_import(statement_file_id: str, request: Request) -> dict:
+    user_id = _agent_owner(request, "imports:write")
+    with write_conn(user_id) as conn:
+        return _reprocess(conn, statement_file_id)
 
 
 @router.post("/reattribute")
 def run_reattribute(request: Request) -> dict:
     """Re-run card resolution over existing rows, e.g. after adding a reissue."""
-    def work(job):
-        from ...ingest import reattribute_cards
-        with write_conn(request.state.user_id) as conn:
-            return {"updated": reattribute_cards(conn)}
-
-    return runner.submit("reattribute", work, user_id=request.state.user_id).as_dict()
+    from ...ingest import reattribute_cards
+    with write_conn(request.state.user_id) as conn:
+        return {"updated": reattribute_cards(conn)}
 
 
 @router.post("/fx/harvest")
 def run_fx_harvest(request: Request) -> dict:
-    def work(job):
-        from ...fx import harvest_rates
-        with write_conn(request.state.user_id) as conn:
-            return {"rates": harvest_rates(conn)}
-
-    return runner.submit("fx-harvest", work, user_id=request.state.user_id).as_dict()
+    from ...fx import harvest_rates
+    with write_conn(request.state.user_id) as conn:
+        return {"rates": harvest_rates(conn)}
 
 
 @router.get("/imports/history")

@@ -147,6 +147,11 @@ def _to_parse_result(
                 for key, value in facts.items():
                     details.setdefault(key, value)
         marker_text = "\n".join([row.description, *row.detail_lines])
+        card_number = details.pop("card.number", None)
+        card_last4 = details.pop("card.last4", None)
+        if not card_last4 and card_number:
+            digits = re.sub(r"\D", "", card_number)
+            card_last4 = digits[-4:] if len(digits) >= 4 else None
         txns.append(ParsedTxn(
             txn_date=row.txn_date,
             posted_date=row.settlement_date,
@@ -154,7 +159,7 @@ def _to_parse_result(
             native=row.foreign,
             fx_rate=row.fx_rate,
             external_ref=details.pop("issuer.reference", None),
-            card_last4=details.pop("card.last4", None),
+            card_last4=card_last4,
             cardholder_hint=details.pop("card.holder", None),
             description_raw=row.description,
             installment_hint=parse_installment_marker(marker_text),

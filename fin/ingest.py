@@ -68,6 +68,33 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def statement_content_fingerprint(parser_id: str, result) -> str:
+    """Hash parsed financial facts, independent of PDF metadata/rendering."""
+    facts = {
+        "parser": parser_id,
+        "period_start": str(result.period_start or ""),
+        "period_end": str(result.period_end or ""),
+        "statement_date": str(result.statement_date or ""),
+        "transactions": [{
+            "date": str(txn.txn_date),
+            "posted": str(txn.posted_date or ""),
+            "amount": txn.booked.amount,
+            "currency": txn.booked.currency,
+            "description": txn.description_raw.strip(),
+            "account_hint": (txn.extra or {}).get("account_hint", ""),
+        } for txn in result.txns],
+        "balances": [{
+            "date": str(entry[0]),
+            "amount": entry[1].amount,
+            "currency": entry[1].currency,
+            "account_hint": entry[2],
+            "kind": entry[3] if len(entry) > 3 else "running",
+        } for entry in result.balances],
+    }
+    canonical = json.dumps(facts, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def _institution_of(conn, account_id: str | None) -> str | None:
     """The account map is the authority on which institution a file belongs to;
     parsers only guess. Feeding it into the ParseContext is also what tells
@@ -241,6 +268,7 @@ def ingest_file(
     institution_id: str | None = None,
     account_id: str | None = None,
     default_currency: str | None = None,
+    source_name: str | None = None,
     dry_run: bool = False,
 ) -> dict:
     """Import one statement file. Returns a small result summary."""
@@ -270,6 +298,13 @@ def ingest_file(
                 "reason": f"{parser.parser_id} parsed 0 transactions — file not "
                           "recorded, so you can re-import once this is resolved",
                 "warnings": result.warnings[:10]}
+    content_fingerprint = statement_content_fingerprint(parser.parser_id, result)
+    if dbm.statement_content_imported(conn, content_fingerprint):
+        return {
+            "path": str(path),
+            "status": "skipped",
+            "reason": "statement content already imported",
+        }
 
     resolved_account = account_id or result.account_id
 
@@ -309,8 +344,9 @@ def ingest_file(
                           f"and no --account was given — refusing to guess"}
 
     sf = StatementFile(
-        source_path=str(path),
+        source_path=source_name or str(path),
         file_sha256=digest,
+        content_fingerprint=content_fingerprint,
         institution_id=ctx.institution_id or parser.institution_id,
         account_id=sf_account,
         file_format=_format_of(path),
@@ -375,10 +411,13 @@ def ingest_file(
 
     return {"path": str(path), "status": "imported", "parser": parser.parser_id,
             "txns": len(txns), "balances": len(result.balances),
+            "statement_file_id": sf.id,
+            "period_start": str(result.period_start) if result.period_start else None,
+            "period_end": str(result.period_end) if result.period_end else None,
             "warnings": warnings[:10]}
 
 
-def reattribute_cards(conn) -> int:
+def reattribute_cards(conn, *, statement_file_id: str | None = None) -> int:
     """Re-resolve card_id for every transaction using the current card registry.
 
     card_id is assigned at ingest time, so registering a reissued card afterwards
@@ -389,12 +428,30 @@ def reattribute_cards(conn) -> int:
     if not cards:
         return 0
     updates: list[tuple[str | None, str]] = []
-    for r in conn.execute(
-            "SELECT t.id, t.account_id, t.txn_date, t.card_id, t.description_raw, "
-            "       rr.payload "
-            "FROM txn t LEFT JOIN raw_record rr ON rr.id = t.raw_record_id"):
+    query = (
+        "SELECT t.id, t.account_id, t.txn_date, t.card_id, t.description_raw, "
+        "       t.details, rr.payload "
+        "FROM txn t LEFT JOIN raw_record rr ON rr.id = t.raw_record_id"
+    )
+    params: tuple = ()
+    if statement_file_id:
+        query += " WHERE t.statement_file_id=%s"
+        params = (statement_file_id,)
+    for r in conn.execute(query, params):
         payload = json.loads(r["payload"]) if r["payload"] else {}
-        last4 = (payload.get("Account #") or payload.get("Card Number") or "")[-4:]
+        details = (
+            r["details"] if isinstance(r["details"], dict)
+            else json.loads(r["details"] or "{}")
+        )
+        number = (
+            details.get("card.number")
+            or payload.get("card.number")
+            or payload.get("Account #")
+            or payload.get("Card Number")
+            or ""
+        )
+        digits = re.sub(r"\D", "", number)
+        last4 = digits[-4:] if len(digits) >= 4 else ""
         hint = payload.get("Card Member") or payload.get("Cardholder") or None
         parsed = ParsedTxn(
             txn_date=date.fromisoformat(r["txn_date"]),
@@ -543,7 +600,47 @@ def reset_automatic_reconciliation(conn) -> None:
     conn.commit()
 
 
-def reconcile(conn, *, use_llm: bool = False) -> dict:
+def reset_focused_reconciliation(conn, from_date: date, to_date: date) -> None:
+    """Clear replaceable automatic state touching a bounded transaction window."""
+    bounds = (from_date.isoformat(), to_date.isoformat())
+    scope = "SELECT id FROM txn WHERE txn_date BETWEEN %s AND %s"
+    conn.execute(
+        f"DELETE FROM transfer_candidate WHERE out_txn_id IN ({scope}) "
+        f"OR in_txn_id IN ({scope})", (*bounds, *bounds))
+    conn.execute(
+        f"DELETE FROM duplicate_candidate WHERE keep_txn_id IN ({scope}) "
+        f"OR dupe_txn_id IN ({scope})", (*bounds, *bounds))
+    groups = (
+        "SELECT DISTINCT tg.id FROM transfer_group tg "
+        "JOIN transfer_leg tl ON tl.transfer_group_id=tg.id "
+        f"WHERE tg.is_confirmed=0 AND tg.match_method='auto' AND tl.txn_id IN ({scope})"
+    )
+    conn.execute(
+        f"UPDATE txn SET transfer_group_id=NULL WHERE transfer_group_id IN ({groups})",
+        bounds)
+    conn.execute(f"DELETE FROM transfer_group WHERE id IN ({groups})", bounds)
+    plans = (
+        "SELECT DISTINCT p.id FROM installment_plan p "
+        "JOIN txn t ON t.installment_plan_id=p.id "
+        "WHERE p.is_confirmed=0 AND t.txn_date BETWEEN %s AND %s"
+    )
+    conn.execute(
+        f"UPDATE txn SET installment_plan_id=NULL,installment_seq=NULL "
+        f"WHERE installment_plan_id IN ({plans})", bounds)
+    conn.execute(f"DELETE FROM installment_plan WHERE id IN ({plans})", bounds)
+    conn.execute(
+        f"UPDATE txn SET duplicate_of_id=NULL WHERE id IN ({scope}) "
+        f"OR duplicate_of_id IN ({scope})", (*bounds, *bounds))
+    conn.execute(
+        f"UPDATE txn SET refund_of_id=NULL WHERE id IN ({scope}) "
+        f"OR refund_of_id IN ({scope})", (*bounds, *bounds))
+    conn.commit()
+
+
+def reconcile(
+    conn, *, use_llm: bool = False,
+    from_date: date | None = None, to_date: date | None = None,
+) -> dict:
     """Run dedup + transfer matching over the whole ledger.
 
     Order is deliberate: deterministic passes run first and settle everything
@@ -551,8 +648,12 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
     over, and only adjusts scores — the merge decision stays with the
     deterministic threshold.
     """
-    reset_automatic_reconciliation(conn)
-    txns = dbm.load_txns(conn, include_duplicates=True)
+    if from_date and to_date:
+        reset_focused_reconciliation(conn, from_date, to_date)
+    else:
+        reset_automatic_reconciliation(conn)
+    txns = dbm.load_txns(
+        conn, include_duplicates=True, from_date=from_date, to_date=to_date)
     accounts = dbm.load_accounts(conn)
 
     report = run_dedup(txns, cross_account_pairs=cross_account_dupe_pairs(conn),
@@ -643,6 +744,8 @@ def reconcile(conn, *, use_llm: bool = False) -> dict:
         "payment_gateways_labelled": gateways,
         "semantic_kinds_corrected": semantic_kinds_corrected,
     }
+    if from_date and to_date:
+        summary["range"] = [from_date.isoformat(), to_date.isoformat()]
 
     if use_llm:
         from .llm.adjudicate import adjudicate_duplicates, adjudicate_transfers

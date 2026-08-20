@@ -404,16 +404,26 @@ def file_already_imported(conn, sha256: str) -> bool:
     return row is not None
 
 
+def statement_content_imported(conn, fingerprint: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM statement_file WHERE content_fingerprint=%s",
+        (fingerprint,),
+    ).fetchone()
+    return row is not None
+
+
 def insert_statement_file(conn, sf: StatementFile) -> None:
     conn.execute(
-        "INSERT INTO statement_file (id, source_path, file_sha256, institution_id, "
+        "INSERT INTO statement_file "
+        "(id, source_path, file_sha256, content_fingerprint, institution_id, "
         "account_id, file_format, parser_id, parser_version, period_start, "
         "period_end, statement_date, imported_at, row_count) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (
             sf.id,
             sf.source_path,
             sf.file_sha256,
+            sf.content_fingerprint,
             sf.institution_id,
             sf.account_id,
             sf.file_format.value,

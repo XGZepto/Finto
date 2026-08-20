@@ -550,6 +550,7 @@ def test_stage_previews_without_importing(client):
                               "account_id": "hsbc_hk_current", "currency": "HKD"})
     body = r.json()
     assert body["parser"] == "hsbc_hk_csv"
+    assert len(body["sha256"]) == 64
     assert body["txn_count"] == 8
     assert len(body["sample"]) > 0
     assert body["header"] == ["Date", "Transaction Details", "Deposit",
@@ -571,15 +572,19 @@ def test_stage_then_confirm_imports(client, tmp_path):
                                    "currency": "HKD"}).json()
     assert staged["txn_count"] == 1
 
-    job = client.post(f"/api/imports/{staged['staged_id']}/confirm",
-                      data={"institution_id": "hsbc_hk",
-                            "account_id": "hsbc_hk_current",
-                            "currency": "HKD"}).json()
-
-    from fin.jobs import runner
-    finished = runner.wait(job["id"], timeout=30)
-    assert finished.status == "done", finished.error
-    assert finished.result["import"]["status"] == "imported"
+    with csv.open("rb") as f:
+        result = client.post(
+            "/api/imports/confirm",
+            files={"file": ("extra.csv", f, "text/csv")},
+            data={
+                "expected_sha256": staged["sha256"],
+                "institution_id": "hsbc_hk",
+                "account_id": "hsbc_hk_current",
+                "currency": "HKD",
+            },
+        ).json()
+    assert result["import"]["status"] == "imported"
+    assert result["reconcile"]["range"]
 
     found = client.get("/api/transactions?q=NEW MERCHANT").json()
     assert found["total"] == 1
@@ -604,20 +609,65 @@ def test_unsupported_file_type_is_rejected(client, tmp_path):
     assert r.status_code == 400
 
 
-def test_reconcile_runs_as_a_job(client):
-    from fin.jobs import runner
-    job = client.post("/api/reconcile").json()
-    finished = runner.wait(job["id"], timeout=30)
-    assert finished.status == "done", finished.error
-    assert "transactions" in finished.result
+def test_confirm_rejects_bytes_that_differ_from_preview(client, tmp_path):
+    original = tmp_path / "original.csv"
+    original.write_text(
+        "Date,Transaction Details,Deposit,Withdrawal,Balance\n"
+        "05/02/2025,ORIGINAL,,1.00,100.00\n")
+    changed = tmp_path / "changed.csv"
+    changed.write_text(
+        "Date,Transaction Details,Deposit,Withdrawal,Balance\n"
+        "05/02/2025,CHANGED,,2.00,99.00\n")
+    with original.open("rb") as file:
+        preview = client.post(
+            "/api/imports/preview",
+            files={"file": ("original.csv", file, "text/csv")},
+            data={"institution_id": "hsbc_hk", "account_id": "hsbc_hk_current"},
+        ).json()
+    with changed.open("rb") as file:
+        response = client.post(
+            "/api/imports/confirm",
+            files={"file": ("changed.csv", file, "text/csv")},
+            data={
+                "expected_sha256": preview["sha256"],
+                "institution_id": "hsbc_hk",
+                "account_id": "hsbc_hk_current",
+            },
+        )
+    assert response.status_code == 409
 
 
-def test_job_status_is_queryable(client):
-    from fin.jobs import runner
-    job = client.post("/api/reconcile").json()
-    runner.wait(job["id"], timeout=30)
-    body = client.get(f"/api/jobs/{job['id']}").json()
-    assert body["status"] in ("done", "running", "queued")
+def test_agent_can_preview_and_confirm_without_server_staging(client, tmp_path):
+    token = client.post("/api/auth/api-keys", json={"name": "Importer"}).json()["key"]
+    auth = {"Authorization": f"Bearer {token}"}
+    csv = tmp_path / "agent.csv"
+    csv.write_text(
+        "Date,Transaction Details,Deposit,Withdrawal,Balance\n"
+        "06/02/2025,AGENT IMPORT,,3.00,97.00\n")
+    with csv.open("rb") as file:
+        preview = client.post(
+            "/api/agent/imports/preview", headers=auth,
+            files={"file": ("agent.csv", file, "text/csv")},
+            data={"institution_id": "hsbc_hk", "account_id": "hsbc_hk_current"},
+        )
+    assert preview.status_code == 200
+    with csv.open("rb") as file:
+        confirmed = client.post(
+            "/api/agent/imports/confirm", headers=auth,
+            files={"file": ("agent.csv", file, "text/csv")},
+            data={
+                "expected_sha256": preview.json()["sha256"],
+                "institution_id": "hsbc_hk",
+                "account_id": "hsbc_hk_current",
+            },
+        )
+    assert confirmed.status_code == 200
+    assert confirmed.json()["import"]["status"] == "imported"
+
+
+def test_reconcile_returns_committed_result_directly(client):
+    result = client.post("/api/reconcile").json()
+    assert "transactions" in result
 
 
 # ---------------------------------------------------------------------------
