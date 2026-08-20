@@ -315,6 +315,25 @@ def _reprocess(conn, statement_file_id: str) -> dict:
     }
 
 
+def _import_history(conn, limit: int) -> dict:
+    rows = [dict(r) for r in conn.execute(
+        "SELECT sf.id, sf.source_path, sf.institution_id, sf.account_id, "
+        "       sf.file_format, sf.parser_id, sf.imported_at, sf.row_count, "
+        "       sf.period_start, sf.period_end, "
+        "       (SELECT COUNT(*) FROM txn WHERE statement_file_id = sf.id) AS txn_count "
+        "FROM statement_file sf ORDER BY sf.imported_at DESC LIMIT %s",
+        (min(max(limit, 1), 500),),
+    )]
+    return {"files": rows}
+
+
+@router.get("/agent/imports/history")
+def agent_import_history(request: Request, limit: int = 50) -> dict:
+    user_id = _agent_owner(request, "ledger:read")
+    with write_conn(user_id) as conn:
+        return _import_history(conn, limit)
+
+
 @router.post("/imports/{statement_file_id}/reprocess")
 def reprocess_import(statement_file_id: str, request: Request) -> dict:
     """Re-derive automatic links and attribution for an imported statement."""
@@ -346,13 +365,7 @@ def run_fx_harvest(request: Request) -> dict:
 
 @router.get("/imports/history")
 def import_history(limit: int = 50, conn=Depends(get_conn)) -> dict:
-    rows = [dict(r) for r in conn.execute(
-        "SELECT sf.id, sf.source_path, sf.institution_id, sf.account_id, "
-        "       sf.file_format, sf.parser_id, sf.imported_at, sf.row_count, "
-        "       sf.period_start, sf.period_end, "
-        "       (SELECT COUNT(*) FROM txn WHERE statement_file_id = sf.id) AS txn_count "
-        "FROM statement_file sf ORDER BY sf.imported_at DESC LIMIT %s", (limit,))]
-    return {"files": rows}
+    return _import_history(conn, limit)
 
 
 def _humanize(value: str) -> str:

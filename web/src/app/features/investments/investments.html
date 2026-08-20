@@ -29,7 +29,13 @@
     </div>
     <div class="document-list">
       @for (document of preview.documents; track document.filename) {
-        <span><span class="tag">{{ friendly(document.classification) }}</span> {{ document.filename }}</span>
+        <span>
+          <span class="tag">{{ friendly(document.classification) }}</span>
+          {{ document.filename }}
+          @if (document.parser === 'llm') {
+            <small>AI extracted{{ document.model ? ' · ' + document.model : '' }}</small>
+          }
+        </span>
       }
     </div>
     <div class="import-actions">

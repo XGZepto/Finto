@@ -693,6 +693,18 @@ def test_agent_can_preview_and_confirm_without_server_staging(client, tmp_path):
         )
     assert confirmed.status_code == 200
     assert confirmed.json()["import"]["status"] == "imported"
+    history = client.get("/api/agent/imports/history", headers=auth)
+    assert history.status_code == 200
+    assert any(item["source_path"] == "agent.csv" for item in history.json()["files"])
+    investments = client.get("/api/agent/investments", headers=auth)
+    assert investments.status_code == 200
+    assert "snapshots" in investments.json()
+    activities = client.get("/api/agent/investments/activities", headers=auth)
+    assert activities.status_code == 200
+    assert "activities" in activities.json()
+    integrity = client.get("/api/agent/integrity", headers=auth)
+    assert integrity.status_code == 200
+    assert integrity.json()["summary"]["violation_count"] == 0
 
 
 def test_reconcile_returns_committed_result_directly(client):

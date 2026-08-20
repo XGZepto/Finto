@@ -224,15 +224,51 @@ def convert_rows(conn, rows: list[dict], *, fields: Sequence[str], to_currency: 
     both and label the converted one. Spend and income are converted alongside
     net because a normalised breakdown is ranked on what was spent.
     """
+    target = to_currency.upper()
+    rates: dict[str, Converted] = {}
     out = []
     for r in rows:
         item = dict(r)
         for field in fields:
             m = r.get(field)
             if isinstance(m, dict) and "amount" in m:
-                item[f"{field}_converted"] = convert(
-                    conn, Money(amount=m["amount"], currency=m["currency"]),
-                    to_currency, on).as_dict()
+                source = m["currency"]
+                template = rates.get(source)
+                if template is None:
+                    template = convert(
+                        conn,
+                        Money(amount=0, currency=source),
+                        target,
+                        on,
+                    )
+                    rates[source] = template
+                if not template.ok or template.rate is None:
+                    converted = Converted(
+                        m["amount"],
+                        source,
+                        m["amount"],
+                        source,
+                        None,
+                        None,
+                        False,
+                    )
+                else:
+                    scale = Decimal(10) ** (
+                        minor_exponent(target) - minor_exponent(source)
+                    )
+                    amount = int(
+                        (Decimal(m["amount"]) * template.rate * scale).quantize(Decimal(1))
+                    )
+                    converted = Converted(
+                        amount,
+                        target,
+                        m["amount"],
+                        source,
+                        template.rate,
+                        template.rate_date,
+                        True,
+                    )
+                item[f"{field}_converted"] = converted.as_dict()
         out.append(item)
     return out
 

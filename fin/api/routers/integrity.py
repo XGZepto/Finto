@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from ...integrity import check_all, find_violations
-from ..deps import get_conn
+from ..deps import get_conn, write_conn
 
 router = APIRouter(tags=["integrity"])
 
 
-@router.get("/integrity")
-def get_integrity(conn=Depends(get_conn)) -> dict:
+def _integrity_report(conn) -> dict:
     # record=False: answering the question must not write. The audit trail
     # belongs to import and to `finto check`, which run once per statement, not
     # to a page that may be open on a dashboard all day.
@@ -43,3 +42,17 @@ def get_integrity(conn=Depends(get_conn)) -> dict:
             "unverified_account_count": len(unverified),
         },
     }
+
+
+@router.get("/integrity")
+def get_integrity(conn=Depends(get_conn)) -> dict:
+    return _integrity_report(conn)
+
+
+@router.get("/agent/integrity")
+def agent_get_integrity(request: Request) -> dict:
+    from .imports import _agent_owner
+
+    user_id = _agent_owner(request, "ledger:read")
+    with write_conn(user_id) as conn:
+        return _integrity_report(conn)

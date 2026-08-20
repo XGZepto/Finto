@@ -408,7 +408,12 @@ export interface InvestmentActivity {
 
 export interface MpfBundlePreview {
   bundle_sha256: string;
-  documents: Array<{ filename: string; classification: string }>;
+  documents: Array<{
+    filename: string;
+    classification: string;
+    parser?: 'deterministic' | 'llm';
+    model?: string | null;
+  }>;
   snapshot: {
     as_of_date: string;
     reported_date: string;
