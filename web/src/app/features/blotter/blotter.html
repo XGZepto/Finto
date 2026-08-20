@@ -167,8 +167,11 @@
     <!-- The sentinel sits one screen short of the end, so the next page is
          already arriving by the time the last row is reached. -->
     @if (hasMore()) {
-      <div #sentinel class="sentinel" role="status" aria-label="Loading more transactions">
-        <span class="mono">loading</span>
+      <div #sentinel class="sentinel" role="status"
+           [attr.aria-label]="loadingMore() ? 'Loading more transactions' : 'More transactions below'">
+        @if (loadingMore()) {
+          <span class="mono">loading</span>
+        }
       </div>
     } @else if (total()) {
       <p class="list-end mono">{{ total() }} transaction{{ total() === 1 ? '' : 's' }}</p>

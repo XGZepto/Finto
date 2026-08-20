@@ -391,6 +391,10 @@ def test_pagination(client):
     first = client.get("/api/transactions?limit=2&offset=0").json()
     second = client.get("/api/transactions?limit=2&offset=2").json()
     assert len(first["items"]) == 2
+    assert first["total"] > 0
+    assert "totals" in first
+    assert second["total"] is None
+    assert "totals" not in second
     assert {i["id"] for i in first["items"]} & {i["id"] for i in second["items"]} == set()
 
 

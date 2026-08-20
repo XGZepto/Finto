@@ -110,8 +110,11 @@ export class Api {
     if (opts.sort) p = p.set('sort', opts.sort);
     if (opts.direction) p = p.set('direction', opts.direction);
     if (opts.convertTo) p = p.set('convert_to', opts.convertTo);
-    return this.cached<Page<Txn>>(
-      `${this.base}/transactions?${p.toString()}`, this.activityTtl);
+    const url = `${this.base}/transactions?${p.toString()}`;
+    // Appended pages must not replay a stale cached emit — concat(old, fresh)
+    // would duplicate rows and leave the sentinel looking stuck.
+    if (opts.offset) return this.http.get<Page<Txn>>(url);
+    return this.cached<Page<Txn>>(url, this.activityTtl);
   }
 
   transaction(id: string): Observable<Txn> {

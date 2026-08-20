@@ -762,8 +762,12 @@ def transactions(conn, *, filters: dict | None = None, limit: int = 100,
     order = _SORTABLE.get(sort, _SORTABLE["date"])
     dirn = "ASC" if str(direction).lower() == "asc" else "DESC"
 
-    review = review_totals(conn, filters=filters)
-    total = review["total"]
+    # Later pages only need the next rows. Recomputing filter aggregates and
+    # attaching details to OFFSET-skipped rows is what made mobile infinite
+    # scroll look stuck.
+    aggregates = int(offset) == 0
+    review = review_totals(conn, filters=filters) if aggregates else None
+    total = review["total"] if review is not None else None
 
     sql = f"""
         SELECT t.*, a.display_name AS account_name, a.institution_id,
@@ -771,7 +775,15 @@ def transactions(conn, *, filters: dict | None = None, limit: int = 100,
                c.cardholder_name, c.last4,
                COALESCE(detail_rows.details, '{{}}'::jsonb) AS page_details,
                COALESCE(tag_rows.tags, '[]'::jsonb) AS page_tags
-        FROM txn t
+        FROM (
+          SELECT t.id
+          FROM txn t
+          JOIN account a ON a.id = t.account_id
+          WHERE {where}
+          ORDER BY {order} {dirn}, t.id
+          LIMIT %s OFFSET %s
+        ) page
+        JOIN txn t ON t.id = page.id
         JOIN account a ON a.id = t.account_id
         LEFT JOIN card c ON c.id = t.card_id
         LEFT JOIN LATERAL (
@@ -783,25 +795,22 @@ def transactions(conn, *, filters: dict | None = None, limit: int = 100,
           SELECT jsonb_agg(tg.tag ORDER BY tg.tag) AS tags
           FROM txn_tag tg WHERE tg.txn_id=t.id
         ) tag_rows ON TRUE
-        WHERE {where}
         ORDER BY {order} {dirn}, t.id
-        LIMIT %s OFFSET %s
     """
     rows = list(conn.execute(sql, [*params, int(limit), int(offset)]))
-
-    return {
+    payload = {
         "total": total,
         "limit": limit,
         "offset": offset,
         "items": [
-            _txn_dict(r, r["page_details"], r["page_tags"])
+            _txn_dict(r, r["page_details"] or {}, r["page_tags"] or [])
             for r in rows
         ],
-        # The filtered set, not the page: the question a filter asks is what
-        # the matching rows come to.
-        "totals": totals(conn, filters=filters),
-        "review": review,
     }
+    if aggregates:
+        payload["totals"] = totals(conn, filters=filters)
+        payload["review"] = review
+    return payload
 
 
 def review_totals(conn, *, filters: dict | None = None) -> dict:
