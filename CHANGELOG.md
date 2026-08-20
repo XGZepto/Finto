@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.2 — 2026-08-21
+
+- Recreate the ledger view when adding derived transaction columns so existing
+  PostgreSQL installations migrate without changing an established view shape.
+
 ## 0.4.1 — 2026-08-21
 
 - Materialise non-raw transaction search text so PostgreSQL can use one trigram
