@@ -16,6 +16,7 @@ import pytest
 from fin import db as dbm
 from fin.ingest import (
     ingest_file,
+    reattribute_cards,
     reconcile,
     resolve_card,
     statement_content_fingerprint,
@@ -106,6 +107,36 @@ def conn(database_url):
     c.commit()
     yield c
     c.close()
+
+
+def test_reattribute_reads_normalized_transaction_details(conn):
+    dbm.upsert_card(conn, Card(
+        id="hsbc_card_3456",
+        account_id="hsbc_hk_current",
+        cardholder_name="ALEX E",
+        last4="3456",
+    ))
+    conn.execute(
+        "INSERT INTO statement_file "
+        "(id,source_path,file_sha256,institution_id,account_id,file_format,"
+        "parser_id,parser_version,imported_at,row_count) "
+        "VALUES ('hsbc-card-file','card.pdf','hsbc-card-hash','hsbc_hk',"
+        "'hsbc_hk_current','pdf','pdf_statement','2.0',CURRENT_TIMESTAMP::text,1)"
+    )
+    txn = Txn(
+        account_id="hsbc_hk_current",
+        txn_date=date(2026, 8, 1),
+        booked=Money(amount=-1000, currency="HKD"),
+        description_raw="TEST MERCHANT",
+        statement_file_id="hsbc-card-file",
+        details={"card.number": "1234 5678 9012 3456"},
+    )
+    dbm.insert_txns(conn, [txn])
+    conn.commit()
+
+    assert reattribute_cards(conn, statement_file_id="hsbc-card-file") == 1
+    row = conn.execute("SELECT card_id FROM txn WHERE id=%s", (txn.id,)).fetchone()
+    assert row["card_id"] == "hsbc_card_3456"
 
 
 # ---------------------------------------------------------------------------

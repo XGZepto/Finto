@@ -50,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.3.3",
+    version="0.3.4",
 )
 
 
@@ -201,8 +201,7 @@ def agent_ledger_categorize(request: Request, apply: bool = False,
     win; the model only sees what is left, its answers are cached and recorded
     source='llm', and low-confidence rows stay uncategorised."""
     from .. import db as dbm
-    from ..llm.categorize import (
-        apply_merchants, apply_tags, apply_to_ledger, promote_to_rules)
+    from ..llm.categorize import apply_merchants, apply_tags, apply_to_ledger, promote_to_rules
     from ..llm.provider import AnthropicProvider, LLMUnavailable
 
     user_id, key_id = _api_key_owner(

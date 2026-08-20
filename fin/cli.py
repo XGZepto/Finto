@@ -496,7 +496,10 @@ def cmd_stats(args):
         print(f"\n!! {unattributed} txns on card accounts have no card attributed")
         print("   (a reissued card? register it with replaces_card_id)")
 
-    print("\nuncategorised:", q("SELECT COUNT(*) AS count_value FROM v_ledger WHERE category IS NULL"))
+    uncategorised = q(
+        "SELECT COUNT(*) AS count_value FROM v_ledger WHERE category IS NULL"
+    )
+    print("\nuncategorised:", uncategorised)
 
 
 def cmd_export(args):
