@@ -198,6 +198,7 @@ CREATE TABLE IF NOT EXISTS txn (
     merchant          TEXT,
     counterparty      TEXT,                          -- for transfers/payments
     external_ref      TEXT,                          -- issuer's own txn id, when given
+    search_text       TEXT NOT NULL DEFAULT '',      -- derived non-raw searchable facts
 
     kind              TEXT NOT NULL DEFAULT 'purchase' CHECK (kind IN
                         ('purchase','refund','fee','interest','reward',
@@ -242,14 +243,13 @@ CREATE INDEX IF NOT EXISTS idx_txn_category     ON txn(category, subcategory);
 CREATE INDEX IF NOT EXISTS idx_txn_live_date
     ON txn(txn_date DESC, id)
     WHERE duplicate_of_id IS NULL AND status <> 'void';
-CREATE INDEX IF NOT EXISTS idx_txn_description_raw_trgm
-    ON txn USING gin (description_raw gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_txn_description_norm_trgm
-    ON txn USING gin (description_norm gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_txn_merchant_trgm
-    ON txn USING gin ((COALESCE(merchant, '')) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_txn_counterparty_trgm
-    ON txn USING gin ((COALESCE(counterparty, '')) gin_trgm_ops);
+ALTER TABLE txn ADD COLUMN IF NOT EXISTS search_text TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_txn_search_text_trgm
+    ON txn USING gin (search_text gin_trgm_ops);
+DROP INDEX IF EXISTS idx_txn_description_raw_trgm;
+DROP INDEX IF EXISTS idx_txn_description_norm_trgm;
+DROP INDEX IF EXISTS idx_txn_merchant_trgm;
+DROP INDEX IF EXISTS idx_txn_counterparty_trgm;
 
 -- The ledger you actually query: duplicates filtered out.
 CREATE OR REPLACE VIEW v_ledger AS
@@ -399,9 +399,104 @@ CREATE TABLE IF NOT EXISTS txn_detail (
 
 CREATE INDEX IF NOT EXISTS idx_detail_key   ON txn_detail(key, value);
 CREATE INDEX IF NOT EXISTS idx_detail_value ON txn_detail(value);
-CREATE INDEX IF NOT EXISTS idx_detail_value_trgm
-    ON txn_detail USING gin (value gin_trgm_ops)
-    WHERE key NOT LIKE 'raw.%';
+DROP INDEX IF EXISTS idx_detail_value_trgm;
+
+CREATE TABLE IF NOT EXISTS detail_key_catalog (
+    key TEXT PRIMARY KEY
+);
+
+INSERT INTO detail_key_catalog (key)
+SELECT DISTINCT key FROM txn_detail WHERE key NOT LIKE 'raw.%'
+ON CONFLICT (key) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION finto_set_txn_search_text()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.search_text := concat_ws(
+        ' ',
+        NEW.description_raw,
+        NEW.description_norm,
+        NEW.merchant,
+        NEW.counterparty,
+        (
+            SELECT string_agg(value, ' ' ORDER BY key)
+            FROM txn_detail
+            WHERE txn_id=NEW.id AND key NOT LIKE 'raw.%'
+        )
+    );
+    RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS finto_txn_search_fields ON txn;
+CREATE TRIGGER finto_txn_search_fields
+BEFORE INSERT OR UPDATE OF description_raw,description_norm,merchant,counterparty
+ON txn
+FOR EACH ROW EXECUTE FUNCTION finto_set_txn_search_text();
+
+CREATE OR REPLACE FUNCTION finto_refresh_txn_search_from_detail()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    target_txn TEXT;
+    relevant BOOLEAN;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        target_txn := OLD.txn_id;
+        relevant := OLD.key NOT LIKE 'raw.%';
+    ELSIF TG_OP = 'INSERT' THEN
+        target_txn := NEW.txn_id;
+        relevant := NEW.key NOT LIKE 'raw.%';
+    ELSE
+        target_txn := NEW.txn_id;
+        relevant := NEW.key NOT LIKE 'raw.%' OR OLD.key NOT LIKE 'raw.%';
+    END IF;
+    IF TG_OP <> 'DELETE' AND NEW.key NOT LIKE 'raw.%' THEN
+        INSERT INTO detail_key_catalog (key) VALUES (NEW.key)
+        ON CONFLICT (key) DO NOTHING;
+    END IF;
+    IF relevant THEN
+        UPDATE txn
+        SET search_text=concat_ws(
+            ' ',
+            description_raw,
+            description_norm,
+            merchant,
+            counterparty,
+            (
+                SELECT string_agg(value, ' ' ORDER BY key)
+                FROM txn_detail
+                WHERE txn_id=target_txn AND key NOT LIKE 'raw.%'
+            )
+        )
+        WHERE id=target_txn;
+    END IF;
+    RETURN NULL;
+END
+$$;
+
+DROP TRIGGER IF EXISTS finto_txn_detail_search ON txn_detail;
+CREATE TRIGGER finto_txn_detail_search
+AFTER INSERT OR UPDATE OR DELETE ON txn_detail
+FOR EACH ROW EXECUTE FUNCTION finto_refresh_txn_search_from_detail();
+
+UPDATE txn
+SET search_text=concat_ws(
+    ' ',
+    description_raw,
+    description_norm,
+    merchant,
+    counterparty,
+    (
+        SELECT string_agg(value, ' ' ORDER BY key)
+        FROM txn_detail
+        WHERE txn_id=txn.id AND key NOT LIKE 'raw.%'
+    )
+)
+WHERE search_text='';
 
 -- ---------------------------------------------------------------------------
 -- 4. Transfers between accounts you own

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.1 — 2026-08-21
+
+- Materialise non-raw transaction search text so PostgreSQL can use one trigram
+  index instead of repeatedly scanning RLS-protected transaction detail rows.
+- Serve stable filter vocabularies from canonical catalogs instead of full
+  ledger scans.
+
 ## 0.4.0 — 2026-08-20
 
 - Add validated LLM fallback and force modes for changing HSBC MPF/eMPF PDF

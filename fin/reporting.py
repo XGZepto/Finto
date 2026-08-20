@@ -195,13 +195,8 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
             params.append(value)
 
     for term in str(f.get("q") or "").split():
-        clauses.append(
-            "(t.description_raw ILIKE %s OR t.description_norm ILIKE %s "
-            " OR COALESCE(t.merchant,'') ILIKE %s OR COALESCE(t.counterparty,'') ILIKE %s "
-            " OR EXISTS (SELECT 1 FROM txn_detail d "
-            "            WHERE d.txn_id = t.id AND d.key NOT LIKE 'raw.%%' "
-            "              AND d.value ILIKE %s))")
-        params.extend([f"%{term}%"] * 5)
+        clauses.append("t.search_text ILIKE %s")
+        params.append(f"%{term}%")
 
     return " AND ".join(clauses), params
 
@@ -959,33 +954,43 @@ def facets(conn) -> dict:
           ), '[]'::jsonb) AS institutions,
           COALESCE((
             SELECT jsonb_agg(item_value ORDER BY item_value)
-            FROM (SELECT DISTINCT category AS item_value FROM txn
-                  WHERE category IS NOT NULL) items
+            FROM (
+              SELECT DISTINCT category AS item_value
+              FROM category_definition WHERE active=1
+            ) items
           ), '[]'::jsonb) AS categories,
           COALESCE((
             SELECT jsonb_agg(item_value ORDER BY item_value)
-            FROM (SELECT DISTINCT kind AS item_value FROM txn) items
-          ), '[]'::jsonb) AS kinds,
-          COALESCE((
-            SELECT jsonb_agg(item_value ORDER BY item_value)
-            FROM (SELECT DISTINCT currency_booked AS item_value FROM txn) items
+            FROM (
+              SELECT DISTINCT currency AS item_value FROM account_currency
+            ) items
           ), '[]'::jsonb) AS currencies,
           COALESCE((
             SELECT jsonb_agg(item_value ORDER BY item_value)
-            FROM (SELECT DISTINCT key AS item_value FROM txn_detail) items
+            FROM (SELECT key AS item_value FROM detail_key_catalog) items
           ), '[]'::jsonb) AS detail_keys,
-          (SELECT MIN(txn_date) FROM txn) AS min_date,
-          (SELECT MAX(txn_date) FROM txn) AS max_date
+          (
+            SELECT jsonb_build_object(
+              'min_date', MIN(txn_date),
+              'max_date', MAX(txn_date)
+            )
+            FROM txn
+          ) AS date_range
     """).fetchone()
     return {
         "accounts": row["accounts"],
         "cards": row["cards"],
         "institutions": row["institutions"],
         "categories": row["categories"],
-        "kinds": row["kinds"],
+        "kinds": [
+            "purchase", "refund", "fee", "interest", "reward",
+            "cc_payment", "transfer", "atm", "fx_conversion",
+            "income", "adjustment", "installment",
+            "installment_origination", "unknown",
+        ],
         "currencies": row["currencies"],
         "detail_keys": row["detail_keys"],
-        "date_range": {"min_date": row["min_date"], "max_date": row["max_date"]},
+        "date_range": row["date_range"],
     }
 
 
