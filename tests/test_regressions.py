@@ -14,13 +14,73 @@ from pathlib import Path
 import pytest
 
 from fin import db as dbm
-from fin.ingest import ingest_file, reconcile, resolve_card, unattributed_card_warnings
+from fin.ingest import (
+    ingest_file,
+    reconcile,
+    resolve_card,
+    statement_content_fingerprint,
+    unattributed_card_warnings,
+)
 from fin.models import Account, Card, Institution, Money, ParsedTxn, Txn
 from fin.parsers import institutions as _reg  # noqa: F401  (registers parsers)
-from fin.parsers.base import ParseContext, parse_amount, select_parser
+from fin.parsers.base import ParseContext, ParseResult, parse_amount, select_parser
+from fin.parsers.pdf import _to_parse_result
+from fin.pdf.extract import PdfDocument
+from fin.pdf.template import ExtractedRow, TemplateResult
 from fin.transfers import transfer_group_id
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_statement_fingerprint_ignores_source_pdf_bytes():
+    parsed = ParseResult(
+        txns=[ParsedTxn(
+            txn_date=date(2026, 8, 10),
+            booked=Money(amount=-1500, currency="USD"),
+            description_raw="Monthly Service Fee",
+            extra={"account_hint": "Chase Total Checking"},
+        )],
+        raw_rows=[{"pdf_metadata": "render one"}],
+        period_start=date(2026, 7, 9),
+        period_end=date(2026, 8, 10),
+        balances=[
+            (date(2026, 8, 10), Money(amount=50103, currency="USD"),
+             "Chase Total Checking", "closing"),
+            (date(2026, 8, 10), Money(amount=30000, currency="USD"),
+             "Chase Savings", "closing"),
+        ],
+    )
+    rerendered = ParseResult(
+        txns=parsed.txns,
+        raw_rows=[{"pdf_metadata": "render two"}],
+        period_start=parsed.period_start,
+        period_end=parsed.period_end,
+        balances=parsed.balances,
+    )
+    assert statement_content_fingerprint("chase_us_consolidated", parsed) == (
+        statement_content_fingerprint("chase_us_consolidated", rerendered)
+    )
+
+
+def test_hsbc_pdf_card_number_is_normalised_to_last_four():
+    row = ExtractedRow(
+        txn_date=date(2026, 8, 1),
+        description="TEST MERCHANT",
+        amount=Money(amount=-1000, currency="HKD"),
+        currency="HKD",
+        section="charges",
+        page_no=0,
+        line_no=0,
+        details={"card.number": "1234 5678 9012 3456", "card.holder": "ALEX E"},
+    )
+    result = _to_parse_result(
+        PdfDocument(path="statement.pdf", pages=[]),
+        "hsbc_hk_card",
+        TemplateResult(rows=[row]),
+        [],
+    )
+    assert result.txns[0].card_last4 == "3456"
+    assert result.txns[0].cardholder_hint == "ALEX E"
 
 
 @pytest.fixture

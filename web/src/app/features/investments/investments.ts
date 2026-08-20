@@ -3,7 +3,9 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { InvestmentDetail, InvestmentHistory, InvestmentSnapshot } from '../../core/models';
+import {
+  InvestmentActivity, InvestmentDetail, InvestmentHistory, InvestmentSnapshot, MpfBundlePreview,
+} from '../../core/models';
 import { FormsModule } from '@angular/forms';
 import { FintoSelect } from '../../shared/finto-select';
 import { FintoTimeseries, SeriesPoint } from '../../shared/finto-timeseries';
@@ -33,6 +35,12 @@ export class InvestmentsPage {
   history = signal<InvestmentHistory | null>(null);
   scheme = signal(this.route.snapshot.queryParamMap.get('scheme') ?? '');
   accountId = signal(this.route.snapshot.queryParamMap.get('account') ?? '');
+  activities = signal<InvestmentActivity[]>([]);
+  mpfFiles = signal<File[]>([]);
+  mpfPreview = signal<MpfBundlePreview | null>(null);
+  mpfBusy = signal(false);
+  mpfError = signal('');
+  mpfResult = signal<any>(null);
 
   scopedSnapshots = computed(() => {
     const scheme = this.scheme();
@@ -87,6 +95,11 @@ export class InvestmentsPage {
       )),
       error: () => undefined,
     });
+    this.loadSnapshots();
+    this.loadActivities();
+  }
+
+  private loadSnapshots(): void {
     this.api.investments().subscribe({
       next: (r) => {
         this.snapshots.set(r.snapshots);
@@ -99,6 +112,54 @@ export class InvestmentsPage {
         else this.loading.set(false);
       },
       error: () => this.loading.set(false),
+    });
+  }
+
+  private loadActivities(): void {
+    this.api.investmentActivities(this.accountId() || undefined).subscribe({
+      next: (result) => this.activities.set(result.activities),
+      error: () => this.activities.set([]),
+    });
+  }
+
+  onMpfPick(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (!files.length) return;
+    this.mpfFiles.set(files);
+    this.mpfPreview.set(null);
+    this.mpfResult.set(null);
+    this.mpfError.set('');
+    this.mpfBusy.set(true);
+    this.api.previewMpfBundle(files).subscribe({
+      next: (preview) => {
+        this.mpfPreview.set(preview);
+        this.mpfBusy.set(false);
+      },
+      error: (error) => {
+        this.mpfError.set(error?.error?.detail ?? 'MPF bundle could not be parsed.');
+        this.mpfBusy.set(false);
+      },
+    });
+  }
+
+  confirmMpf(): void {
+    const preview = this.mpfPreview();
+    if (!preview || !this.mpfFiles().length) return;
+    this.mpfBusy.set(true);
+    this.mpfError.set('');
+    this.api.confirmMpfBundle(this.mpfFiles(), preview.bundle_sha256).subscribe({
+      next: (result) => {
+        this.mpfResult.set(result);
+        this.mpfBusy.set(false);
+        this.loadSnapshots();
+        this.loadActivities();
+      },
+      error: (error) => {
+        this.mpfError.set(error?.error?.detail ?? 'MPF bundle import failed.');
+        this.mpfBusy.set(false);
+      },
     });
   }
 
@@ -152,5 +213,6 @@ export class InvestmentsPage {
       queryParams: { scheme, account: accountId },
     });
     this.loadHistory();
+    this.loadActivities();
   }
 }

@@ -40,7 +40,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install Vercel CLI
-        run: npm install --global vercel@58.5.1
+        run: npm install --global vercel@59.1.4
 
       - name: Pull production environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}

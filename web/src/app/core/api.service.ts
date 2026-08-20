@@ -3,7 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import {
   Account, Card, CategorySuggestion, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
-  ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentDetail, InvestmentHistory, InvestmentSnapshot, Job,
+  ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentActivity, InvestmentDetail,
+  InvestmentHistory, InvestmentSnapshot, Job, MpfBundlePreview,
   LedgerFilter, Money, Page, Position, QueryResult, StagePreview, StatementFreshness, SummaryRow,
   TotalRow, Txn,
 } from './models';
@@ -211,21 +212,19 @@ addTag(id: string, tag: string): Observable<Txn> {
     if (meta.institution_id) form.append('institution_id', meta.institution_id);
     if (meta.account_id) form.append('account_id', meta.account_id);
     if (meta.currency) form.append('currency', meta.currency);
-    return this.http.post<StagePreview>(`${this.base}/imports/stage`, form);
+    return this.http.post<StagePreview>(`${this.base}/imports/preview`, form);
   }
 
-  confirmImport(stagedId: string, meta: { institution_id?: string; account_id?: string; currency?: string }):
-    Observable<Job> {
+  confirmImport(file: File, expectedSha256: string,
+    meta: { institution_id?: string; account_id?: string; currency?: string }): Observable<any> {
     this.invalidateReads();
     const form = new FormData();
+    form.append('file', file, file.name);
+    form.append('expected_sha256', expectedSha256);
     if (meta.institution_id) form.append('institution_id', meta.institution_id);
     if (meta.account_id) form.append('account_id', meta.account_id);
     if (meta.currency) form.append('currency', meta.currency);
-    return this.http.post<Job>(`${this.base}/imports/${stagedId}/confirm`, form);
-  }
-
-  discardStaged(stagedId: string): Observable<any> {
-    return this.http.delete(`${this.base}/imports/${stagedId}`);
+    return this.http.post<any>(`${this.base}/imports/confirm`, form);
   }
 
   importHistory(): Observable<{ files: any[] }> {
@@ -236,19 +235,19 @@ addTag(id: string, tag: string): Observable<Txn> {
     return this.cached<ImportCapabilities>(`${this.base}/imports/capabilities`, this.referenceTtl);
   }
 
-  reconcile(): Observable<Job> {
+  reconcile(): Observable<any> {
     this.invalidateReads();
-    return this.http.post<Job>(`${this.base}/reconcile`, {});
+    return this.http.post<any>(`${this.base}/reconcile`, {});
   }
 
-  reattribute(): Observable<Job> {
+  reattribute(): Observable<any> {
     this.invalidateReads();
-    return this.http.post<Job>(`${this.base}/reattribute`, {});
+    return this.http.post<any>(`${this.base}/reattribute`, {});
   }
 
-  harvestFx(): Observable<Job> {
+  harvestFx(): Observable<any> {
     this.invalidateReads();
-    return this.http.post<Job>(`${this.base}/fx/harvest`, {});
+    return this.http.post<any>(`${this.base}/fx/harvest`, {});
   }
 
   job(id: string): Observable<Job> {
@@ -276,6 +275,27 @@ addTag(id: string, tag: string): Observable<Txn> {
   investments(): Observable<{ snapshots: InvestmentSnapshot[] }> {
     return this.cached<{ snapshots: InvestmentSnapshot[] }>(
       `${this.base}/investments`, this.computedTtl);
+  }
+
+  investmentActivities(accountId?: string): Observable<{ activities: InvestmentActivity[] }> {
+    const suffix = accountId ? `?account_id=${encodeURIComponent(accountId)}` : '';
+    return this.cached<{ activities: InvestmentActivity[] }>(
+      `${this.base}/investments/activities${suffix}`, this.activityTtl);
+  }
+
+  previewMpfBundle(files: File[]): Observable<MpfBundlePreview> {
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file, file.name));
+    return this.http.post<MpfBundlePreview>(
+      `${this.base}/investments/imports/preview`, form);
+  }
+
+  confirmMpfBundle(files: File[], expectedBundleSha256: string): Observable<any> {
+    this.invalidateReads();
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file, file.name));
+    form.append('expected_bundle_sha256', expectedBundleSha256);
+    return this.http.post<any>(`${this.base}/investments/imports/confirm`, form);
   }
 
   investment(id: string): Observable<InvestmentDetail> {

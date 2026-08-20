@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS statement_file (
                    CONSTRAINT statement_file_user_fk REFERENCES app_user(id),
     source_path    TEXT NOT NULL,
     file_sha256    TEXT NOT NULL UNIQUE,    -- re-importing the same file is a no-op
+    content_fingerprint TEXT,
     institution_id TEXT NOT NULL REFERENCES institution(id),
     account_id     TEXT REFERENCES account(id),  -- NULL if the file spans accounts
     file_format    TEXT NOT NULL CHECK (file_format IN
@@ -150,6 +151,7 @@ CREATE TABLE IF NOT EXISTS statement_file (
     imported_at    TEXT NOT NULL,
     row_count      BIGINT NOT NULL DEFAULT 0
 );
+ALTER TABLE statement_file ADD COLUMN IF NOT EXISTS content_fingerprint TEXT;
 
 -- Verbatim source rows. Never edited. Lets you re-derive transactions when a
 -- parser improves, without going back to the original download.
@@ -368,6 +370,10 @@ CREATE TABLE IF NOT EXISTS user_api_key (
     revoked_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_user_api_key_owner ON user_api_key(user_id, revoked_at);
+UPDATE user_api_key
+SET scopes = scopes || '["imports:write"]'::jsonb
+WHERE scopes @> '["ledger:write"]'::jsonb
+  AND NOT scopes @> '["imports:write"]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS txn_detail (
     txn_id  TEXT NOT NULL REFERENCES txn(id) ON DELETE CASCADE,
@@ -686,6 +692,9 @@ CREATE INDEX IF NOT EXISTS idx_account_alias ON account_alias(alias);
 
 CREATE TABLE IF NOT EXISTS investment_snapshot (
     id                TEXT PRIMARY KEY,
+    user_id           TEXT NOT NULL DEFAULT
+                      COALESCE(NULLIF(current_setting('finto.user_id', true), ''), 'owner')
+                      REFERENCES app_user(id),
     as_of_date        TEXT NOT NULL,
     scheme            TEXT NOT NULL,          -- 'hsbc_mpf'
     currency          TEXT NOT NULL,
@@ -721,6 +730,23 @@ CREATE TABLE IF NOT EXISTS investment_holding (
 
 CREATE INDEX IF NOT EXISTS idx_holding_snapshot ON investment_holding(snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_inv_sub_account ON investment_subaccount_balance(account_id);
+
+CREATE TABLE IF NOT EXISTS investment_activity (
+    id                TEXT PRIMARY KEY,
+    account_id        TEXT NOT NULL REFERENCES account(id),
+    member_no         TEXT,
+    activity_date     TEXT NOT NULL,
+    contribution_type TEXT NOT NULL,
+    activity_type     TEXT NOT NULL CHECK (activity_type IN
+                          ('regular_contribution','transfer_in','rebate')),
+    amount            BIGINT NOT NULL,
+    currency          TEXT NOT NULL,
+    source_hash       TEXT NOT NULL,
+    created_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_inv_activity_account_date
+    ON investment_activity(account_id, activity_date DESC);
 
 CREATE TABLE IF NOT EXISTS pdf_template (
     template_id   TEXT PRIMARY KEY,
@@ -779,6 +805,15 @@ BEGIN
         ALTER TABLE statement_file ADD CONSTRAINT statement_file_user_fk
             FOREIGN KEY (user_id) REFERENCES app_user(id);
     END IF;
+    ALTER TABLE investment_snapshot ADD COLUMN IF NOT EXISTS user_id TEXT;
+    UPDATE investment_snapshot SET user_id='owner' WHERE user_id IS NULL;
+    ALTER TABLE investment_snapshot ALTER COLUMN user_id SET DEFAULT
+        COALESCE(NULLIF(current_setting('finto.user_id', true), ''), 'owner');
+    ALTER TABLE investment_snapshot ALTER COLUMN user_id SET NOT NULL;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'investment_snapshot_user_fk') THEN
+        ALTER TABLE investment_snapshot ADD CONSTRAINT investment_snapshot_user_fk
+            FOREIGN KEY (user_id) REFERENCES app_user(id);
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'txn_transfer_group_fk') THEN
         ALTER TABLE txn ADD CONSTRAINT txn_transfer_group_fk
             FOREIGN KEY (transfer_group_id) REFERENCES transfer_group(id);
@@ -790,6 +825,9 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_account_user ON account(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_statement_content_fingerprint
+    ON statement_file(user_id, content_fingerprint)
+    WHERE content_fingerprint IS NOT NULL;
 
 -- Account ACLs are enforced in PostgreSQL, including for queries that access a
 -- child table directly. CLI/admin connections explicitly enable the bypass;
@@ -1017,11 +1055,20 @@ ALTER TABLE investment_snapshot ENABLE ROW LEVEL SECURITY;
 ALTER TABLE investment_snapshot FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS finto_acl_select ON investment_snapshot;
 CREATE POLICY finto_acl_select ON investment_snapshot FOR SELECT
-    USING (current_setting('finto.bypass_acl', true) = '1' OR EXISTS (
+    USING (current_setting('finto.bypass_acl', true) = '1'
+           OR user_id=current_setting('finto.user_id', true)
+           OR EXISTS (
         SELECT 1 FROM investment_subaccount_balance b
          WHERE b.snapshot_id=investment_snapshot.id
            AND finto_account_access(b.account_id, 'viewer')
     ));
+DROP POLICY IF EXISTS finto_acl_write ON investment_snapshot;
+CREATE POLICY finto_acl_write ON investment_snapshot
+    FOR ALL
+    USING (current_setting('finto.bypass_acl', true) = '1'
+           OR user_id=current_setting('finto.user_id', true))
+    WITH CHECK (current_setting('finto.bypass_acl', true) = '1'
+                OR user_id=current_setting('finto.user_id', true));
 
 ALTER TABLE investment_holding ENABLE ROW LEVEL SECURITY;
 ALTER TABLE investment_holding FORCE ROW LEVEL SECURITY;
@@ -1032,6 +1079,26 @@ CREATE POLICY finto_acl_select ON investment_holding FOR SELECT
          WHERE b.snapshot_id=investment_holding.snapshot_id
            AND finto_account_access(b.account_id, 'viewer')
     ));
+DROP POLICY IF EXISTS finto_acl_write ON investment_holding;
+CREATE POLICY finto_acl_write ON investment_holding
+    FOR ALL
+    USING (current_setting('finto.bypass_acl', true) = '1' OR EXISTS (
+        SELECT 1 FROM investment_snapshot s
+         WHERE s.id=investment_holding.snapshot_id
+           AND s.user_id=current_setting('finto.user_id', true)
+    ))
+    WITH CHECK (current_setting('finto.bypass_acl', true) = '1' OR EXISTS (
+        SELECT 1 FROM investment_snapshot s
+         WHERE s.id=investment_holding.snapshot_id
+           AND s.user_id=current_setting('finto.user_id', true)
+    ));
+
+ALTER TABLE investment_activity ENABLE ROW LEVEL SECURITY;
+ALTER TABLE investment_activity FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS finto_acl ON investment_activity;
+CREATE POLICY finto_acl ON investment_activity
+    USING (finto_account_access(account_id, 'viewer'))
+    WITH CHECK (finto_account_access(account_id, 'editor'));
 
 -- The database owner (and test superusers) can bypass RLS. Web requests switch
 -- to this non-login role so the policies remain authoritative in every hosting

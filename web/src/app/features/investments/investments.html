@@ -3,6 +3,52 @@
   <div><h1>{{ pageTitle() }}</h1></div>
 </div>
 
+<section class="card mpf-import">
+  <div class="section-head">
+    <div>
+      <h2>Import HSBC MPF bundle</h2>
+      <span class="small muted">Member Returns, three Account Returns, and Contribution History PDFs</span>
+    </div>
+    <label class="button-like">
+      Choose PDFs
+      <input type="file" accept=".pdf,application/pdf" multiple hidden (change)="onMpfPick($event)" />
+    </label>
+  </div>
+  @if (mpfBusy()) {
+    <p class="small muted">Validating the complete bundle…</p>
+  }
+  @if (mpfError()) {
+    <div class="import-message error">{{ mpfError() }}</div>
+  }
+  @if (mpfPreview(); as preview) {
+    <div class="bundle-summary">
+      <div><span class="figure-small">{{ preview.snapshot.total | money }}</span><small>total value</small></div>
+      <div><strong>{{ preview.snapshot.holdings }}</strong><small>fund holdings</small></div>
+      <div><strong>{{ preview.activities.count }}</strong><small>activities</small></div>
+      <div><strong>{{ preview.snapshot.as_of_date | shortDate }}</strong><small>valuation date</small></div>
+    </div>
+    <div class="document-list">
+      @for (document of preview.documents; track document.filename) {
+        <span><span class="tag">{{ friendly(document.classification) }}</span> {{ document.filename }}</span>
+      }
+    </div>
+    <div class="import-actions">
+      <span class="small muted">
+        Reported {{ preview.snapshot.reported_date | shortDate }} ·
+        {{ preview.snapshot.subaccounts.length }} member accounts reconcile
+      </span>
+      <button class="primary" [disabled]="mpfBusy()" (click)="confirmMpf()">Import bundle</button>
+    </div>
+  }
+  @if (mpfResult(); as result) {
+    <div class="import-message success">
+      Snapshot {{ result.snapshot.status }} ·
+      {{ result.activities.inserted }} activities added ·
+      {{ result.activities.skipped }} duplicates skipped
+    </div>
+  }
+</section>
+
 @if (loading()) {
   <finto-skeleton [rows]="6" label="Loading investments" />
 } @else if (!current()) {
@@ -93,6 +139,27 @@
         </div>
       } @empty {
         <p class="empty">No fund allocation in this valuation.</p>
+      }
+    </div>
+  </section>
+}
+
+@if (activities().length) {
+  <section class="card activity-card">
+    <div class="section-head">
+      <h2>Contribution activity</h2>
+      <span class="small muted">{{ activities().length }} records</span>
+    </div>
+    <div class="activity-list">
+      @for (activity of activities(); track activity.id) {
+        <div class="activity-row">
+          <span class="mono small">{{ activity.activity_date | shortDate }}</span>
+          <span>
+            <strong>{{ friendly(activity.activity_type) }}</strong>
+            <small>{{ activity.contribution_type }} · {{ accountLabel(activity.account_id) }}</small>
+          </span>
+          <span class="holding-value">{{ activity.amount | money }}</span>
+        </div>
       }
     </div>
   </section>

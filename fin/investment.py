@@ -8,9 +8,11 @@ fed into `integrity.check_account`.
 
 from __future__ import annotations
 
+import hashlib
+import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -47,12 +49,193 @@ class InvestmentSnapshot:
     statement_file_id: str | None = None
 
 
+@dataclass
+class InvestmentActivity:
+    account_id: str
+    activity_date: date
+    contribution_type: str
+    activity_type: str
+    amount: Money
+    member_no: str | None = None
+    source_hash: str = ""
+    id: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.id:
+            basis = "|".join((
+                self.account_id, self.activity_date.isoformat(),
+                self.contribution_type, self.activity_type,
+                str(self.amount.amount), self.amount.currency,
+            ))
+            self.id = hashlib.sha256(basis.encode()).hexdigest()[:32]
+
+
 # Map HSBC MPF role labels -> stable account ids (must match accounts.yaml).
 HSBC_MPF_ROLE_ACCOUNTS = {
     "regular employee": "hsbc_mpf_regular",
     "personal account holder": "hsbc_mpf_personal",
     "tax deductible voluntary contribution account holder": "hsbc_mpf_tdvc",
 }
+
+_MPF_ACCOUNT_ROLES = {
+    "Regular Employee": "hsbc_mpf_regular",
+    "Personal Account Holder": "hsbc_mpf_personal",
+    "Tax Deductible Voluntary Contribution Account Holder": "hsbc_mpf_tdvc",
+}
+_MONEY = r"(\d[\d,]*\.\d{2})"
+_DATE = r"(\d{2} [A-Z][a-z]{2} \d{4})"
+
+
+def _decimal(value: str) -> Decimal:
+    return Decimal(value.replace(",", ""))
+
+
+def _date(value: str) -> date:
+    return datetime.strptime(value, "%d %b %Y").date()
+
+
+def classify_hsbc_mpf_pdf(path: str | Path) -> str:
+    from .pdf.extract import extract_document
+    text = extract_document(path).text
+    if "MPF Member Returns" in text:
+        return "member_returns"
+    if "MPF Account Returns" in text:
+        return "account_returns"
+    if "MPF Contribution History" in text or "MPF Transaction history" in text:
+        return "contribution_history"
+    raise ValueError(f"{Path(path).name}: not a recognised HSBC MPF PDF")
+
+
+def _parse_member_returns(path: str | Path) -> InvestmentSnapshot:
+    from .pdf.extract import extract_document
+    text = extract_document(path).text
+    total_match = re.search(
+        rf"Overall account balance.*?\n{_MONEY}\s+{_MONEY}\s+{_MONEY}", text)
+    report_match = re.search(r"Balances as at (\d{1,2} [A-Z][a-z]{2} \d{4})", text)
+    if not total_match or not report_match:
+        raise ValueError(f"{Path(path).name}: incomplete member returns summary")
+    total = _decimal(total_match.group(1))
+    holdings: list[FundHolding] = []
+    row = re.compile(
+        rf"^(.+? Fund(?: \(with de-risking nature\))?) "
+        rf"([\d,]+\.\d{{4}}) ([\d,]+\.\d{{4}}) {_MONEY}(?:\s|$)",
+        re.MULTILINE,
+    )
+    for match in row.finditer(text):
+        holdings.append(FundHolding(
+            instrument=match.group(1),
+            units=_decimal(match.group(2)),
+            unit_price=_decimal(match.group(3)),
+            market_value=Money.from_decimal(_decimal(match.group(4)), "HKD"),
+        ))
+    if not holdings:
+        raise ValueError(f"{Path(path).name}: no MPF holdings found")
+    return InvestmentSnapshot(
+        as_of_date=_date(report_match.group(1)),
+        scheme="hsbc_mpf",
+        currency="HKD",
+        total_value=Money.from_decimal(total, "HKD"),
+        source="hsbc_mpf_pdf",
+        holdings=holdings,
+    )
+
+
+def _parse_account_returns(path: str | Path) -> SubaccountBalance:
+    from .pdf.extract import extract_document
+    text = extract_document(path).text
+    role = next((label for label in _MPF_ACCOUNT_ROLES if label in text), None)
+    if role is None and "Tax Deductible Voluntary" in text:
+        role = "Tax Deductible Voluntary Contribution Account Holder"
+    member = re.search(r"Member account number:\s*(\d+)", text)
+    summary = re.search(
+        rf"Total account balance.*?\n{_MONEY}\s+{_MONEY}\s+{_MONEY}", text)
+    if not role or not member or not summary:
+        raise ValueError(f"{Path(path).name}: incomplete account returns")
+    return SubaccountBalance(
+        account_id=_MPF_ACCOUNT_ROLES[role],
+        member_no=member.group(1),
+        balance=Money.from_decimal(_decimal(summary.group(1)), "HKD"),
+    )
+
+
+def _parse_contribution_history(path: str | Path) -> list[InvestmentActivity]:
+    from .pdf.extract import extract_document
+    doc = extract_document(path)
+    text = doc.text
+    member = re.search(r"Member account number:\s*(\d+)", text)
+    if not member:
+        raise ValueError(f"{Path(path).name}: contribution member number missing")
+    member_no = member.group(1)
+    account_id = {
+        "65841230": "hsbc_mpf_regular",
+        "15921678": "hsbc_mpf_personal",
+        "84303079": "hsbc_mpf_tdvc",
+    }.get(member_no)
+    if not account_id:
+        raise ValueError(f"{Path(path).name}: unknown MPF member account {member_no}")
+    activities: list[InvestmentActivity] = []
+    pattern = re.compile(
+        rf"^{_DATE}\s+(?:(.*?)\s+)?"
+        rf"(Regular Contribution|Transfer In|Rebate)\s+{_MONEY}$",
+        re.MULTILINE,
+    )
+    defaults = {
+        "hsbc_mpf_personal": "Mandatory contributions from former employment(s)",
+        "hsbc_mpf_tdvc": "Tax Deductible Voluntary Contributions",
+    }
+    for match in pattern.finditer(text):
+        contribution_type = (
+            (match.group(2) or "").strip()
+            or defaults.get(account_id, "Contribution")
+        )
+        activities.append(InvestmentActivity(
+            account_id=account_id,
+            member_no=member_no,
+            activity_date=_date(match.group(1)),
+            contribution_type=contribution_type,
+            activity_type=match.group(3).lower().replace(" ", "_"),
+            amount=Money.from_decimal(_decimal(match.group(4)), "HKD"),
+            source_hash=doc.content_hash,
+        ))
+    if not activities:
+        raise ValueError(f"{Path(path).name}: no MPF contribution activities found")
+    return activities
+
+
+def parse_hsbc_mpf_pdf_bundle(
+    paths: list[str | Path],
+) -> tuple[InvestmentSnapshot, list[InvestmentActivity], list[dict]]:
+    """Parse and cross-check one member, three account, and activity PDFs."""
+    classified = [(Path(path), classify_hsbc_mpf_pdf(path)) for path in paths]
+    member_paths = [path for path, kind in classified if kind == "member_returns"]
+    account_paths = [path for path, kind in classified if kind == "account_returns"]
+    activity_paths = [path for path, kind in classified if kind == "contribution_history"]
+    if len(member_paths) != 1 or len(account_paths) != 3 or not activity_paths:
+        raise ValueError(
+            "MPF bundle needs one Member Returns, three Account Returns, "
+            "and at least one Contribution History PDF")
+    snapshot = _parse_member_returns(member_paths[0])
+    snapshot.subaccounts = [_parse_account_returns(path) for path in account_paths]
+    if len({item.account_id for item in snapshot.subaccounts}) != 3:
+        raise ValueError("MPF bundle contains duplicate or missing member accounts")
+    sub_total = sum(item.balance.amount for item in snapshot.subaccounts)
+    holding_total = sum(item.market_value.amount for item in snapshot.holdings)
+    if sub_total != snapshot.total_value.amount or holding_total != snapshot.total_value.amount:
+        raise ValueError(
+            f"MPF bundle does not reconcile: reported={snapshot.total_value.amount}, "
+            f"accounts={sub_total}, holdings={holding_total}")
+    # Account Returns explicitly state their holdings use 18 Aug prices; retain
+    # the 19 Aug reporting date in notes but value the coherent snapshot at 18 Aug.
+    snapshot.notes = (
+        f"Reported {snapshot.as_of_date.isoformat()}; holdings valued "
+        f"{(snapshot.as_of_date - timedelta(days=1)).isoformat()}"
+    )
+    snapshot.as_of_date -= timedelta(days=1)
+    activities = [
+        activity for path in activity_paths for activity in _parse_contribution_history(path)
+    ]
+    docs = [{"filename": path.name, "classification": kind} for path, kind in classified]
+    return snapshot, activities, docs
 
 
 def parse_hsbc_mpf_position_xlsx(path: str | Path) -> InvestmentSnapshot:
@@ -132,7 +315,7 @@ def parse_hsbc_mpf_position_xlsx(path: str | Path) -> InvestmentSnapshot:
     )
 
 
-def save_snapshot(conn, snap: InvestmentSnapshot) -> str:
+def save_snapshot(conn, snap: InvestmentSnapshot, *, commit: bool = True) -> str:
     """Persist a snapshot, replacing any previous one for the same scheme+date+source."""
     snap_id = str(uuid.uuid4())
     conn.execute(
@@ -165,8 +348,63 @@ def save_snapshot(conn, snap: InvestmentSnapshot) -> str:
              h.market_value.amount, h.market_value.currency,
              str(h.allocation) if h.allocation is not None else None),
         )
-    conn.commit()
+    if commit:
+        conn.commit()
     return snap_id
+
+
+def save_activities(
+    conn, activities: list[InvestmentActivity], *, commit: bool = True,
+) -> dict:
+    inserted = 0
+    skipped = 0
+    for activity in activities:
+        result = conn.execute(
+            "INSERT INTO investment_activity "
+            "(id,account_id,member_no,activity_date,contribution_type,activity_type,"
+            " amount,currency,source_hash,created_at) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+            "ON CONFLICT (id) DO NOTHING",
+            (
+                activity.id, activity.account_id, activity.member_no,
+                activity.activity_date.isoformat(), activity.contribution_type,
+                activity.activity_type, activity.amount.amount,
+                activity.amount.currency, activity.source_hash,
+                datetime.now().isoformat(),
+            ),
+        )
+        if result.rowcount:
+            inserted += 1
+        else:
+            skipped += 1
+    if commit:
+        conn.commit()
+    return {"inserted": inserted, "skipped": skipped}
+
+
+def list_activities(
+    conn, *, account_id: str | None = None, limit: int = 200,
+) -> list[dict]:
+    where = "WHERE account_id=%s" if account_id else ""
+    params = (account_id, limit) if account_id else (limit,)
+    rows = conn.execute(
+        "SELECT id,account_id,member_no,activity_date,contribution_type,"
+        "activity_type,amount,currency FROM investment_activity "
+        f"{where} ORDER BY activity_date DESC,id LIMIT %s",
+        params,
+    )
+    return [
+        {
+            "id": row["id"],
+            "account_id": row["account_id"],
+            "member_no": row["member_no"],
+            "activity_date": row["activity_date"],
+            "contribution_type": row["contribution_type"],
+            "activity_type": row["activity_type"],
+            "amount": {"amount": row["amount"], "currency": row["currency"]},
+        }
+        for row in rows
+    ]
 
 
 def list_snapshots(conn) -> list[dict]:

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.3.2 — 2026-08-20
+
+- Replace server-local upload staging and background import jobs with stateless
+  preview/confirm uploads and bounded synchronous reconciliation.
+- Detect semantically identical statements even when their PDF bytes differ.
+- Correct HSBC supplementary-card attribution and preserve installment fees
+  outside principal plans.
+- Import and reconcile HSBC MPF Member Returns, Account Returns, and
+  Contribution History PDF bundles, including idempotent investment activity.
+- Add direct browser and API-key import flows with MPF bundle previews.
+
 ## 0.3.1 — 2026-08-19
 
 - Reload, remount, or refetch the current route when an installed PWA returns

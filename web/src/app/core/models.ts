@@ -266,7 +266,7 @@ export interface Job {
 }
 
 export interface StagePreview {
-  staged_id: string;
+  sha256: string;
   filename: string;
   size_bytes: number;
   parser: string | null;
@@ -394,6 +394,36 @@ export interface InvestmentHistory {
   scheme: string | null;
   account_id: string | null;
   points: Array<{ as_of_date: string; value: Money }>;
+}
+
+export interface InvestmentActivity {
+  id: string;
+  account_id: string;
+  member_no: string | null;
+  activity_date: string;
+  contribution_type: string;
+  activity_type: string;
+  amount: Money;
+}
+
+export interface MpfBundlePreview {
+  bundle_sha256: string;
+  documents: Array<{ filename: string; classification: string }>;
+  snapshot: {
+    as_of_date: string;
+    reported_date: string;
+    total: Money;
+    subaccounts: Array<{
+      account_id: string;
+      member_no: string;
+      balance: Money;
+    }>;
+    holdings: number;
+  };
+  activities: {
+    count: number;
+    by_account: Record<string, number>;
+  };
 }
 
 

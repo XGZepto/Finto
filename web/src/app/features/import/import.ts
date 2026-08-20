@@ -1,4 +1,4 @@
-import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api } from '../../core/api.service';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
@@ -15,6 +15,7 @@ interface Entry {
   key: string;
   filename: string;
   sizeBytes: number;
+  file: File;
   state: 'staging' | 'ready' | 'refused' | 'importing' | 'done' | 'failed';
   preview?: StagePreview;
   error?: string;
@@ -43,7 +44,7 @@ interface Entry {
   templateUrl: './import.html',
   styleUrl: './import.css',
 })
-export class ImportPage implements OnDestroy {
+export class ImportPage {
   private api = inject(Api);
 
   facets = signal<Facets | null>(null);
@@ -59,7 +60,6 @@ export class ImportPage implements OnDestroy {
   defaultAccount = signal('');
   defaultCurrency = signal('');
 
-  private timers = new Set<ReturnType<typeof setTimeout>>();
   private seq = 0;
 
   constructor() {
@@ -92,11 +92,6 @@ export class ImportPage implements OnDestroy {
 
   isWorkspaceFormat(format: ImportFormat): boolean {
     return format.source !== 'builtin' && format.source !== 'bundled';
-  }
-
-  ngOnDestroy(): void {
-    this.timers.forEach((t) => clearTimeout(t));
-    this.timers.clear();
   }
 
   loadHistory(): void {
@@ -164,6 +159,7 @@ export class ImportPage implements OnDestroy {
       key,
       filename: file.name,
       sizeBytes: file.size,
+      file,
       state: 'staging',
       institutionId: this.defaultInstitution(),
       accountId: this.defaultAccount(),
@@ -190,19 +186,17 @@ export class ImportPage implements OnDestroy {
     if (!entry.preview) return;
     this.patch(entry.key, { state: 'importing' });
     this.api
-      .confirmImport(entry.preview.staged_id, {
+      .confirmImport(entry.file, entry.preview.sha256, {
         institution_id: entry.institutionId || undefined,
         account_id: entry.accountId || undefined,
         currency: entry.currency || undefined,
       })
       .subscribe({
-        next: (job) => {
-          this.patch(entry.key, { job });
-          this.poll(job.id, (j) => {
-            const failed = j.status === 'error' || j.result?.import?.status === 'error';
-            this.patch(entry.key, { job: j, state: failed ? 'failed' : 'done' });
-            this.loadHistory();
-          });
+        next: (result) => {
+          const job = this.completedJob('import', result);
+          const failed = result?.import?.status === 'error';
+          this.patch(entry.key, { job, state: failed ? 'failed' : 'done' });
+          this.loadHistory();
         },
         error: (err) =>
           this.patch(entry.key, {
@@ -213,7 +207,6 @@ export class ImportPage implements OnDestroy {
   }
 
   discard(entry: Entry): void {
-    if (entry.preview) this.api.discardStaged(entry.preview.staged_id).subscribe();
     this.entries.update((list) => list.filter((e) => e.key !== entry.key));
   }
 
@@ -236,37 +229,32 @@ export class ImportPage implements OnDestroy {
   }
 
   private run(request: ReturnType<Api['reconcile']>): void {
-    this.maintenance.set(null);
+    this.maintenance.set({
+      id: 'maintenance', kind: 'maintenance', status: 'running', progress: 'working',
+      result: null, error: null, created_at: new Date().toISOString(), finished_at: null,
+    });
     request.subscribe({
-      next: (job) => {
-        this.maintenance.set(job);
-        this.poll(job.id, (j) => this.maintenance.set(j));
-      },
+      next: (result) => this.maintenance.set(this.completedJob('maintenance', result)),
+      error: (err) => this.maintenance.set({
+        ...this.completedJob('maintenance', null),
+        status: 'error',
+        error: err?.error?.detail ?? 'Maintenance failed.',
+      }),
     });
   }
 
-  /**
-   * Jobs are queued rather than run in the request, because reconciliation takes one
-   * writer and a UI button makes concurrent invocation trivial in a way the CLI
-   * never did. So the client waits by asking.
-   */
-  private poll(jobId: string, done: (job: Job) => void): void {
-    const tick = () => {
-      this.api.job(jobId).subscribe({
-        next: (j) => {
-          if (j.status === 'done' || j.status === 'error') {
-            done(j);
-            return;
-          }
-          if (jobId === this.maintenance()?.id) this.maintenance.set(j);
-          const t = setTimeout(tick, 600);
-          this.timers.add(t);
-        },
-        error: () => done({ ...({} as Job), id: jobId, status: 'error', error: 'lost the job' }),
-      });
+  private completedJob(kind: string, result: any): Job {
+    const now = new Date().toISOString();
+    return {
+      id: `${kind}-${now}`,
+      kind,
+      status: 'done',
+      progress: 'complete',
+      result,
+      error: null,
+      created_at: now,
+      finished_at: now,
     };
-    const t = setTimeout(tick, 300);
-    this.timers.add(t);
   }
 
   private patch(key: string, change: Partial<Entry>): void {

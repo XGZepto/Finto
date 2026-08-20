@@ -199,6 +199,7 @@ class StatementFile(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     source_path: str
     file_sha256: str
+    content_fingerprint: str | None = None
     institution_id: str
     account_id: str | None = None
     file_format: FileFormat

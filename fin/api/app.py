@@ -50,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.2.7",
+    version="0.3.2",
 )
 
 
@@ -99,7 +99,14 @@ def _ensure_live_schema() -> None:
             "AND column_name='user_id') AS ownership, "
             "EXISTS (SELECT 1 FROM information_schema.columns "
             "WHERE table_schema=current_schema() AND table_name='statement_file' "
-            "AND column_name='user_id') AS statement_ownership"
+            "AND column_name='user_id') AS statement_ownership, "
+            "EXISTS (SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='statement_file' "
+            "AND column_name='content_fingerprint') AS statement_fingerprint, "
+            "to_regclass('investment_activity') IS NOT NULL AS investment_activities, "
+            "EXISTS (SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='investment_snapshot' "
+            "AND column_name='user_id') AS investment_ownership"
         ).fetchone()
         if not all(ready.values()):
             dbm.init_db(conn)
@@ -144,7 +151,7 @@ def _api_key_owner(request: Request, required_scope: str) -> tuple[str, str]:
             raise HTTPException(401, "invalid API key")
         scopes = row["scopes"] if isinstance(row["scopes"], list) else json.loads(row["scopes"])
         if required_scope not in scopes:
-            raise HTTPException(403, "API key lacks taxonomy access")
+            raise HTTPException(403, f"API key lacks {required_scope} access")
         conn.execute("UPDATE user_api_key SET last_used_at=%s WHERE id=%s",
                      (datetime.now(timezone.utc).isoformat(), row["id"]))
         conn.commit()
@@ -289,7 +296,11 @@ def create_api_key(req: ApiKeyRequest, request: Request) -> dict:
         token = "finto_" + secrets.token_urlsafe(32)
         key_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
-        scopes = ["taxonomy:read", "taxonomy:write", "ledger:read", "ledger:write"]
+        scopes = [
+            "taxonomy:read", "taxonomy:write",
+            "ledger:read", "ledger:write",
+            "imports:write",
+        ]
         conn.execute(
             "INSERT INTO user_api_key (id,user_id,name,key_prefix,key_hash,scopes,created_at) "
             "VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s)",

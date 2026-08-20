@@ -80,7 +80,7 @@
   </section>
 }
 
-<!-- Staged files: one card each, nothing committed yet. -->
+<!-- Previewed files: bytes stay in the browser until confirmation. -->
 @for (e of entries(); track e.key) {
   <section class="card entry">
     <header class="spread">
@@ -99,7 +99,7 @@
             <button class="primary" (click)="confirm(e)">Import {{ e.preview?.txn_count }} rows</button>
           }
           @case ('refused') { <button class="ghost" (click)="discard(e)">Dismiss</button> }
-          @case ('importing') { <span class="muted small mono">{{ e.job?.progress || 'queued' }}…</span> }
+          @case ('importing') { <span class="muted small mono">importing and reconciling…</span> }
           @case ('done') { <span class="tag good">imported</span> }
           @case ('failed') { <span class="tag bad">failed</span> }
         }
@@ -193,7 +193,7 @@
              [class.error]="imp.status === 'error'" [class.warn]="imp.status === 'skipped'">
           @switch (imp.status) {
             @case ('imported') { Imported {{ imp.txns }} transactions via {{ imp.parser }}. }
-            @case ('skipped') { Already imported — this exact file is in the ledger. }
+            @case ('skipped') { Already imported — this statement is in the ledger. }
             @default { {{ imp.reason }} }
           }
         </div>
@@ -228,7 +228,7 @@
   </div>
 }
 
-<!-- Ledger-wide operations. These are jobs too — one writer at a time. -->
+<!-- Ledger-wide operations return their committed result directly. -->
 <section class="card">
   <div class="section-head">
     <h2>Maintenance</h2>
