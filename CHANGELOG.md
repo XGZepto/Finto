@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.5 — 2026-08-21
+
+- Render filter select and date menus on `document.body` with inline fixed
+  positioning so the filter panel cannot clip the option list.
+
 ## 0.4.4 — 2026-08-21
 
 - Pin desktop select and date menus to the viewport so the blotter scroll pane
