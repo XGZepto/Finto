@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.6 — 2026-08-21
+
+- Put blotter totals on the same row as Converted/Native and drop the dangling
+  Amounts label.
+
 ## 0.4.5 — 2026-08-21
 
 - Render filter select and date menus on `document.body` with inline fixed
