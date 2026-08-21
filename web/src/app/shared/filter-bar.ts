@@ -151,6 +151,7 @@ import { FintoDate } from './finto-date';
     }
     .advanced.open { grid-template-rows: 1fr; opacity: 1; margin-top: var(--s3); }
     .advanced-inner { overflow: hidden; min-height: 0; }
+    .advanced.open .advanced-inner { overflow: visible; }
     .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; }
     .field.narrow { max-width: 150px; }
     .field input, .field finto-select, .field finto-date { width: 100%; }
