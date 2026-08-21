@@ -1,4 +1,4 @@
-/** Desktop popovers pin to the viewport so a scroll pane cannot clip them. */
+/** Position helpers for menus rendered on the viewport overlay host. */
 
 const COMPACT = '(max-width: 880px)';
 
@@ -26,32 +26,16 @@ export function placeOverlay(
   return {
     dropUp,
     style: {
-      position: 'fixed',
+      position: 'absolute',
       top: dropUp ? 'auto' : `${Math.round(trigger.bottom + gap)}px`,
       bottom: dropUp ? `${Math.round(vh - trigger.top + gap)}px` : 'auto',
       left: `${Math.round(left)}px`,
       right: 'auto',
       width: `${Math.round(width)}px`,
-      'max-width': `${Math.round(maxWidth)}px`,
-      'max-height': `${Math.round(maxHeight)}px`,
-      'z-index': '50',
+      maxWidth: `${Math.round(maxWidth)}px`,
+      maxHeight: `${Math.round(maxHeight)}px`,
     },
   };
-}
-
-export function applyOverlay(el: HTMLElement | null, style: Record<string, string> | null): void {
-  if (!el) return;
-  for (const key of ['position', 'top', 'bottom', 'left', 'right', 'width', 'max-width', 'max-height', 'z-index']) {
-    if (style?.[key]) el.style.setProperty(key, style[key]);
-    else el.style.removeProperty(key);
-  }
-  if (style) portalToBody(el);
-}
-
-/** Leave clipping ancestors so overflow:hidden cannot cut the menu. */
-export function portalToBody(el: HTMLElement | null): void {
-  if (!el || isCompactViewport() || el.parentElement === document.body) return;
-  document.body.appendChild(el);
 }
 
 export function watchOverlay(anchor: () => void): () => void {

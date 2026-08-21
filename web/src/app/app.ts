@@ -1,5 +1,7 @@
 import { Component, inject, signal, viewChild } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, NavigationError, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { OverlayHost } from './core/overlay-host';
 import { Preferences } from './core/preferences.service';
 import { isCollapsedContentPane, isDeadChunkError, recoverAction } from './core/pwa-lifecycle';
 import { Refresh } from './core/refresh.service';
@@ -15,7 +17,7 @@ import { PullToRefresh } from './shared/pull-to-refresh';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NavIcon, PullToRefresh],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NavIcon, PullToRefresh, NgTemplateOutlet],
   template: `
     <div class="shell">
       <nav class="sidebar">
@@ -67,6 +69,11 @@ import { PullToRefresh } from './shared/pull-to-refresh';
         </a>
       </nav>
     </div>
+    <div class="overlay-root">
+      @if (overlays.pane(); as pane) {
+        <ng-container *ngTemplateOutlet="pane" />
+      }
+    </div>
   `,
   styleUrl: './app.css',
 })
@@ -74,6 +81,7 @@ export class App {
   private router = inject(Router);
   private refreshes = inject(Refresh);
   private outlet = viewChild(RouterOutlet);
+  overlays = inject(OverlayHost);
   preferences = inject(Preferences);
 
   readonly nav = [

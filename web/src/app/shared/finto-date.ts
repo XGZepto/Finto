@@ -1,7 +1,8 @@
-import { Component, ElementRef, HostListener, OnDestroy, forwardRef, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, TemplateRef, forwardRef, inject, signal, viewChild } from '@angular/core';
 import { NgStyle } from '@angular/common';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
-import { applyOverlay, placeOverlay, watchOverlay } from '../core/overlay';
+import { OverlayHost } from '../core/overlay-host';
+import { placeOverlay, watchOverlay } from '../core/overlay';
 
 interface CalendarDay { iso: string; day: number; inMonth: boolean; }
 
@@ -18,10 +19,11 @@ let dateInstances = 0;
         <span [class.placeholder]="!value()">{{ value() || 'YYYY-MM-DD' }}</span>
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3v3m12-3v3M3 7h14M4 5h12v12H4z" /></svg>
       </button>
-      @if (open()) {
-        <button type="button" class="date-scrim" aria-label="Close date picker" (click)="close()"></button>
-        <div class="calendar" data-scroll-surface role="dialog" [id]="id"
-             [attr.aria-label]="ariaLabel" [ngStyle]="menuStyle()">
+    </div>
+    <ng-template #pane>
+      <button type="button" class="date-scrim" aria-label="Close date picker" (click)="close()"></button>
+      <div class="calendar" data-scroll-surface role="dialog" [id]="id"
+           [attr.aria-label]="ariaLabel" [ngStyle]="menuStyle()">
           <div class="sheet-head"><strong>Choose date</strong><button type="button" aria-label="Close" (click)="close()">×</button></div>
           <header>
             <button type="button" class="month-step" (click)="move(-1)" aria-label="Previous month">←</button>
@@ -42,8 +44,7 @@ let dateInstances = 0;
             <button type="button" class="bare" (click)="choose(today)">Today</button>
           </footer>
         </div>
-      }
-    </div>
+    </ng-template>
   `,
   styles: [`
     :host { display: block; min-width: 0; }
@@ -85,6 +86,8 @@ let dateInstances = 0;
 })
 export class FintoDate implements ControlValueAccessor, OnDestroy {
   private host = inject(ElementRef<HTMLElement>);
+  private overlays = inject(OverlayHost);
+  private pane = viewChild<TemplateRef<unknown>>('pane');
   readonly ariaLabel = 'Date';
   readonly weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   readonly today = toIso(new Date());
@@ -130,18 +133,16 @@ export class FintoDate implements ControlValueAccessor, OnDestroy {
 
   private startAnchor(): void {
     this.releaseAnchor();
-    const run = () => this.anchor();
-    run();
-    requestAnimationFrame(() => {
-      if (!this.open()) return;
-      run();
-      this.stopAnchor = watchOverlay(run);
-    });
+    this.anchor();
+    const tpl = this.pane();
+    if (tpl) this.overlays.attach(tpl);
+    this.stopAnchor = watchOverlay(() => this.anchor());
   }
 
   private releaseAnchor(): void {
     this.stopAnchor?.();
     this.stopAnchor = undefined;
+    this.overlays.detach(this.pane());
     this.menuStyle.set({});
   }
 
@@ -155,7 +156,6 @@ export class FintoDate implements ControlValueAccessor, OnDestroy {
     if (!(trigger instanceof HTMLElement)) return;
     const placed = placeOverlay(trigger.getBoundingClientRect(), { width: 264, maxWidth: 264, maxHeight: 420 });
     this.menuStyle.set(placed?.style ?? {});
-    applyOverlay(this.menuEl(), placed?.style ?? null);
   }
 
   @HostListener('document:pointerdown', ['$event'])

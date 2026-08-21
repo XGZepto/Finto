@@ -20,7 +20,7 @@ describe('placeOverlay', () => {
     const placed = placeOverlay(rect(1340, 120, 78, 36), { minWidth: 260, maxWidth: 360 });
     assert.ok(placed);
     assert.equal(placed.style['width'], '260px');
-    assert.equal(placed.style['position'], 'fixed');
+    assert.equal(placed.style['position'], 'absolute');
     const left = Number.parseInt(placed.style['left'], 10);
     assert.equal(left + 260 <= 1432, true);
     assert.equal(placed.dropUp, false);

@@ -1,9 +1,10 @@
 import {
-  Component, ElementRef, HostListener, Input, OnDestroy, forwardRef, inject, signal,
+  Component, ElementRef, HostListener, Input, OnDestroy, TemplateRef, forwardRef, inject, signal, viewChild,
 } from '@angular/core';
 import { NgStyle } from '@angular/common';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
-import { placeOverlay, applyOverlay, watchOverlay } from '../core/overlay';
+import { OverlayHost } from '../core/overlay-host';
+import { placeOverlay, watchOverlay } from '../core/overlay';
 
 let instances = 0;
 
@@ -20,10 +21,11 @@ let instances = 0;
               (click)="toggle()" (keydown)="onKeydown($event)">
         <span>{{ selectedLabel() }}</span><i aria-hidden="true"></i>
       </button>
-      @if (open()) {
-        <button type="button" class="select-scrim" aria-label="Close {{ ariaLabel }}" (click)="close()"></button>
-        <div class="select-menu" data-scroll-surface role="listbox" [id]="id + '-list'"
-             [attr.aria-label]="ariaLabel" [ngStyle]="menuStyle()">
+    </div>
+    <ng-template #pane>
+      <button type="button" class="select-scrim" aria-label="Close {{ ariaLabel }}" (click)="close()"></button>
+      <div class="select-menu" data-scroll-surface role="listbox" [id]="id + '-list'"
+           [attr.aria-label]="ariaLabel" [ngStyle]="menuStyle()">
           <div class="sheet-head">
             <strong>{{ ariaLabel }}</strong>
             <button type="button" aria-label="Close" (click)="close()">×</button>
@@ -52,8 +54,7 @@ let instances = 0;
             <p class="no-options">No matching options</p>
           }
         </div>
-      }
-    </div>
+    </ng-template>
   `,
   styles: [`
     :host { display: block; min-width: 0; }
@@ -129,6 +130,8 @@ let instances = 0;
 })
 export class FintoSelect implements ControlValueAccessor, OnDestroy {
   private host = inject(ElementRef<HTMLElement>);
+  private overlays = inject(OverlayHost);
+  private pane = viewChild<TemplateRef<unknown>>('pane');
   @Input() options: readonly unknown[] = [];
   @Input() valueKey = '';
   @Input() labelKey = '';
@@ -238,18 +241,16 @@ export class FintoSelect implements ControlValueAccessor, OnDestroy {
 
   private startAnchor(): void {
     this.releaseAnchor();
-    const run = () => this.anchor();
-    run();
-    requestAnimationFrame(() => {
-      if (!this.open()) return;
-      run();
-      this.stopAnchor = watchOverlay(run);
-    });
+    this.anchor();
+    const tpl = this.pane();
+    if (tpl) this.overlays.attach(tpl);
+    this.stopAnchor = watchOverlay(() => this.anchor());
   }
 
   private releaseAnchor(): void {
     this.stopAnchor?.();
     this.stopAnchor = undefined;
+    this.overlays.detach(this.pane());
     this.menuStyle.set({});
     this.dropUp.set(false);
   }
@@ -265,7 +266,6 @@ export class FintoSelect implements ControlValueAccessor, OnDestroy {
     const placed = placeOverlay(trigger.getBoundingClientRect(), { minWidth: 260, maxWidth: 360, maxHeight: 360 });
     this.dropUp.set(placed?.dropUp ?? false);
     this.menuStyle.set(placed?.style ?? {});
-    applyOverlay(this.menuEl(), placed?.style ?? null);
   }
 
   onKeydown(event: KeyboardEvent): void {

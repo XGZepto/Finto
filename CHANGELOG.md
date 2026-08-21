@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.7 — 2026-08-21
+
+- Render select and date menus on a root overlay host (the usual portal
+  pattern) so the first click is not clipped by the blotter scroll pane.
+
 ## 0.4.6 — 2026-08-21
 
 - Put blotter totals on the same row as Converted/Native and drop the dangling
