@@ -7,7 +7,29 @@
 
 <div class="card ledger-card">
   <div class="aggregation-controls">
-    <span class="aggregation-label">Amounts</span>
+    @if (scopeTotals().length) {
+      @if (!showNative() && normalised(); as total) {
+        <div class="scope normalised-scope">
+          <div class="scope-item">
+            <span class="ccy mono">{{ total.net.currency }}</span>
+            <span class="metric out"><small>Out</small><b class="mono">{{ total.spend | money: 'bare' }}</b></span>
+            <span class="metric in"><small>In</small><b class="mono">{{ total.income | money: 'bare' }}</b></span>
+            <span class="metric net" [class.neg]="total.net.amount < 0" [class.pos]="total.net.amount > 0"><small>Net</small><b class="mono">{{ total.net | money: 'bare' }}</b></span>
+          </div>
+        </div>
+      } @else {
+      <div class="scope">
+        @for (t of scopeTotals(); track t.currency) {
+          <div class="scope-item">
+            <span class="ccy mono">{{ t.currency }}</span>
+            <span class="metric out"><small>Out</small><b class="mono">{{ t.spend | money: 'bare' }}</b></span>
+            <span class="metric in"><small>In</small><b class="mono">{{ t.income | money: 'bare' }}</b></span>
+            <span class="metric net" [class.neg]="t.net.amount < 0" [class.pos]="t.net.amount > 0"><small>Net</small><b class="mono">{{ t.net | money: 'bare' }}</b></span>
+          </div>
+        }
+      </div>
+      }
+    }
     <div class="aggregation-actions">
       <div class="seg" aria-label="Amount display">
         <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Converted</button>
@@ -20,29 +42,6 @@
       }
     </div>
   </div>
-  @if (scopeTotals().length) {
-    @if (!showNative() && normalised(); as total) {
-      <div class="scope normalised-scope">
-        <div class="scope-item">
-          <span class="ccy mono">{{ total.net.currency }}</span>
-          <span class="metric out"><small>Out</small><b class="mono">{{ total.spend | money: 'bare' }}</b></span>
-          <span class="metric in"><small>In</small><b class="mono">{{ total.income | money: 'bare' }}</b></span>
-          <span class="metric net" [class.neg]="total.net.amount < 0" [class.pos]="total.net.amount > 0"><small>Net</small><b class="mono">{{ total.net | money: 'bare' }}</b></span>
-        </div>
-      </div>
-    } @else {
-    <div class="scope">
-      @for (t of scopeTotals(); track t.currency) {
-        <div class="scope-item">
-          <span class="ccy mono">{{ t.currency }}</span>
-          <span class="metric out"><small>Out</small><b class="mono">{{ t.spend | money: 'bare' }}</b></span>
-          <span class="metric in"><small>In</small><b class="mono">{{ t.income | money: 'bare' }}</b></span>
-          <span class="metric net" [class.neg]="t.net.amount < 0" [class.pos]="t.net.amount > 0"><small>Net</small><b class="mono">{{ t.net | money: 'bare' }}</b></span>
-        </div>
-      }
-    </div>
-    }
-  }
 
   @if (loading()) {
     <finto-skeleton [rows]="8" label="Loading transactions" />

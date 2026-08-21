@@ -191,7 +191,7 @@ try {
   const reviewChrome = await page.$('.review-progress, .review-value');
   if (reviewChrome) throw new Error('Ledger still exposes review-state chrome');
   const compactAmountControls = await page.evaluate(() => ({
-    inline: getComputedStyle(document.querySelector('.aggregation-controls')).display,
+    inline: getComputedStyle(document.querySelector('.aggregation-actions')).display,
     options: getComputedStyle(document.querySelector('.amount-options-trigger')).display,
   }));
   if (compactAmountControls.inline !== 'none' || compactAmountControls.options === 'none') {
@@ -463,7 +463,7 @@ try {
     if (overflow > 1) throw new Error(`${route}: desktop horizontal overflow of ${overflow}px`);
     if (route === '/blotter') {
       const desktopAmounts = await page.evaluate(() => ({
-        inline: getComputedStyle(document.querySelector('.aggregation-controls')).display,
+        inline: getComputedStyle(document.querySelector('.aggregation-actions')).display,
         options: getComputedStyle(document.querySelector('.amount-options-trigger')).display,
       }));
       if (desktopAmounts.inline === 'none' || desktopAmounts.options !== 'none') {
