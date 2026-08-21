@@ -149,9 +149,11 @@ import { FintoDate } from './finto-date';
       transition: grid-template-rows var(--motion) var(--ease),
                   opacity var(--motion-fast) linear, margin-top var(--motion) var(--ease);
     }
-    .advanced.open { grid-template-rows: 1fr; opacity: 1; margin-top: var(--s3); }
+    .advanced.open { grid-template-rows: 1fr; opacity: 1; margin-top: var(--s3); overflow: visible; }
     .advanced-inner { overflow: hidden; min-height: 0; }
     .advanced.open .advanced-inner { overflow: visible; }
+    .filter-bar:has(finto-select.sheet-open) .advanced,
+    .filter-bar:has(finto-date.sheet-open) .advanced { overflow: visible; }
     .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; }
     .field.narrow { max-width: 150px; }
     .field input, .field finto-select, .field finto-date { width: 100%; }

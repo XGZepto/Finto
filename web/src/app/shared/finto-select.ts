@@ -1,8 +1,9 @@
 import {
   Component, ElementRef, HostListener, Input, OnDestroy, forwardRef, inject, signal,
 } from '@angular/core';
+import { NgStyle } from '@angular/common';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
-import { placeOverlay, watchOverlay, writeOverlayVars } from '../core/overlay';
+import { placeOverlay, applyOverlay, watchOverlay } from '../core/overlay';
 
 let instances = 0;
 
@@ -21,7 +22,8 @@ let instances = 0;
       </button>
       @if (open()) {
         <button type="button" class="select-scrim" aria-label="Close {{ ariaLabel }}" (click)="close()"></button>
-        <div class="select-menu" data-scroll-surface role="listbox" [id]="id + '-list'" [attr.aria-label]="ariaLabel">
+        <div class="select-menu" data-scroll-surface role="listbox" [id]="id + '-list'"
+             [attr.aria-label]="ariaLabel" [ngStyle]="menuStyle()">
           <div class="sheet-head">
             <strong>{{ ariaLabel }}</strong>
             <button type="button" aria-label="Close" (click)="close()">×</button>
@@ -74,15 +76,6 @@ let instances = 0;
       box-shadow: var(--shadow-popover);
     }
     .select-scrim, .sheet-head { display: none; }
-    /* Desktop menus pin to the viewport so the content pane cannot clip them. */
-    @media (min-width: 881px) {
-      .select-menu, .up .select-menu {
-        position: fixed; top: var(--overlay-top, calc(100% + 4px));
-        bottom: var(--overlay-bottom, auto); left: var(--overlay-left, 0); right: auto;
-        width: var(--overlay-width, max-content); min-width: 0;
-        max-width: min(360px, calc(100vw - 16px)); max-height: var(--overlay-max-h, 280px);
-      }
-    }
     .select-option {
       display: grid; grid-template-columns: minmax(0, 1fr) 24px; gap: 12px; align-items: center;
       width: 100%; min-height: 38px; padding: 7px 9px; border: 0;
@@ -127,6 +120,7 @@ let instances = 0;
     }
     @media (prefers-reduced-motion: reduce) { .select-trigger i { transition: none; } .select-menu, .select-scrim { animation: none; } }
   `],
+  imports: [NgStyle],
   providers: [{
     provide: NG_VALUE_ACCESSOR,
     useExisting: forwardRef(() => FintoSelect),
@@ -150,6 +144,7 @@ export class FintoSelect implements ControlValueAccessor, OnDestroy {
   disabled = signal(false);
   activeIndex = signal(0);
   query = signal('');
+  menuStyle = signal<Record<string, string>>({});
   private onChange: (value: string) => void = () => undefined;
   private onTouched: () => void = () => undefined;
   private stopAnchor?: () => void;
@@ -245,15 +240,22 @@ export class FintoSelect implements ControlValueAccessor, OnDestroy {
     this.releaseAnchor();
     const run = () => this.anchor();
     run();
-    requestAnimationFrame(run);
-    this.stopAnchor = watchOverlay(run);
+    requestAnimationFrame(() => {
+      if (!this.open()) return;
+      run();
+      this.stopAnchor = watchOverlay(run);
+    });
   }
 
   private releaseAnchor(): void {
     this.stopAnchor?.();
     this.stopAnchor = undefined;
-    writeOverlayVars(this.host.nativeElement, null);
+    this.menuStyle.set({});
     this.dropUp.set(false);
+  }
+
+  private menuEl(): HTMLElement | null {
+    return document.getElementById(this.id + '-list');
   }
 
   private anchor(): void {
@@ -262,7 +264,8 @@ export class FintoSelect implements ControlValueAccessor, OnDestroy {
     if (!(trigger instanceof HTMLElement)) return;
     const placed = placeOverlay(trigger.getBoundingClientRect(), { minWidth: 260, maxWidth: 360, maxHeight: 360 });
     this.dropUp.set(placed?.dropUp ?? false);
-    writeOverlayVars(this.host.nativeElement, placed?.vars ?? null);
+    this.menuStyle.set(placed?.style ?? {});
+    applyOverlay(this.menuEl(), placed?.style ?? null);
   }
 
   onKeydown(event: KeyboardEvent): void {
@@ -284,6 +287,8 @@ export class FintoSelect implements ControlValueAccessor, OnDestroy {
 
   @HostListener('document:pointerdown', ['$event'])
   closeOutside(event: PointerEvent): void {
-    if (!this.host.nativeElement.contains(event.target as Node)) this.close();
+    const target = event.target as Node;
+    if (this.host.nativeElement.contains(target) || this.menuEl()?.contains(target)) return;
+    this.close();
   }
 }

@@ -19,8 +19,9 @@ describe('placeOverlay', () => {
     });
     const placed = placeOverlay(rect(1340, 120, 78, 36), { minWidth: 260, maxWidth: 360 });
     assert.ok(placed);
-    assert.equal(placed.vars['--overlay-width'], '260px');
-    const left = Number.parseInt(placed.vars['--overlay-left'], 10);
+    assert.equal(placed.style['width'], '260px');
+    assert.equal(placed.style['position'], 'fixed');
+    const left = Number.parseInt(placed.style['left'], 10);
     assert.equal(left + 260 <= 1432, true);
     assert.equal(placed.dropUp, false);
     if (previous === undefined) delete (globalThis as { window?: unknown }).window;
