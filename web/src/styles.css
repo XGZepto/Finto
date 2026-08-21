@@ -227,6 +227,15 @@
 html, body, app-root { margin: 0; padding: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
 app-root { display: block; }
 
+/* Menus render here, outside the scrolling pane, so overflow cannot clip them. */
+.overlay-root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-popover);
+  pointer-events: none;
+}
+.overlay-root > * { pointer-events: auto; }
+
 body {
   background: var(--bg);
   color: var(--fg);
