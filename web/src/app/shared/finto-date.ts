@@ -1,5 +1,6 @@
-import { Component, ElementRef, HostListener, forwardRef, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, forwardRef, inject, signal } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { placeOverlay, watchOverlay, writeOverlayVars } from '../core/overlay';
 
 interface CalendarDay { iso: string; day: number; inMonth: boolean; }
 
@@ -49,6 +50,13 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
     .open .date-trigger { border-color: var(--fg-3); background: var(--panel-2); }
     .calendar { position: absolute; z-index: var(--z-popover); top: calc(100% + 4px); left: 0; width: 264px; padding: 9px; border: 1px solid var(--line-2); background: var(--panel); box-shadow: var(--shadow-popover); }
     .date-scrim, .sheet-head { display: none; }
+    @media (min-width: 881px) {
+      .calendar {
+        position: fixed; top: var(--overlay-top, calc(100% + 4px));
+        bottom: var(--overlay-bottom, auto); left: var(--overlay-left, 0); right: auto;
+        width: var(--overlay-width, 264px); max-height: var(--overlay-max-h, none); overflow-y: auto;
+      }
+    }
     header { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; margin-bottom: 7px; }
     header strong { color: var(--fg-2); font: 500 var(--t-label)/1 var(--mono); letter-spacing: .08em; text-align: center; text-transform: uppercase; }
     .month-step { padding: 0; border: 0; background: transparent; }
@@ -64,7 +72,7 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
     @media (max-width: 880px) {
       .date-trigger { min-height: 44px; }
       .date-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--modal-scrim); -webkit-backdrop-filter: var(--modal-scrim-filter); backdrop-filter: var(--modal-scrim-filter); animation: date-fade var(--motion-fast) var(--ease-out) both; }
-      .calendar { position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; width: auto; padding: 0 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--line-2); background: var(--glass-surface); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); box-shadow: var(--shadow-sheet); animation: date-up var(--motion) var(--ease-out) both; }
+      .calendar { position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; top: auto; bottom: 0; left: 0; right: 0; width: auto; padding: 0 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--line-2); background: var(--glass-surface); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); box-shadow: var(--shadow-sheet); animation: date-up var(--motion) var(--ease-out) both; }
       .sheet-head { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: 48px; margin: 0 -12px 4px; padding: 0 12px; border-bottom: 1px solid var(--line); }
       .sheet-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 32px; height: 3px; border-radius: 3px; background: var(--fg-4); transform: translateX(-50%); opacity: .6; }
       .sheet-head strong { font: 550 var(--t-data)/1 var(--sans); }
@@ -77,7 +85,7 @@ interface CalendarDay { iso: string; day: number; inMonth: boolean; }
   `],
   providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => FintoDate), multi: true }],
 })
-export class FintoDate implements ControlValueAccessor {
+export class FintoDate implements ControlValueAccessor, OnDestroy {
   private host = inject(ElementRef<HTMLElement>);
   readonly ariaLabel = 'Date';
   readonly weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -88,6 +96,7 @@ export class FintoDate implements ControlValueAccessor {
   readonly cursor = signal(monthStart(new Date()));
   private onChange: (value: string) => void = () => undefined;
   private onTouched: () => void = () => undefined;
+  private stopAnchor?: () => void;
 
   writeValue(value: unknown): void {
     const iso = typeof value === 'string' ? value : '';
@@ -97,7 +106,13 @@ export class FintoDate implements ControlValueAccessor {
   registerOnChange(fn: (value: string) => void): void { this.onChange = fn; }
   registerOnTouched(fn: () => void): void { this.onTouched = fn; }
   setDisabledState(value: boolean): void { this.disabled.set(value); }
-  toggle(): void { if (!this.disabled()) this.open.update((value) => !value); }
+  toggle(): void {
+    if (this.disabled()) return;
+    this.open.update((value) => !value);
+    if (this.open()) this.startAnchor();
+    else this.releaseAnchor();
+  }
+  ngOnDestroy(): void { this.releaseAnchor(); }
   move(delta: number): void { this.cursor.update((date) => new Date(date.getFullYear(), date.getMonth() + delta, 1)); }
   monthLabel(): string { return new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(this.cursor()); }
   days(): CalendarDay[] {
@@ -109,14 +124,36 @@ export class FintoDate implements ControlValueAccessor {
       return { iso: toIso(date), day: date.getDate(), inMonth: date.getMonth() === month.getMonth() };
     });
   }
-  choose(iso: string): void { this.value.set(iso); this.onChange(iso); this.onTouched(); this.open.set(false); }
+  choose(iso: string): void { this.value.set(iso); this.onChange(iso); this.onTouched(); this.open.set(false); this.releaseAnchor(); }
   clear(): void { this.choose(''); }
-  close(): void { this.open.set(false); this.onTouched(); }
+  close(): void { this.open.set(false); this.onTouched(); this.releaseAnchor(); }
+
+  private startAnchor(): void {
+    this.releaseAnchor();
+    const run = () => this.anchor();
+    run();
+    requestAnimationFrame(run);
+    this.stopAnchor = watchOverlay(run);
+  }
+
+  private releaseAnchor(): void {
+    this.stopAnchor?.();
+    this.stopAnchor = undefined;
+    writeOverlayVars(this.host.nativeElement, null);
+  }
+
+  private anchor(): void {
+    if (!this.open()) return;
+    const trigger = this.host.nativeElement.querySelector('.date-trigger');
+    if (!(trigger instanceof HTMLElement)) return;
+    const placed = placeOverlay(trigger.getBoundingClientRect(), { width: 264, maxWidth: 264, maxHeight: 420 });
+    writeOverlayVars(this.host.nativeElement, placed?.vars ?? null);
+  }
 
   @HostListener('document:pointerdown', ['$event'])
-  closeOutside(event: PointerEvent): void { if (!this.host.nativeElement.contains(event.target as Node)) this.open.set(false); }
+  closeOutside(event: PointerEvent): void { if (!this.host.nativeElement.contains(event.target as Node)) this.close(); }
   @HostListener('document:keydown.escape')
-  closeEscape(): void { this.open.set(false); }
+  closeEscape(): void { this.close(); }
 }
 
 function monthStart(date: Date): Date { return new Date(date.getFullYear(), date.getMonth(), 1); }

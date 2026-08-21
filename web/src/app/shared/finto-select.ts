@@ -1,7 +1,8 @@
 import {
-  Component, ElementRef, HostListener, Input, forwardRef, inject, signal,
+  Component, ElementRef, HostListener, Input, OnDestroy, forwardRef, inject, signal,
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { placeOverlay, watchOverlay, writeOverlayVars } from '../core/overlay';
 
 let instances = 0;
 
@@ -68,13 +69,20 @@ let instances = 0;
     .open .select-trigger i { transform: rotate(225deg) translate(-2px, -1px); }
     .select-menu {
       position: absolute; z-index: var(--z-popover); top: calc(100% + 4px); left: 0; min-width: 100%;
-      width: max-content; max-width: min(320px, 88vw); max-height: 260px; overflow-y: auto;
+      width: max-content; max-width: min(360px, 88vw); max-height: 260px; overflow-y: auto;
       padding: 4px; border: 1px solid var(--line-2); background: var(--panel);
       box-shadow: var(--shadow-popover);
     }
     .select-scrim, .sheet-head { display: none; }
-    /* Desktop menus near the viewport foot open upward. */
-    .up .select-menu { top: auto; bottom: calc(100% + 4px); }
+    /* Desktop menus pin to the viewport so the content pane cannot clip them. */
+    @media (min-width: 881px) {
+      .select-menu, .up .select-menu {
+        position: fixed; top: var(--overlay-top, calc(100% + 4px));
+        bottom: var(--overlay-bottom, auto); left: var(--overlay-left, 0); right: auto;
+        width: var(--overlay-width, max-content); min-width: 0;
+        max-width: min(360px, calc(100vw - 16px)); max-height: var(--overlay-max-h, 280px);
+      }
+    }
     .select-option {
       display: grid; grid-template-columns: minmax(0, 1fr) 24px; gap: 12px; align-items: center;
       width: 100%; min-height: 38px; padding: 7px 9px; border: 0;
@@ -99,8 +107,9 @@ let instances = 0;
       .select-trigger, .select-option { min-height: 44px; }
       .select-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--modal-scrim); -webkit-backdrop-filter: var(--modal-scrim-filter); backdrop-filter: var(--modal-scrim-filter); animation: sheet-fade var(--motion-fast) var(--ease-out) both; }
       .select-menu, .up .select-menu {
-        position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; width: 100%; max-width: none;
-        max-height: min(76dvh, 660px); padding: 0 14px calc(14px + env(safe-area-inset-bottom));
+        position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; top: auto; bottom: 0; left: 0; right: 0;
+        width: 100%; max-width: none; max-height: min(76dvh, 660px);
+        padding: 0 14px calc(14px + env(safe-area-inset-bottom));
         border: 0; border-top: 1px solid var(--line-2); background: var(--glass-surface);
         -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
         box-shadow: var(--shadow-sheet); animation: sheet-up var(--motion) var(--ease-out) both;
@@ -124,7 +133,7 @@ let instances = 0;
     multi: true,
   }],
 })
-export class FintoSelect implements ControlValueAccessor {
+export class FintoSelect implements ControlValueAccessor, OnDestroy {
   private host = inject(ElementRef<HTMLElement>);
   @Input() options: readonly unknown[] = [];
   @Input() valueKey = '';
@@ -143,6 +152,7 @@ export class FintoSelect implements ControlValueAccessor {
   query = signal('');
   private onChange: (value: string) => void = () => undefined;
   private onTouched: () => void = () => undefined;
+  private stopAnchor?: () => void;
 
   writeValue(value: unknown): void { this.value.set(value == null ? '' : String(value)); }
   registerOnChange(fn: (value: string) => void): void { this.onChange = fn; }
@@ -202,18 +212,16 @@ export class FintoSelect implements ControlValueAccessor {
     this.activeIndex.set(0);
   }
 
+  ngOnDestroy(): void { this.releaseAnchor(); }
+
   toggle(): void {
     if (this.disabled()) return;
     this.open.update((open) => !open);
-    if (this.open()) {
-      const rect = this.host.nativeElement.getBoundingClientRect();
-      const below = window.innerHeight - rect.bottom;
-      // Flip up when the space below can't hold the menu and there's more above.
-      this.dropUp.set(below < 280 && rect.top > below);
-    }
     this.query.set('');
     const selected = this.filteredOptions().findIndex((option) => this.optionValue(option) === this.value());
     this.activeIndex.set(Math.max(0, selected));
+    if (this.open()) this.startAnchor();
+    else this.releaseAnchor();
   }
 
   choose(option: unknown): void {
@@ -223,15 +231,45 @@ export class FintoSelect implements ControlValueAccessor {
     this.onTouched();
     this.open.set(false);
     this.query.set('');
+    this.releaseAnchor();
   }
 
-  close(): void { this.open.set(false); this.query.set(''); this.onTouched(); }
+  close(): void {
+    this.open.set(false);
+    this.query.set('');
+    this.onTouched();
+    this.releaseAnchor();
+  }
+
+  private startAnchor(): void {
+    this.releaseAnchor();
+    const run = () => this.anchor();
+    run();
+    requestAnimationFrame(run);
+    this.stopAnchor = watchOverlay(run);
+  }
+
+  private releaseAnchor(): void {
+    this.stopAnchor?.();
+    this.stopAnchor = undefined;
+    writeOverlayVars(this.host.nativeElement, null);
+    this.dropUp.set(false);
+  }
+
+  private anchor(): void {
+    if (!this.open()) return;
+    const trigger = this.host.nativeElement.querySelector('.select-trigger');
+    if (!(trigger instanceof HTMLElement)) return;
+    const placed = placeOverlay(trigger.getBoundingClientRect(), { minWidth: 260, maxWidth: 360, maxHeight: 360 });
+    this.dropUp.set(placed?.dropUp ?? false);
+    writeOverlayVars(this.host.nativeElement, placed?.vars ?? null);
+  }
 
   onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') { this.open.set(false); return; }
+    if (event.key === 'Escape') { this.close(); return; }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
-      if (!this.open()) this.open.set(true);
+      if (!this.open()) { this.open.set(true); this.startAnchor(); }
       const step = event.key === 'ArrowDown' ? 1 : -1;
       const count = this.filteredOptions().length;
       if (count) this.activeIndex.set((this.activeIndex() + step + count) % count);
@@ -246,6 +284,6 @@ export class FintoSelect implements ControlValueAccessor {
 
   @HostListener('document:pointerdown', ['$event'])
   closeOutside(event: PointerEvent): void {
-    if (!this.host.nativeElement.contains(event.target as Node)) this.open.set(false);
+    if (!this.host.nativeElement.contains(event.target as Node)) this.close();
   }
 }

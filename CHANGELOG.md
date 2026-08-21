@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.4 — 2026-08-21
+
+- Pin desktop select and date menus to the viewport so the blotter scroll pane
+  cannot clip them, and let the content column fill the window so the scrollbar
+  sits on the right edge.
+
 ## 0.4.3 — 2026-08-21
 
 - Keep blotter infinite scroll moving on phones: paginate transaction ids

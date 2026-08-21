@@ -97,10 +97,11 @@
   text-transform: uppercase;
 }
 
+/* The pane is the scroll container, so it has to fill the column. A max-width
+   on this element parked the scrollbar in the middle of a wide display. */
 .content {
   position: relative;
-  width: 100%;
-  max-width: 1640px;
+  width: auto;
   min-width: 0;
   height: 100%;
   overflow-y: auto;
