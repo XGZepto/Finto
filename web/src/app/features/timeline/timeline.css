@@ -23,7 +23,7 @@
   overflow: hidden;
   white-space: nowrap;
 }
-.tick.on { color: var(--fg-1); }
+.tick.on { color: var(--fg); }
 
 .legend {
   display: flex;

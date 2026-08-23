@@ -33,17 +33,24 @@
   background: var(--panel);
 }
 .queue li {
+  border-bottom: 1px solid var(--line);
+  border-left: 2px solid transparent;
+}
+.queue li button {
   display: flex;
   gap: 8px;
   align-items: baseline;
+  width: 100%;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--line);
-  border-left: 2px solid transparent;
+  border: 0;
+  background: transparent;
+  color: inherit;
   font-size: var(--t-meta);
-  cursor: pointer;
+  letter-spacing: 0;
+  text-align: left;
 }
 .queue li:last-child { border-bottom: none; }
-.queue li:hover { background: var(--panel-2); }
+.queue li:hover button { background: var(--panel-2); }
 .queue li.on { background: var(--panel-2); border-left-color: var(--fg); }
 .queue .line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
 .queue li.on .line { color: var(--fg); }

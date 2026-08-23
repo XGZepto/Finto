@@ -56,7 +56,7 @@ td.action button { font-family: var(--mono); font-size: var(--t-label); letter-s
   td.check-state::before, td.action::before { display: none; }
   td.num { text-align: left; white-space: normal; }
   td.action { grid-column: 1 / -1; width: auto; text-align: left; }
-  td.action button { min-height: 36px; }
+  td.action button { min-height: var(--touch-h); }
   td.empty { grid-column: 1 / -1; padding: 22px 0; }
   td.empty::before { display: none; }
 }

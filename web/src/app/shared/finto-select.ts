@@ -61,8 +61,8 @@ let instances = 0;
     .select-root { position: relative; min-width: 0; }
     .select-trigger {
       display: grid; grid-template-columns: minmax(0, 1fr) 12px; align-items: center;
-      gap: 10px; width: 100%; min-height: 36px; padding: 7px 10px;
-      background: var(--panel-2); border: 1px solid var(--line-2); color: var(--fg);
+      gap: 10px; width: 100%; min-height: var(--control-h); padding: 6px 10px;
+      background: var(--panel-2); border: 1px solid var(--line-strong); color: var(--fg);
       text-align: left; letter-spacing: 0;
     }
     .select-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -71,8 +71,7 @@ let instances = 0;
     .open .select-trigger { border-color: var(--fg-3); background: var(--panel-3); }
     .open .select-trigger i { transform: rotate(225deg) translate(-2px, -1px); }
     .select-menu {
-      position: absolute; z-index: var(--z-popover); top: calc(100% + 4px); left: 0; min-width: 100%;
-      width: max-content; max-width: min(360px, 88vw); max-height: 260px; overflow-y: auto;
+      position: absolute; z-index: var(--z-popover); overflow-y: auto;
       padding: 4px; border: 1px solid var(--line-2); background: var(--panel);
       box-shadow: var(--shadow-popover);
     }
@@ -98,7 +97,8 @@ let instances = 0;
     .search-icon::after { content: ''; position: absolute; right: -4px; bottom: -2px; width: 5px; border-top: 1.5px solid currentColor; transform: rotate(45deg); transform-origin: left; }
     .no-options { margin: 18px 10px; color: var(--fg-4); font-size: var(--t-meta); text-align: center; }
     @media (max-width: 880px) {
-      .select-trigger, .select-option { min-height: 44px; }
+      .select-trigger { min-height: var(--touch-h); }
+      .select-option { min-height: 48px; }
       .select-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--modal-scrim); -webkit-backdrop-filter: var(--modal-scrim-filter); backdrop-filter: var(--modal-scrim-filter); animation: sheet-fade var(--motion-fast) var(--ease-out) both; }
       .select-menu, .up .select-menu {
         position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; top: auto; bottom: 0; left: 0; right: 0;

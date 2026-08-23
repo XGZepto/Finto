@@ -20,11 +20,30 @@ describe('placeOverlay', () => {
     const placed = placeOverlay(rect(1340, 120, 78, 36), { minWidth: 260, maxWidth: 360 });
     assert.ok(placed);
     assert.equal(placed.style['width'], '260px');
+    assert.equal(placed.style['minWidth'], '260px');
+    assert.equal(placed.style['maxWidth'], '260px');
     assert.equal(placed.style['position'], 'absolute');
     const left = Number.parseInt(placed.style['left'], 10);
     assert.equal(left + 260 <= 1432, true);
     assert.equal(placed.dropUp, false);
     if (previous === undefined) delete (globalThis as { window?: unknown }).window;
     else Object.defineProperty(globalThis, 'window', { configurable: true, value: previous });
+  });
+
+  it('caps a wide trigger instead of stretching to the overlay host', () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        innerWidth: 1440,
+        innerHeight: 900,
+        matchMedia: (query: string) => ({ matches: false, media: query }),
+      },
+    });
+    const placed = placeOverlay(rect(48, 120, 980, 36), { minWidth: 260, maxWidth: 360 });
+    assert.ok(placed);
+    assert.equal(placed.style['width'], '360px');
+    assert.equal(placed.style['minWidth'], '360px');
+    assert.equal(placed.style['maxWidth'], '360px');
+    delete (globalThis as { window?: unknown }).window;
   });
 });

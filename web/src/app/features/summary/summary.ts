@@ -340,6 +340,11 @@ export class SummaryPage {
     this.filters.drillInto(this.groupBy(), bucket, this.periodFilter());
   }
 
+  /** A flow column is a month. The split-by control does not apply to it. */
+  drillMonth(bucket: string): void {
+    this.filters.drillInto('month', bucket);
+  }
+
   /** Tooltip for a trend column. Goes through MoneyPipe like every other figure. */
   barTitle(row: SummaryRow, bucket: string): string {
     const out = this.money.transform(row.spend);

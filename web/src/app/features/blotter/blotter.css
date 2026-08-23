@@ -128,12 +128,12 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
 
 /* Payment-gateway charge metadata. */
 .tag.gateway {
-  background: color-mix(in srgb, var(--accent, #6b7280) 12%, transparent);
-  color: var(--muted, #6b7280);
+  background: var(--info-wash);
+  color: var(--info);
 }
 
 .gateway-note {
-  border-left: 2px solid color-mix(in srgb, var(--muted, #6b7280) 35%, transparent);
+  border-left: 2px solid var(--line-strong);
   padding-left: 0.75rem;
 }
 

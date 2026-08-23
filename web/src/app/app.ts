@@ -93,12 +93,11 @@ export class App {
     { path: '/ask', label: 'Ask', labelZh: '查詢', icon: 'ask' },
   ];
 
-  /** Stable top-level destinations earn tabs; episodic utilities stay in More. */
+  /** Stable top-level destinations earn tabs; the rest stay in More on a phone. */
   readonly primaryNav = this.nav.slice(0, 4);
 
   readonly desktopGroups = [
-    { label: 'Money', labelZh: '財務', items: this.nav.slice(0, 4) },
-    { label: 'More', labelZh: '更多', items: this.nav.slice(4) },
+    { label: 'Money', labelZh: '財務', items: this.nav },
   ];
 
   /** Live, not a boot-time probe: connectivity is only worth showing while it changes. */

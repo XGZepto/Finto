@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -9,8 +10,14 @@ const output = path.join(root, '.artifacts/design/sanity');
 const baseUrl = process.env.FINTO_CAPTURE_URL || 'http://127.0.0.1:4200';
 const username = process.env.FINTO_CAPTURE_USER || 'owner';
 const password = process.env.FINTO_CAPTURE_PASSWORD || 'local-dev';
-const executablePath = process.env.CHROME_PATH ||
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const executablePath = process.env.CHROME_PATH || [
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/chromium',
+].find((candidate) => existsSync(candidate));
+if (!executablePath) throw new Error('Set CHROME_PATH to a Chrome or Chromium binary');
 
 const viewports = {
   mobile: { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
@@ -81,6 +88,20 @@ async function audit(mode, route) {
   const result = await page.evaluate(() => {
     const shell = document.querySelector('.shell');
     const content = document.querySelector('.content');
+    const visible = (node) => {
+      const box = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      return box.width > 0 && box.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+    };
+    const controlHeights = [...document.querySelectorAll(
+      '.controls-bar input:not([type="checkbox"]), .controls-bar finto-select .select-trigger, ' +
+      '.controls-bar finto-date .date-trigger, .controls-bar finto-pills .pills, ' +
+      '.defaults finto-select .select-trigger, .filter-bar .controls finto-select .select-trigger, ' +
+      '.filter-bar .controls finto-date .date-trigger',
+    )].filter(visible).map((node) => ({
+      label: node.getAttribute('aria-label') || node.tagName,
+      height: Math.round(node.getBoundingClientRect().height),
+    }));
     return {
       viewportOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       shellOverflow: shell ? shell.scrollWidth - shell.clientWidth : 0,
@@ -90,6 +111,7 @@ async function audit(mode, route) {
         const style = getComputedStyle(node);
         return box.width > 0 && box.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0;
       }).length,
+      controlHeights,
     };
   });
   if ([result.viewportOverflow, result.shellOverflow, result.contentOverflow].some((value) => value > 1)) {
@@ -97,6 +119,13 @@ async function audit(mode, route) {
   }
   if (mode === 'mobile' && result.navItems !== 5) {
     throw new Error(`${route}: persistent navigation lost visible destinations: ${JSON.stringify(result)}`);
+  }
+  const expectedControlHeight = mode === 'mobile' ? 44 : 36;
+  const unevenControls = result.controlHeights.filter(
+    (control) => Math.abs(control.height - expectedControlHeight) > 1,
+  );
+  if (unevenControls.length) {
+    throw new Error(`${mode} ${route}: inconsistent control heights ${JSON.stringify(unevenControls)}`);
   }
 }
 
@@ -225,11 +254,11 @@ async function captureActions(mode) {
   }
 
   await visit('/review');
-  if (await click('.queue-tabs button')) {
+  if (await click('.bar .seg button')) {
     await settle();
     await shot(mode, 'matching-suggestions-queue');
   }
-  if (await click('.queue-list li')) {
+  if (await click('.queue li button')) {
     await settle();
     await shot(mode, 'matching-suggestions-candidate');
   }
@@ -241,8 +270,8 @@ async function captureActions(mode) {
   }
 
   await visit('/ask');
-  if (await click('.examples button')) {
-    await settle();
+  if (await click('.suggestions button')) {
+    await settle('.generated-answer');
     await shot(mode, 'ask-example-ready');
   }
 

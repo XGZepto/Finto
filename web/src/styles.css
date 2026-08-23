@@ -78,6 +78,11 @@
   --s6: 32px;
   --s7: 48px;
 
+  /* Interactive controls share one measured row on desktop and one touch row
+     on compact screens. Components use this instead of inventing local heights. */
+  --control-h: 36px;
+  --touch-h: 44px;
+
   /* Type scale. A ledger has a headline figure and supporting detail; rendering
      both at one size leaves the ranking to the reader. Ten steps, and a literal
      px font-size anywhere else is a bug — that is what let eleven sizes
@@ -137,6 +142,7 @@
     --t-data: 13.5px;
     --t-body: 15px;
     --t-lede: 16px;
+    --control-h: var(--touch-h);
   }
 }
 
@@ -249,7 +255,7 @@ body {
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button, a { touch-action: manipulation; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
-  outline: 1px solid var(--info);
+  outline: 2px solid var(--info);
   outline-offset: 2px;
 }
 
@@ -330,7 +336,7 @@ a { color: var(--fg); }
 /* --- Controls ------------------------------------------------------------ */
 
 button, .btn {
-  min-height: 34px;
+  min-height: var(--control-h);
   padding: var(--s1) var(--s3);
   border: 1px solid var(--line-strong);
   border-radius: 0;
@@ -342,6 +348,7 @@ button, .btn {
   cursor: pointer;
   transition: color var(--motion-fast) linear, border-color var(--motion-fast) linear, background var(--motion-fast) linear;
 }
+.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 @media (hover: hover) {
   button:hover:not(:disabled), .btn:hover { color: var(--fg); border-color: var(--fg-3); }
 }
@@ -352,18 +359,18 @@ button:active:not(:disabled), .btn:active, [role='button']:active, a.tappable:ac
 }
 button:disabled { opacity: 0.35; cursor: not-allowed; }
 button.primary { background: var(--fg); border-color: var(--fg); color: var(--bg); font-weight: 500; }
-button.primary:hover:not(:disabled) { background: #fff; border-color: #fff; color: var(--bg); }
+button.primary:hover:not(:disabled) { background: var(--fg-2); border-color: var(--fg-2); color: var(--bg); }
 button.ghost { background: transparent; border-color: var(--line-strong); }
 button.danger:hover:not(:disabled) { color: var(--neg); border-color: var(--neg); }
 button.bare { background: none; border: none; padding: 0; color: var(--fg-3); }
 button.bare:hover { color: var(--fg); }
 
 input, select, textarea {
-  min-height: 34px;
+  min-height: var(--control-h);
   padding: var(--s1) var(--s2);
   border: 1px solid var(--line-strong);
   border-radius: 0;
-  background: var(--bg);
+  background: var(--panel-2);
   color: var(--fg);
   font-family: var(--mono);
   font-size: var(--t-data);
@@ -397,8 +404,9 @@ label {
 }
 
 /* Segmented control — the terminal answer to a tab bar. */
-.seg { display: inline-flex; border: 1px solid var(--line-strong); }
+.seg { display: inline-flex; min-height: var(--control-h); border: 0; box-shadow: inset 0 0 0 1px var(--line-strong); }
 .seg button {
+  min-height: var(--control-h);
   border: none;
   border-right: 1px solid var(--line-strong);
   background: transparent;
@@ -657,7 +665,7 @@ router-outlet + *:has(.select-root.open, .date-root.open, .filter-bar.sheet-open
   .card { padding: var(--s3); border: 0; }
   /* 44px is the smallest target Apple's HIG accepts and the size a thumb
      actually hits; 40px cleared WCAG 2.5.8 and little else. */
-  input, select, textarea, button, .btn { min-height: 44px; }
+  input, select, textarea, button, .btn { min-height: var(--touch-h); }
   input, select, textarea { font-size: var(--t-data); }
   .section-head { align-items: flex-start; }
   .section-head > .row { width: 100%; }

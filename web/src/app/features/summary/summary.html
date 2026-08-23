@@ -24,17 +24,19 @@
 
 <section class="hero">
   <div class="card hero-figure">
-    @if (spendComparison(); as comparison) {
-      <span class="label">Spent this month</span>
-      <strong class="hero-value mono">{{ comparison.spend | money }}</strong>
-      @if (comparison.percent !== null) {
-        <span class="hero-change" [class.better]="comparison.percent < 0" [class.worse]="comparison.percent > 0">
-          {{ comparison.percent > 0 ? '↑' : comparison.percent < 0 ? '↓' : '—' }}
-          {{ comparison.percent === 0 ? 'No change' : (comparison.percent < 0 ? -comparison.percent : comparison.percent).toFixed(1) + '% ' + (comparison.percent < 0 ? 'less' : 'more') }}
-          <small>vs same time last month</small>
-        </span>
-      } @else { <span class="hero-change muted">No comparable activity last month</span> }
-    }
+    <div class="hero-spend">
+      @if (spendComparison(); as comparison) {
+        <span class="label">Spent this month</span>
+        <strong class="hero-value mono">{{ comparison.spend | money }}</strong>
+        @if (comparison.percent !== null) {
+          <span class="hero-change" [class.better]="comparison.percent < 0" [class.worse]="comparison.percent > 0">
+            {{ comparison.percent > 0 ? '↑' : comparison.percent < 0 ? '↓' : '—' }}
+            {{ comparison.percent === 0 ? 'No change' : (comparison.percent < 0 ? -comparison.percent : comparison.percent).toFixed(1) + '% ' + (comparison.percent < 0 ? 'less' : 'more') }}
+            <small>vs same time last month</small>
+          </span>
+        } @else { <span class="hero-change muted">No comparable activity last month</span> }
+      }
+    </div>
     @if (monthToDate(); as h) {
       <div class="hero-stats">
         <span><label>In</label><b class="pos">{{ h.income | money: 'bare' }}</b></span>
@@ -80,27 +82,31 @@
         </svg>
         <div class="chart-hits">
           @for (b of trendChart().labels; track b.bucket) {
-            <button class="chart-hit" (click)="drill(b.bucket)" [title]="barTitle(b.row, b.bucket)">@if (b.show) { <span class="tick mono">{{ b.label }}</span> }</button>
+            <button class="chart-hit" (click)="drillMonth(b.bucket)" [title]="barTitle(b.row, b.bucket)">@if (b.show) { <span class="tick mono">{{ b.label }}</span> }</button>
           }
         </div>
       </div>
     }
 
-    @if (spendSlices().length > 1) {
-      <finto-donut class="breakdown-donut" fintoReveal [slices]="spendSlices()"
-                   [label]="'Spending by ' + groupBy()" />
-    }
+    @if (spendSlices().length > 1 || rankedTop().length) {
+      <div class="composition">
+        @if (spendSlices().length > 1) {
+          <finto-donut class="breakdown-donut" fintoReveal [slices]="spendSlices()"
+                       [label]="'Spending by ' + groupBy()" />
+        }
 
-    @if (rankedTop().length) {
-      <div class="rank-list">
-        @for (b of rankedTop(); track b.bucket) {
-          <button (click)="drill(b.bucket)">
-            <span class="rank mono">{{ ($index + 1).toString().padStart(2, '0') }}</span>
-            <span class="name">{{ humanize(b.bucket) }}</span>
-            <span class="bar-track"><span class="bar-fill" [style.width]="b.width"></span></span>
-            <span class="amount mono">{{ b.spend | money: 'bare' }}</span>
-            <span class="share mono">{{ (b.share * 100).toFixed(1) }}%</span>
-          </button>
+        @if (rankedTop().length) {
+          <div class="rank-list">
+            @for (b of rankedTop(); track b.bucket) {
+              <button (click)="drill(b.bucket)">
+                <span class="rank mono">{{ ($index + 1).toString().padStart(2, '0') }}</span>
+                <span class="name">{{ humanize(b.bucket) }}</span>
+                <span class="bar-track"><span class="bar-fill" [style.width]="b.width"></span></span>
+                <span class="amount mono">{{ b.spend | money: 'bare' }}</span>
+                <span class="share mono">{{ (b.share * 100).toFixed(1) }}%</span>
+              </button>
+            }
+          </div>
         }
       </div>
       @if (unranked().length) {

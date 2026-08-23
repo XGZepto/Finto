@@ -34,11 +34,10 @@ export interface Bar {
     </div>
   `,
   styles: [`
-    .bars-wrap { display: flex; flex-direction: column; gap: var(--s2); }
-    .bars { display: flex; align-items: flex-end; gap: 4px; height: 140px; }
-    .col { max-width: 84px; }
+    .bars-wrap { display: flex; flex-direction: column; gap: var(--s2); height: 100%; }
+    .bars { display: flex; align-items: flex-end; gap: 6px; height: 140px; }
     .col {
-      flex: 1; min-width: 0; height: 100%;
+      flex: 1; min-width: 12px; height: 100%;
       display: flex; flex-direction: column; justify-content: flex-end; gap: var(--s2);
       padding: 0; border: 0; background: none;
     }
@@ -46,13 +45,17 @@ export interface Bar {
     .fill { width: 100%; background: var(--fg-4); min-height: 1px; transform-origin: bottom; animation: bar-reveal var(--motion) var(--ease-out) both; transition: background var(--motion-fast) linear; }
     @keyframes bar-reveal { from { transform: scaleY(0); } }
     .fill.peak { background: var(--info); }
-    .fill.selected { background: var(--info); box-shadow: inset 0 0 0 1px var(--fg-1); }
+    .fill.selected { background: var(--info); box-shadow: inset 0 0 0 1px var(--fg); }
     .col:hover .fill { background: var(--fg-2); }
     .col:hover .fill.peak { background: var(--info); }
     .col:hover .fill.selected { background: var(--info); }
     .x { font-size: var(--t-micro); color: var(--fg-4); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mean { display: flex; align-items: baseline; gap: var(--s2); font-size: var(--t-label); color: var(--fg-4); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; }
     .mean b { color: var(--fg-3); font-variant-numeric: tabular-nums; }
+    @media (min-width: 881px) {
+      :host { display: flex; flex-direction: column; height: 100%; min-height: 240px; }
+      .bars { flex: 1; height: auto; min-height: 220px; }
+    }
     @media (prefers-reduced-motion: reduce) { .fill { animation: none; } }
   `],
 })

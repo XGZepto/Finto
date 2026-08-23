@@ -19,13 +19,14 @@ import { Component, input, output } from '@angular/core';
     </div>
   `,
   styles: [`
-    :host { display: inline-flex; }
-    .pills { display: inline-flex; border: 1px solid var(--line-strong); }
+    :host { display: inline-flex; min-height: var(--control-h); }
+    .pills { display: inline-flex; min-height: var(--control-h); border: 0; box-shadow: inset 0 0 0 1px var(--line-strong); }
     .pills.stretch { display: flex; width: 100%; }
     .pills.stretch .pill { flex: 1; text-align: center; }
     .pill {
       display: grid;
       place-items: center;
+      min-height: var(--control-h);
       padding: var(--s1) var(--s3);
       border: 0;
       border-right: 1px solid var(--line-strong);
