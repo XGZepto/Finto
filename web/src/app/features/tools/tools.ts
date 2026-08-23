@@ -38,7 +38,7 @@ import { NavIcon } from '../../shared/nav-icon';
   styles: [`
     .tool-group { margin-bottom: var(--s5); }
     .tool-group h2 { margin-bottom: var(--s3); }
-    .tool-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--s3); }
+    .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s3); }
     .tool {
       display: grid; grid-template-columns: 32px minmax(0, 1fr) 16px; align-items: center; gap: var(--s3);
       min-height: 72px;

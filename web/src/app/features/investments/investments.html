@@ -63,6 +63,8 @@
 
 @if (loading()) {
   <finto-skeleton [rows]="6" label="Loading investments" />
+} @else if (failed()) {
+  <p class="banner error">Couldn't load investments.</p>
 } @else if (!current()) {
   <div class="card empty-state">
     <p class="muted">No valuation snapshots imported.</p>

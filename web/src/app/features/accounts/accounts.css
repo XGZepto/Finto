@@ -7,9 +7,9 @@
 .portfolio-split span { display: flex; flex-direction: column; gap: var(--s1); }
 .portfolio-split label { color: var(--fg-4); font-size: var(--t-label); }
 .portfolio-split b { font-size: var(--t-data); font-weight: 500; }
-.portfolio-hero .banner { grid-column: 1 / -1; margin: 0; }
-.account-groups { columns: 2 360px; column-gap: 12px; margin-bottom: 12px; }
-.account-group { width: 100%; padding: 0; overflow: hidden; margin: 0 0 12px; break-inside: avoid; }
+.portfolio-hero .banner, .portfolio-hero finto-timeseries { grid-column: 1 / -1; margin: 0; }
+.account-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.account-group { width: 100%; padding: 0; overflow: hidden; margin: 0; }
 .single-account, .group-header { width: 100%; min-height: 72px; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto 16px; align-items: center; gap: var(--s3); padding: var(--s3) 16px; border: 0; background: transparent; color: var(--fg); text-align: left; letter-spacing: 0; }
 .group-header { border-bottom: 1px solid var(--line); }
 .single-account:hover, .group-header:hover { background: var(--panel-2); }
@@ -148,7 +148,11 @@
   .account-summary-strip .top-spend { grid-column: 1 / -1; }
   .group-subaccount-grid { grid-template-columns: 1fr; }
   .group-subaccount-grid button:nth-child(n) { padding-inline: 0; border-left: 0; }
-  .account-groups { columns: 1; }
+  .account-groups { grid-template-columns: 1fr; }
+  .pan-cue {
+    display: block; position: absolute; right: 8px; bottom: 8px; pointer-events: none;
+    color: var(--fg-4); font: var(--t-micro)/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  }
   .group-header { padding: var(--s3) 12px; }
   .account-child { padding: 9px 12px; grid-template-columns: 1fr auto 14px; }
   .single-account, .group-header { min-height: 72px; padding: var(--s3) 12px; grid-template-columns: 32px minmax(0, 1fr) auto 12px; }

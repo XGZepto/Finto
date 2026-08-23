@@ -77,6 +77,7 @@ export class BlotterPage implements OnDestroy {
   private inflight?: Subscription;
 
   loading = signal(true);
+  failed = signal(false);
   rows = signal<Txn[]>([]);
   total = signal(0);
   scopeTotals = signal<TotalRow[]>([]);
@@ -194,6 +195,7 @@ export class BlotterPage implements OnDestroy {
   }
 
   private fetch(reset: boolean): void {
+    if (reset) this.failed.set(false);
     this.inflight?.unsubscribe();
     this.inflight = this.api
       .transactions(this.filters.filter(), {
@@ -217,6 +219,7 @@ export class BlotterPage implements OnDestroy {
         error: () => {
           this.loading.set(false);
           this.loadingMore.set(false);
+          if (reset) this.failed.set(true);
         },
       });
   }

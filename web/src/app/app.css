@@ -41,8 +41,8 @@
 .nav a {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 36px;
+  gap: var(--s3);
+  min-height: 40px;
   padding: 7px 18px;
   border-left: 2px solid transparent;
   color: var(--fg-3);
@@ -108,6 +108,7 @@
   overscroll-behavior: contain;
   padding: 28px 32px 72px;
 }
+.content:has(.offline) { --offline-h: 32px; }
 
 .mobile-nav { display: none; }
 
@@ -119,14 +120,15 @@
   .content {
     flex: 1;
     min-height: 0;
-    padding: calc(var(--s3) + env(safe-area-inset-top)) var(--s3) var(--s5);
+    padding: calc(var(--s3) + env(safe-area-inset-top)) var(--s3)
+             calc(var(--s5) + var(--nav-h) + env(safe-area-inset-bottom));
   }
   .mobile-nav {
     display: grid;
     flex: none;
     z-index: var(--z-nav);
     grid-template-columns: repeat(5, 1fr);
-    min-height: calc(56px + env(safe-area-inset-bottom));
+    min-height: calc(var(--nav-h) + env(safe-area-inset-bottom));
     padding: 4px 6px env(safe-area-inset-bottom);
     border-top: 1px solid var(--line-2);
     background: var(--panel);

@@ -37,7 +37,7 @@ export interface Bar {
     .bars-wrap { display: flex; flex-direction: column; gap: var(--s2); height: 100%; }
     .bars { display: flex; align-items: flex-end; gap: 6px; height: 140px; }
     .col {
-      flex: 1; min-width: 12px; height: 100%;
+      flex: 1; min-width: 28px; height: 100%;
       display: flex; flex-direction: column; justify-content: flex-end; gap: var(--s2);
       padding: 0; border: 0; background: none;
     }

@@ -22,7 +22,7 @@ export interface FlowNode {
     <div class="alloc">
       <div class="bar" role="img" [attr.aria-label]="'Allocation of ' + sourceLabel()">
         @for (seg of segments(); track seg.label) {
-          <span class="seg" [style.flex-grow]="seg.value" [style.background]="seg.colour"></span>
+          <span class="flow-seg" [style.flex-grow]="seg.value" [style.background]="seg.colour"></span>
         }
       </div>
 
@@ -41,9 +41,9 @@ export interface FlowNode {
   `,
   styles: [`
     .alloc { display: flex; flex-direction: column; gap: var(--s4); }
-    .bar { display: flex; height: 12px; width: 100%; overflow: hidden; background: var(--panel-3); }
-    .seg { min-width: 1px; border-right: 1px solid var(--bg); transform-origin: left; animation: allocation-reveal var(--motion) var(--ease-out) both; }
-    .seg:last-child { border-right: 0; }
+    .bar { display: flex; height: var(--bar-h-emphasis); width: 100%; overflow: hidden; background: var(--panel-3); }
+    .flow-seg { min-width: 1px; border-right: 1px solid var(--bg); transform-origin: left; animation: allocation-reveal var(--motion) var(--ease-out) both; }
+    .flow-seg:last-child { border-right: 0; }
     .legend { display: grid; grid-template-columns: 1fr; gap: 0; }
     .row {
       display: grid;
@@ -61,7 +61,7 @@ export interface FlowNode {
     .row:last-child { border-bottom: 0; }
     .row:not(.static):hover { background: var(--panel-2); }
     .row.static { cursor: default; }
-    .dot { width: 10px; height: 10px; }
+    .dot { width: var(--dot-size); height: var(--dot-size); }
     .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-data); color: var(--fg); }
     .pct { font-size: var(--t-meta); color: var(--fg-4); font-variant-numeric: tabular-nums; text-align: right; min-width: 44px; }
     .val { font-size: var(--t-data); color: var(--fg-2); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
@@ -69,7 +69,7 @@ export interface FlowNode {
       .row { grid-template-columns: 10px minmax(0, 1fr) 64px 120px; }
     }
     @keyframes allocation-reveal { from { opacity: 0; transform: scaleX(0); } }
-    @media (prefers-reduced-motion: reduce) { .seg { animation: none; } }
+    @media (prefers-reduced-motion: reduce) { .flow-seg { animation: none; } }
   `],
 })
 export class FintoFlow {

@@ -26,7 +26,7 @@ const MAX = 108;
          [style.transform]="'translateY(' + offset() + 'px)'"
          [style.opacity]="progress()"
          role="status"
-         [attr.aria-label]="refresh.running() ? 'Refreshing' : null">
+         [attr.aria-label]="refresh.running() ? 'Refreshing' : 'Pull to refresh'">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle class="track" cx="12" cy="12" r="9" />
         <circle class="arc" cx="12" cy="12" r="9"

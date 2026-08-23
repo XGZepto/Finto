@@ -30,14 +30,16 @@
 <section class="card">
   <div class="section-head">
     <h2>Plans</h2>
-    <div class="seg">
-      <button [class.on]="activeOnly()" (click)="setActiveOnly(true)">Active</button>
-      <button [class.on]="!activeOnly()" (click)="setActiveOnly(false)">All</button>
+    <div class="seg" role="group" aria-label="Plan status">
+      <button [class.on]="activeOnly()" [attr.aria-pressed]="activeOnly()" (click)="setActiveOnly(true)">Active</button>
+      <button [class.on]="!activeOnly()" [attr.aria-pressed]="!activeOnly()" (click)="setActiveOnly(false)">All</button>
     </div>
   </div>
 
   @if (loading()) {
     <finto-skeleton [rows]="6" label="Loading plans" />
+  } @else if (failed()) {
+    <p class="banner error">Couldn't load instalment plans.</p>
   } @else {
     <div class="table-wrap">
       <table>

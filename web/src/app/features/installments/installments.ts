@@ -38,6 +38,7 @@ export class InstallmentsPage {
   private api = inject(Api);
 
   loading = signal(true);
+  failed = signal(false);
   activeOnly = signal(true);
   plans = signal<InstallmentPlan[]>([]);
   outstanding = signal<Money[]>([]);
@@ -51,6 +52,7 @@ export class InstallmentsPage {
 
   load(): void {
     this.loading.set(true);
+    this.failed.set(false);
     this.api.installments(this.activeOnly()).subscribe({
       next: (res) => {
         this.plans.set(res.plans);
@@ -58,7 +60,7 @@ export class InstallmentsPage {
         this.monthly.set(res.committed_monthly_by_currency);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => { this.loading.set(false); this.failed.set(true); },
     });
   }
 

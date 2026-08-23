@@ -82,6 +82,12 @@
      on compact screens. Components use this instead of inventing local heights. */
   --control-h: 36px;
   --touch-h: 44px;
+  --nav-h: 56px;
+  --dot-size: 8px;
+  --bar-h: 6px;
+  --bar-h-emphasis: 12px;
+  --sheet-head-h: 56px;
+  --offline-h: 0px;
 
   /* Type scale. A ledger has a headline figure and supporting detail; rendering
      both at one size leaves the ranking to the reader. Ten steps, and a literal
@@ -254,7 +260,7 @@ body {
 
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button, a { touch-action: manipulation; }
-button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
   outline: 2px solid var(--info);
   outline-offset: 2px;
 }
@@ -271,6 +277,13 @@ h1 {
   font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--fg);
+}
+.figure-hero {
+  font-family: var(--mono);
+  font-size: var(--t-hero);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+  line-height: 1.05;
 }
 
 h2 {
@@ -305,11 +318,11 @@ a { color: var(--fg); }
   max-width: 68ch;
 }
 
-.mono { font-family: var(--mono); }
 .muted { color: var(--fg-3); }
 .small { font-size: var(--t-data); }
 .dim { color: var(--fg-4); }
 .nowrap { white-space: nowrap; }
+.mono { font-family: var(--mono); }
 
 /* --- Surfaces ------------------------------------------------------------ */
 
@@ -465,7 +478,19 @@ th.num, td.num {
   color: var(--fg-2);
   white-space: nowrap;
 }
-.chip button { padding: 0; border: none; background: none; color: var(--fg-3); font-size: var(--t-data); line-height: 1; }
+.chip button {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--fg-3);
+  font-size: var(--t-data);
+  line-height: 1;
+}
+.chip button::after { content: ''; position: absolute; inset: -13px; }
 .chip button:hover { color: var(--fg); border: none; }
 .chip.accent { border-color: var(--fg-3); color: var(--fg); }
 
@@ -490,7 +515,7 @@ th.num, td.num {
 .tag.good { border-color: var(--pos); background: var(--pos-wash); color: var(--pos); }
 
 /* A status dot carries state in list rows where a tag would be too heavy. */
-.dot { display: inline-block; width: 7px; height: 7px; background: var(--fg-4); }
+.dot { display: inline-block; width: var(--dot-size); height: var(--dot-size); background: var(--fg-4); }
 .dot.ok { background: var(--pos); }
 .dot.bad { background: var(--bad); }
 .dot.warn { background: var(--warn); }
@@ -526,7 +551,7 @@ th.num, td.num {
 
 /* Proportional bar for breakdown rows. The series colour is set inline by the
    component so a chart legend and its bars cannot drift apart. */
-.bar-track { display: block; width: 100%; height: 6px; background: var(--panel-3); }
+.bar-track { display: block; width: 100%; height: var(--bar-h); background: var(--panel-3); }
 .bar-fill { display: block; height: 100%; background: var(--fg-3); }
 
 .empty {
@@ -611,9 +636,9 @@ th.num, td.num {
 @keyframes skeleton-scan { to { transform: translateX(100%); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner::after { animation: none; }
-  .skeleton::after { animation: none; }
-  * { transition: none !important; }
+  .spinner::after, .skeleton::after { animation: none; }
+  .skeleton, .spinner, [fintoReveal] .series, [fintoReveal] .area,
+  [fintoReveal] .arc, [fintoReveal] .fill, [fintoReveal] .flow-seg { transition: none; }
 }
 
 /* The scroll observer starts chart animation when the chart enters view. */
@@ -626,7 +651,7 @@ th.num, td.num {
 [fintoReveal] .detail-node,
 [fintoReveal] .sankey .link,
 [fintoReveal] .sankey .node,
-[fintoReveal] .seg { animation-play-state: paused !important; }
+[fintoReveal] .flow-seg { animation-play-state: paused !important; }
 [fintoReveal].finto-in-view .series,
 [fintoReveal].finto-in-view .area,
 [fintoReveal].finto-in-view .arc,
@@ -636,7 +661,7 @@ th.num, td.num {
 [fintoReveal].finto-in-view .detail-node,
 [fintoReveal].finto-in-view .sankey .link,
 [fintoReveal].finto-in-view .sankey .node,
-[fintoReveal].finto-in-view .seg { animation-play-state: running !important; }
+[fintoReveal].finto-in-view .flow-seg { animation-play-state: running !important; }
 
 [data-scroll-surface] {
   overscroll-behavior: contain;
@@ -665,7 +690,9 @@ router-outlet + *:has(.select-root.open, .date-root.open, .filter-bar.sheet-open
   .card { padding: var(--s3); border: 0; }
   /* 44px is the smallest target Apple's HIG accepts and the size a thumb
      actually hits; 40px cleared WCAG 2.5.8 and little else. */
-  input, select, textarea, button, .btn { min-height: var(--touch-h); }
+  input:not([type='checkbox']), select, textarea, button, .btn { min-height: var(--touch-h); }
+  .check { min-height: var(--touch-h); padding-block: var(--s2); }
+  .figure-hero { font-size: var(--t-fig-lg); }
   input, select, textarea { font-size: var(--t-data); }
   .section-head { align-items: flex-start; }
   .section-head > .row { width: 100%; }

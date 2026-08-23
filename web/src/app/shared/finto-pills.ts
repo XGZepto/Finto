@@ -37,7 +37,7 @@ import { Component, input, output } from '@angular/core';
       letter-spacing: .08em;
     }
     .pill:last-child { border-right: 0; }
-    .pill.on { background: var(--panel-3); color: var(--fg); }
+    .pill.on { background: var(--fg); color: var(--bg); }
   `],
 })
 export class FintoPills {

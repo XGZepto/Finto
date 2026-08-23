@@ -12,4 +12,4 @@ form > input, .password-row input { min-width: 0; height: 44px; padding-inline: 
 .unlock { height: 44px; padding-inline: 17px; border-left: 0; color: var(--bg); background: var(--fg); font-weight: 600; }
 .unlock:hover:not(:disabled) { background: var(--fg); color: var(--bg); }
 .error { margin: 10px 0 0; color: var(--neg); font: var(--t-meta)/1.5 var(--mono); }
-@media (max-width: 520px) { .login-screen { padding: 0; align-items: stretch; } .login-panel { display: flex; flex-direction: column; justify-content: center; width: 100%; padding: 30px 24px max(30px, env(safe-area-inset-bottom)); border: 0; } .password-row { grid-template-columns: 1fr; gap: 8px; } .unlock { border: 1px solid var(--fg); } }
+@media (max-width: 520px) { .login-screen { padding: 0; align-items: stretch; } .login-panel { display: flex; flex-direction: column; justify-content: center; width: 100%; padding: max(30px, env(safe-area-inset-top)) 24px max(30px, env(safe-area-inset-bottom)); border: 0; } .password-row { grid-template-columns: 1fr; gap: 8px; } .unlock { border: 1px solid var(--fg); } }

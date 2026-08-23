@@ -126,7 +126,7 @@
 
     @if (detailLoading() || hasAccountActivity()) {
     <section class="card detail-flow-card" fintoReveal>
-      <div class="section-head"><h2>Money flow</h2><div class="flow-tools"><span class="tag">{{ flows().normalised.currency }} normalised</span><div class="view-switch" role="group" aria-label="Money flow view"><button [class.on]="detailFlowView() === 'chart'" (click)="setFlowView('chart', true)">Chart</button><button [class.on]="detailFlowView() === 'list'" (click)="setFlowView('list', true)">List</button></div></div></div>
+      <div class="section-head"><h2>Money flow</h2><div class="flow-tools"><span class="tag">{{ flows().normalised.currency }} normalised</span><div class="view-switch" role="group" aria-label="Money flow view"><button [class.on]="detailFlowView() === 'chart'" [attr.aria-pressed]="detailFlowView() === 'chart'" (click)="setFlowView('chart', true)">Chart</button><button [class.on]="detailFlowView() === 'list'" [attr.aria-pressed]="detailFlowView() === 'list'" (click)="setFlowView('list', true)">List</button></div></div></div>
       @if (detailLoading()) {
         <div class="flow-skeleton skeleton" aria-label="Loading money flow"></div>
       } @else {
@@ -237,6 +237,8 @@
 
   @if (loading()) {
     <div class="card"><finto-skeleton [rows]="6" label="Loading accounts" /></div>
+  } @else if (failed()) {
+    <p class="banner error">Couldn't load accounts.</p>
   } @else {
     @if (netWorth(); as worth) {
       <section class="card portfolio-hero">
@@ -251,6 +253,9 @@
         </div>
         @if (unconvertible().length) {
           <p class="banner warn">Missing rates for {{ unconvertible().join(', ') }}; those balances are excluded.</p>
+        }
+        @if (series().length > 1) {
+          <finto-timeseries [points]="series()" label="Net worth over time" />
         }
       </section>
     }
@@ -288,9 +293,9 @@
     <section class="card sankey-card" fintoReveal>
       <div class="section-head">
         <h2>Money flow · {{ flows().normalised.currency }}</h2>
-        <div class="flow-tools"><span class="tag">normalised</span><div class="view-switch" role="group" aria-label="Money flow view"><button [class.on]="flowView() === 'chart'" (click)="setFlowView('chart')">Chart</button><button [class.on]="flowView() === 'list'" (click)="setFlowView('list')">List</button></div></div>
+        <div class="flow-tools"><span class="tag">normalised</span><div class="view-switch" role="group" aria-label="Money flow view"><button [class.on]="flowView() === 'chart'" [attr.aria-pressed]="flowView() === 'chart'" (click)="setFlowView('chart')">Chart</button><button [class.on]="flowView() === 'list'" [attr.aria-pressed]="flowView() === 'list'" (click)="setFlowView('list')">List</button></div></div>
       </div>
-      @if (flowView() === 'chart') { <div class="sankey-frame"><div class="sankey-scroll" tabindex="0" aria-label="Scrollable money flow chart">
+      @if (flowView() === 'chart') { <div class="sankey-frame"><span class="pan-cue" aria-hidden="true">scroll →</span><div class="sankey-scroll" tabindex="0" aria-label="Scrollable money flow chart">
         <svg class="sankey" viewBox="0 0 1000 800" preserveAspectRatio="xMidYMin meet" [attr.viewBox]="'0 0 1000 ' + flowHeight()">
           <defs><marker id="internal-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="internal-arrow"></path></marker></defs>
           <text x="26" y="22">MONEY IN</text><text x="468" y="22">ACCOUNTS</text><text x="900" y="22">MONEY OUT</text>

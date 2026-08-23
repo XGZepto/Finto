@@ -109,8 +109,8 @@ td.path { font-family: var(--mono); font-size: var(--t-meta); word-break: break-
   .defaults .field.narrow { max-width: none; }
   .dropzone { min-height: 132px; padding: 24px 14px; }
   .format-groups { grid-template-columns: 1fr; }
-  .format-row { align-items: flex-start; }
-  .format-meta { max-width: 42%; }
+  .format-row { flex-wrap: wrap; align-items: flex-start; }
+  .format-meta { max-width: none; justify-content: flex-start; }
   .contribute-row { display: grid; grid-template-columns: 1fr 1fr; }
   .contribute-row > span { grid-column: 1 / -1; }
   .contribute-row .btn { justify-content: center; }

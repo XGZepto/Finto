@@ -112,7 +112,7 @@ const MERCHANT_DOMAIN: Record<string, string> = {
       position: absolute; inset: 0;
       width: 100%; height: 100%; object-fit: cover;
       transform: scale(1.08);
-      background: #fff;
+      background: var(--panel-2);
       opacity: 0; transition: opacity 120ms linear;
     }
     .logo.shown { opacity: 1; }

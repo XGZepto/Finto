@@ -88,6 +88,7 @@ export class RecurringPage {
 
   convertTo = this.preferences.baseCurrency;
   loading = signal(true);
+  failed = signal(false);
   search = signal('');
   kind = signal('All');
   cadence = signal('Any');
@@ -103,6 +104,7 @@ export class RecurringPage {
 
   load(): void {
     this.loading.set(true);
+    this.failed.set(false);
     const convert = this.convertTo() || undefined;
 
     // Cadence needs the dates of individual charges, which a rollup discards.
@@ -121,7 +123,7 @@ export class RecurringPage {
     for (const tag of ['subscription', 'recurring']) {
       this.api.transactions({ tags: [tag] }, opts).subscribe({
         next: (page) => absorb(page.items ?? []),
-        error: () => absorb([]),
+        error: () => { this.failed.set(true); absorb([]); },
       });
     }
 
