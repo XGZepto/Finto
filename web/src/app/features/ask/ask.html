@@ -35,55 +35,91 @@
 }
 
 @if (asking()) {
-  <div class="card"><div class="spinner">analysing </div></div>
+  <div class="card ask-progress" role="status" aria-live="polite">
+    <span class="progress-mark" aria-hidden="true"></span>
+    <span><strong>Analysing ledger</strong><small>Finding matching rows and calculating totals</small></span>
+  </div>
 }
 
 @if (result(); as r) {
   @if (!r.ok) {
     <div class="banner error">{{ r.error }}</div>
   } @else {
-    @if (r.answer) {
-      <section class="card generated-answer" aria-live="polite">
-        <label>Answer</label>
-        <p>{{ r.answer }}</p>
-      </section>
-    }
-
-    @if (r.filter || r.group_by || r.tools?.length) {
-      <section class="card plan">
-      <div class="section-head">
-        <h2>Ledger queries</h2>
-        <div class="row">
-          @if (r.prompt_cache?.hit) { <span class="tag high">prompt cache hit</span> }
-          @if (r.filter) {
-            <button class="ghost" (click)="openInBlotter()">Open in blotter →</button>
-          }
-        </div>
-      </div>
-
-      <div class="chips">
-        @for (c of chips(); track c.key) {
-          <span class="chip accent">{{ c.label }}</span>
-        } @empty {
-          <span class="chip">whole ledger</span>
-        }
-        @if (r.group_by) { <span class="chip">grouped by {{ r.group_by }}</span> }
-      </div>
-
-      @if (r.tools?.length) {
-        <div class="tool-list">
-          @for (tool of r.tools!; track $index) {
-            <span class="tool"><span class="tool-dot"></span>{{ toolLabel(tool.name) }}</span>
-          }
-        </div>
+    <div class="result-overview">
+      @if (r.answer) {
+        <section class="card generated-answer" aria-live="polite">
+          <span class="eyebrow">Answer</span>
+          <div class="answer-copy">
+            @for (block of answerBlocks(); track $index) {
+              @if (block.kind === 'heading') {
+                <h3>
+                  @for (part of block.parts; track $index) {
+                    @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} }
+                  }
+                </h3>
+              } @else if (block.kind === 'paragraph') {
+                <p>
+                  @for (part of block.parts; track $index) {
+                    @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} }
+                  }
+                </p>
+              } @else if (block.kind === 'list') {
+                @if (block.ordered) {
+                  <ol>
+                    @for (item of block.items; track $index) {
+                      <li>
+                        @for (part of item; track $index) {
+                          @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} }
+                        }
+                      </li>
+                    }
+                  </ol>
+                } @else {
+                  <ul>
+                    @for (item of block.items; track $index) {
+                      <li>
+                        @for (part of item; track $index) {
+                          @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} }
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+              }
+            }
+          </div>
+        </section>
       }
-      </section>
-    }
+
+      @if (r.filter || r.group_by) {
+        <section class="card scope">
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">Analysis scope</span>
+              <h2>What was included</h2>
+            </div>
+            @if (r.filter) {
+              <button class="ghost" (click)="openInBlotter()">View rows →</button>
+            }
+          </div>
+
+          <div class="scope-list">
+            @for (c of chips(); track c.key) {
+              <span>{{ c.label }}</span>
+            } @empty {
+              <span>Whole ledger</span>
+            }
+            @if (r.group_by) { <span>Grouped by {{ r.group_by }}</span> }
+          </div>
+          <p class="scope-note">Figures are calculated from matching ledger rows.</p>
+        </section>
+      }
+    </div>
 
     <section class="answer">
       @for (t of r.totals ?? []; track t.currency) {
         <div class="card total">
-          <h3>{{ t.currency }}</h3>
+          <div class="total-head"><h3>{{ t.currency }}</h3><span>Net</span></div>
           <div class="figure" [class.neg]="t.net.amount < 0" [class.pos]="t.net.amount > 0">
             {{ t.net | money: 'bare' }}
           </div>
@@ -99,7 +135,7 @@
     </section>
 
     @if (r.rows?.length) {
-      <section class="card">
+      <section class="card result-table groups-table">
         <div class="section-head">
           <h2>By {{ r.group_by }}</h2>
           @if (r.rows!.length > rowCap) {
@@ -124,14 +160,14 @@
             <tbody>
               @for (row of rankedRows(); track row.bucket + row.currency) {
                 <tr>
-                  <td class="mono">{{ row.bucket }}</td>
-                  <td><span class="tag">{{ row.currency }}</span></td>
-                  <td class="num">{{ row.spend | money: 'bare' }}</td>
-                  <td class="num pos">{{ row.income | money: 'bare' }}</td>
-                  <td class="num" [class.neg]="row.net.amount < 0" [class.pos]="row.net.amount > 0">
+                  <td [attr.data-label]="r.group_by" class="mono">{{ row.bucket }}</td>
+                  <td data-label="Currency"><span class="tag">{{ row.currency }}</span></td>
+                  <td data-label="Out" class="num">{{ row.spend | money: 'bare' }}</td>
+                  <td data-label="In" class="num pos">{{ row.income | money: 'bare' }}</td>
+                  <td data-label="Net" class="num" [class.neg]="row.net.amount < 0" [class.pos]="row.net.amount > 0">
                     {{ row.net | money: 'bare' }}
                   </td>
-                  <td class="num">{{ row.txn_count }}</td>
+                  <td data-label="Rows" class="num">{{ row.txn_count }}</td>
                 </tr>
               }
             </tbody>
@@ -151,7 +187,7 @@
     }
 
     @if (r.transactions?.items?.length) {
-      <section class="card">
+      <section class="card result-table transactions-table">
         <div class="section-head">
           <h2>Matching rows</h2>
           <span class="small muted mono">
@@ -172,11 +208,11 @@
             <tbody>
               @for (t of r.transactions!.items; track t.id) {
                 <tr>
-                  <td class="mono">{{ t.date | shortDate }}</td>
-                  <td>{{ t.account_name }}</td>
-                  <td>{{ t.merchant || t.description }}</td>
-                  <td class="muted">{{ t.category || '—' }}</td>
-                  <td class="num" [class.pos]="t.booked.amount > 0">
+                  <td data-label="Date" class="mono">{{ t.date | shortDate }}</td>
+                  <td data-label="Account">{{ t.account_name }}</td>
+                  <td data-label="Description">{{ t.merchant || t.description }}</td>
+                  <td data-label="Category" class="muted">{{ t.category || '—' }}</td>
+                  <td data-label="Amount" class="num" [class.pos]="t.booked.amount > 0">
                     {{ t.booked | money }}
                   </td>
                 </tr>

@@ -279,7 +279,7 @@ def build_provider(
     if not enabled:
         return NullProvider()
     try:
-        default = "claude-sonnet-5" if purpose == "analysis" else "claude-haiku-4-5-20251001"
+        default = "claude-haiku-4-5-20251001"
         return AnthropicProvider(model=configured_model or default)
     except LLMUnavailable:
         return NullProvider()

@@ -28,10 +28,12 @@
           <div class="col" (mouseenter)="hovered.set($index)" (mouseleave)="hovered.set(null)">
             <div class="stack">
               @for (b of col.bands; track b.bucket) {
-                <span class="band"
+                <span class="band" role="button" tabindex="0"
                       [style.bottom.%]="b.bottom" [style.height.%]="b.height"
                       [style.background]="b.colour"
                       (click)="drill(col.month, b.bucket)"
+                      (keydown.enter)="drill(col.month, b.bucket)"
+                      [attr.aria-label]="b.bucket + ' · ' + ({ amount: b.amount, currency: c.currency } | money)"
                       [title]="b.bucket + ' · ' + ({ amount: b.amount, currency: c.currency } | money)"></span>
               }
             </div>

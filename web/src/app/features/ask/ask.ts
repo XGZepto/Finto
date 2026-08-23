@@ -1,10 +1,11 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { describeFilter, filterToParams } from '../../core/filter-state';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { QueryResult, SummaryRow } from '../../core/models';
+import { parseAnswerMarkdown } from './answer-format';
 
 function requestError(error: any): string {
   const body = error?.error;
@@ -41,6 +42,7 @@ export class AskPage {
   result = signal<QueryResult | null>(null);
   history = signal<string[]>([]);
   showAllRows = signal(false);
+  answerBlocks = computed(() => parseAnswerMarkdown(this.result()?.answer ?? ''));
   /** A broad query can group into hundreds of buckets; lead with the movers. */
   readonly rowCap = 12;
 
@@ -88,9 +90,5 @@ export class AskPage {
     const f = this.result()?.filter;
     if (!f) return;
     this.router.navigate(['/blotter'], { queryParams: filterToParams(f) });
-  }
-
-  toolLabel(name: string): string {
-    return name.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 }

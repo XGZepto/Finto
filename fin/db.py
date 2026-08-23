@@ -79,8 +79,16 @@ def init_db(conn: psycopg.Connection) -> None:
             ("period_start", "2025-01-01"),
             ("llm_enabled", "0"),
             ("llm_model", "claude-haiku-4-5-20251001"),
-            ("llm_agent_model", "claude-sonnet-5"),
+            ("llm_agent_model", "claude-haiku-4-5-20251001"),
         ),
+    )
+    # Ask is a bounded tool-selection task, not open-ended financial reasoning.
+    # Move installations that still carry the old default to the lower-latency
+    # model; a different explicit model remains untouched.
+    conn.execute(
+        "UPDATE setting SET value=%s "
+        "WHERE key='llm_agent_model' AND value=%s",
+        ("claude-haiku-4-5-20251001", "claude-sonnet-5"),
     )
     password = os.environ.get("FINTO_AUTH_PASSWORD")
     owner = conn.execute(

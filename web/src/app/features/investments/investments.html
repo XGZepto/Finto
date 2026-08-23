@@ -3,17 +3,22 @@
   <div><h1>{{ pageTitle() }}</h1></div>
 </div>
 
-<section class="card mpf-import">
-  <div class="section-head">
+<details class="card mpf-import">
+  <summary>
     <div>
       <h2>Import HSBC MPF bundle</h2>
       <span class="small muted">Member Returns, three Account Returns, and Contribution History PDFs</span>
     </div>
+    <i aria-hidden="true">⌄</i>
+  </summary>
+  <div class="mpf-import-content">
+    <div class="import-picker">
     <label class="button-like">
       Choose PDFs
       <input type="file" accept=".pdf,application/pdf" multiple hidden (change)="onMpfPick($event)" />
     </label>
-  </div>
+      <span class="small muted">Select the complete PDF bundle for validation.</span>
+    </div>
   @if (mpfBusy()) {
     <p class="small muted">Validating the complete bundle…</p>
   }
@@ -53,7 +58,8 @@
       {{ result.activities.skipped }} duplicates skipped
     </div>
   }
-</section>
+  </div>
+</details>
 
 @if (loading()) {
   <finto-skeleton [rows]="6" label="Loading investments" />

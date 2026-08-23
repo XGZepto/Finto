@@ -49,7 +49,7 @@ let dateInstances = 0;
   styles: [`
     :host { display: block; min-width: 0; }
     .date-root { position: relative; }
-    .date-trigger { display: grid; grid-template-columns: 1fr 17px; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 6px 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); text-align: left; letter-spacing: 0; }
+    .date-trigger { display: grid; grid-template-columns: 1fr 17px; align-items: center; gap: 8px; width: 100%; min-height: var(--control-h); padding: 6px 8px; border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--fg); text-align: left; letter-spacing: 0; }
     .date-trigger .placeholder { color: var(--fg-4); }
     .date-trigger svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.2; }
     .open .date-trigger { border-color: var(--fg-3); background: var(--panel-2); }
@@ -68,7 +68,7 @@ let dateInstances = 0;
     footer { display: flex; justify-content: space-between; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--line); }
     footer button { font-family: var(--sans); font-size: var(--t-label); letter-spacing: 0; text-transform: none; }
     @media (max-width: 880px) {
-      .date-trigger { min-height: 44px; }
+      .date-trigger { min-height: var(--touch-h); }
       .date-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--modal-scrim); -webkit-backdrop-filter: var(--modal-scrim-filter); backdrop-filter: var(--modal-scrim-filter); animation: date-fade var(--motion-fast) var(--ease-out) both; }
       .calendar { position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; top: auto; bottom: 0; left: 0; right: 0; width: auto; padding: 0 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--line-2); background: var(--glass-surface); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); box-shadow: var(--shadow-sheet); animation: date-up var(--motion) var(--ease-out) both; }
       .sheet-head { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: 48px; margin: 0 -12px 4px; padding: 0 12px; border-bottom: 1px solid var(--line); }

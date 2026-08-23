@@ -1,6 +1,6 @@
 {
   "name": "web",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "engines": {
     "node": "22.x"
   },
@@ -12,7 +12,7 @@
     "capture:sanity": "node scripts/capture-sanity.mjs",
     "test:mobile-ux": "node scripts/capture-mobile.mjs --check-only",
     "test:pwa-shell": "node scripts/test-pwa-shell.mjs",
-    "test:unit": "node --experimental-strip-types --experimental-detect-module --test src/app/core/*.spec.ts",
+    "test:unit": "node --experimental-strip-types --experimental-detect-module --test src/app/core/*.spec.ts src/app/features/*/*.spec.ts",
     "test:sw": "node --test scripts/test-sw.mjs",
     "test": "npm run test:unit && npm run test:sw",
     "watch": "ng build --watch --configuration development"

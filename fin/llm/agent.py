@@ -11,7 +11,7 @@ from . import cache
 from .provider import LLMProvider, LLMUnavailable
 from .query import VALID_GROUP_BY, build_context, sanitise
 
-PROMPT_VERSION = "agent-v1"
+PROMPT_VERSION = "agent-v2"
 MAX_TOOL_CALLS = 8
 
 SYSTEM = """You answer questions about the user's Finto ledger.
@@ -109,11 +109,24 @@ def answer_question(
     """Run a bounded read-only analysis and return its answer and audit trace."""
     context = build_context(conn)
     target = (reporting_currency or "").strip().upper() or None
+    question_prompt = question.strip()
+    cache_payload = {
+        "question": question_prompt,
+        "context": context,
+        "reporting_currency": target,
+        "ledger_revision": _ledger_revision(conn),
+    }
+    ihash = cache.input_hash("query", cache_payload)
+    cached = cache.lookup(conn, "query", ihash, PROMPT_VERSION)
+    if cached is not None:
+        result = dict(cached["output"])
+        result.update({"question": question, "cached": True})
+        return result
+
     system = (
         f"{SYSTEM}\n\nLedger vocabulary and coverage:\n"
         f"{json.dumps(context, default=str, separators=(',', ':'))}"
     )
-    question_prompt = question.strip()
     if target:
         question_prompt += f"\nPreferred reporting currency: {target}"
 
@@ -132,7 +145,7 @@ def answer_question(
     try:
         response = provider.complete_with_tools(
             system, question_prompt, TOOLS, execute,
-            max_turns=4, max_tokens=1600,
+            max_turns=3, max_tokens=900,
         )
     except LLMUnavailable as exc:
         return {"ok": False, "error": str(exc), "question": question}
@@ -156,23 +169,46 @@ def answer_question(
     cache.record(
         conn,
         task="query",
-        ihash=cache.input_hash("query", {
-            "question": question,
-            "context": context,
-            "reporting_currency": target,
-        }),
+        ihash=ihash,
         summary=question[:500],
-        output={
-            "answer": answer,
-            "tools": public_calls,
-            "prompt_cache": result["prompt_cache"],
-        },
+        output=result,
         confidence=None,
         model=response.model,
         prompt_version=PROMPT_VERSION,
     )
     conn.commit()
     return result
+
+
+def _ledger_revision(conn) -> dict[str, Any]:
+    """Data fingerprint for safe answer reuse.
+
+    Cached prose contains figures, so a question may only be reused while the
+    authenticated user's ledger, assertions, and conversion rates are unchanged.
+    """
+    user = conn.execute(
+        "SELECT current_setting('finto.user_id', true) AS user_id"
+    ).fetchone()
+    txns = conn.execute(
+        "SELECT COUNT(*) AS count, MAX(updated_at) AS latest FROM txn"
+    ).fetchone()
+    assertions = conn.execute(
+        "SELECT COUNT(*) AS count, MAX(ba.as_of_date) AS latest "
+        "FROM balance_assertion ba JOIN account a ON a.id=ba.account_id"
+    ).fetchone()
+    rates = conn.execute(
+        "SELECT COUNT(*) AS count, MAX(rate_date) AS latest, "
+        "md5(COALESCE(string_agg("
+        "rate_date || ':' || base || ':' || quote || ':' || rate || ':' || source, "
+        "',' ORDER BY rate_date, base, quote, source), '')) AS digest "
+        "FROM fx_rate"
+    ).fetchone()
+    return {
+        "user_id": (user or {}).get("user_id") or "",
+        "transactions": dict(txns or {}),
+        "assertions": dict(assertions or {}),
+        "rates": dict(rates or {}),
+    }
 
 
 def _execute_tool(

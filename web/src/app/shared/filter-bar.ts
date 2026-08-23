@@ -116,7 +116,7 @@ import { FintoDate } from './finto-date';
               <button type="button" (click)="clear(chip.key)" aria-label="Remove filter">×</button>
             </span>
           }
-          <button type="button" class="ghost small" (click)="clear()">Clear all</button>
+          <button type="button" class="ghost small clear-all" (click)="clear()">Clear all</button>
         </div>
       }
     </div>
@@ -171,6 +171,18 @@ import { FintoDate } from './finto-date';
     .chips {
       display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
       margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+    }
+    .chips > .chip, .chips > .clear-all {
+      height: var(--control-h);
+      min-height: var(--control-h);
+      padding-block: 0;
+    }
+    .chips > .chip { padding-inline: var(--s3); }
+    .chips .chip button {
+      width: 18px;
+      height: 18px;
+      min-height: 18px;
+      padding: 0;
     }
     /* Inline on desktop, so nothing to dim. */
     .sheet-scrim { display: none; }

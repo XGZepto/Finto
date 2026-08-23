@@ -1,16 +1,17 @@
 .controls-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(220px, 1.3fr) minmax(110px, .7fr) minmax(160px, 1fr) minmax(130px, .8fr);
   align-items: end;
   gap: var(--s4);
-  flex-wrap: wrap;
   padding: var(--s3) var(--s4);
   margin-bottom: var(--s3);
   border: 1px solid var(--line);
   background: var(--panel);
 }
 .control-pair { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
-.control-pair:has(finto-select) { min-width: 150px; }
-.control-pair:first-child { min-width: 220px; }
+.control-pair finto-select { width: 100%; }
+.control-pair:first-child { min-width: 0; }
+.control-pair:first-child finto-pills { width: 100%; }
 .control-pair label {
   color: var(--fg-4); font-family: var(--sans); font-size: var(--t-label); font-weight: 500;
 }
@@ -21,34 +22,43 @@
 .totals-row .vs { color: var(--fg-4); }
 
 @media (max-width: 880px) {
-  .controls-bar { gap: var(--s3); padding: var(--s3); }
-  /* Period gets its own row so all five spans fit; account and split share the next. */
-  .control-pair:first-child { flex-basis: 100%; }
+  .controls-bar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s3);
+    padding: var(--s3);
+  }
+  .control-pair:first-child { grid-column: 1 / -1; }
   .control-pair:first-child finto-pills { width: 100%; }
-  .control-pair { flex: 1; min-width: 130px; }
 }
 
 .totals-card { display: flex; flex-direction: column; gap: var(--s4); margin-bottom: var(--s3); }
 .report-grid {
   display: grid;
-  grid-template-columns: minmax(320px, .7fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--s3);
-  align-items: start;
+  align-items: stretch;
   margin-bottom: var(--s3);
 }
-.report-grid > .card { min-width: 0; }
-.totals-row { display: flex; align-items: baseline; gap: var(--s5); flex-wrap: wrap; }
-.totals-row > span { display: flex; align-items: baseline; gap: var(--s2); }
+.report-grid > .card { display: flex; flex-direction: column; min-width: 0; }
+.report-grid finto-bars { flex: 1; min-height: 0; }
+.totals-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s6);
+  align-items: end;
+}
+.totals-row > span { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
 .totals-row label {
   color: var(--fg-4); font-family: var(--sans); font-size: var(--t-label); font-weight: 500;
 }
 .totals-row b {
-  font-family: var(--mono); font-size: var(--t-figure); font-weight: 500;
-  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+  font-family: var(--mono); font-size: var(--t-hero); font-weight: 500;
+  font-variant-numeric: tabular-nums; letter-spacing: -.03em;
 }
 
 
-.rank-list { display: flex; flex-direction: column; }
+.rank-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--s6); }
 .rank-list button {
   display: grid;
   grid-template-columns: 8px minmax(90px, 1.1fr) minmax(0, 2fr) auto 52px;
@@ -73,12 +83,20 @@
 .rank-list .amount { font-variant-numeric: tabular-nums; }
 .rank-list .share { color: var(--fg-4); text-align: right; font-variant-numeric: tabular-nums; }
 
+@media (min-width: 881px) and (max-width: 1180px) {
+  .controls-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .control-pair:first-child { grid-column: 1 / -1; }
+  .totals-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rank-list { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 880px) {
   .report-grid { grid-template-columns: 1fr; }
   .totals-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
   .totals-row > span { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); min-width: 0; }
   .totals-row > span b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .totals-row b { font-size: var(--t-fig-sm); }
+  .rank-list { grid-template-columns: 1fr; }
   .rank-list button { grid-template-columns: 8px minmax(0, 1fr) auto; row-gap: var(--s1); }
   .rank-list .bar-track { grid-column: 2 / -1; grid-row: 2; }
   .rank-list .share { display: none; }

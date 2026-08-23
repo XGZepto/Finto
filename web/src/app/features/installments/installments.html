@@ -55,7 +55,9 @@
         </thead>
         <tbody>
           @for (p of plans(); track p.id) {
-            <tr class="clickable" (click)="toggle(p)">
+            <tr class="clickable" tabindex="0" [attr.aria-expanded]="expanded() === p.id"
+                (click)="toggle(p)" (keydown.enter)="toggle(p)"
+                (keydown.space)="$event.preventDefault(); toggle(p)">
               <td class="caret mono">{{ expanded() === p.id ? '▾' : '▸' }}</td>
               <td data-label="Plan">
                 <span class="desc">{{ p.merchant || p.description }}</span>

@@ -32,13 +32,15 @@
     <!-- The candidate list keeps this occasional task bounded and transparent. -->
     <ol class="queue">
       @for (item of items(); track item.id; let i = $index) {
-        <li [class.on]="i === cursor()" (click)="cursor.set(i)">
-          <span class="score mono" [class]="scoreBand(item.score)">
-            {{ (item.score * 100).toFixed(0) }}
-          </span>
-          <span class="line">
-            {{ item.keep_desc || item.out_desc || item.description }}
-          </span>
+        <li [class.on]="i === cursor()">
+          <button type="button" (click)="cursor.set(i)">
+            <span class="score mono" [class]="scoreBand(item.score)">
+              {{ (item.score * 100).toFixed(0) }}
+            </span>
+            <span class="line">
+              {{ item.keep_desc || item.out_desc || item.description }}
+            </span>
+          </button>
         </li>
       }
     </ol>

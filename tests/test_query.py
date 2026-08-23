@@ -215,12 +215,16 @@ class _ToolProvider(LLMProvider):
     name = "tool-test"
     model = "tool-test-v1"
 
+    def __init__(self):
+        self.calls = 0
+
     def complete_json(self, system, user, *, max_tokens=2000):
         raise AssertionError("the analysis agent must use the tool interface")
 
     def complete_with_tools(
         self, system, user, tools, execute_tool, *, max_turns=4, max_tokens=1600,
     ):
+        self.calls += 1
         result = execute_tool("ledger_totals", {
             "filter": {"categories": ["dining"]},
             "reporting_currency": "USD",
@@ -235,8 +239,9 @@ class _ToolProvider(LLMProvider):
 
 
 def test_agent_answer_uses_allowlisted_sql_tool(seeded):
+    provider = _ToolProvider()
     result = answer_question(
-        seeded, _ToolProvider(), "How much did I spend on dining?",
+        seeded, provider, "How much did I spend on dining?",
         reporting_currency="USD",
     )
     assert result["ok"] is True
@@ -254,7 +259,29 @@ def test_agent_answer_uses_allowlisted_sql_tool(seeded):
         "SELECT output,prompt_version FROM llm_decision WHERE task='query'"
     ).fetchone()
     assert "Dining spend was USD 134.00" in audit["output"]
-    assert audit["prompt_version"] == "agent-v1"
+    assert audit["prompt_version"] == "agent-v2"
+
+    repeated = answer_question(
+        seeded, provider, "How much did I spend on dining?",
+        reporting_currency="USD",
+    )
+    assert repeated["answer"] == result["answer"]
+    assert repeated["totals"] == result["totals"]
+    assert repeated["cached"] is True
+    assert provider.calls == 1
+
+    seeded.execute(
+        "UPDATE txn SET amount_booked=amount_booked-100, "
+        "updated_at='2099-01-01T00:00:00' "
+        "WHERE id=(SELECT id FROM txn WHERE category='dining' LIMIT 1)"
+    )
+    seeded.commit()
+    refreshed = answer_question(
+        seeded, provider, "How much did I spend on dining?",
+        reporting_currency="USD",
+    )
+    assert refreshed["cached"] is False
+    assert provider.calls == 2
 
 
 def test_agent_tool_rejects_unknown_name(seeded):

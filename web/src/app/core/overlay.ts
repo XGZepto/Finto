@@ -32,7 +32,8 @@ export function placeOverlay(
       left: `${Math.round(left)}px`,
       right: 'auto',
       width: `${Math.round(width)}px`,
-      maxWidth: `${Math.round(maxWidth)}px`,
+      minWidth: `${Math.round(width)}px`,
+      maxWidth: `${Math.round(width)}px`,
       maxHeight: `${Math.round(maxHeight)}px`,
     },
   };

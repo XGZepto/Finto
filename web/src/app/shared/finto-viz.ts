@@ -97,11 +97,16 @@ export class FintoShareBar {
       from { opacity: 0; transform: rotate(-102deg) scale(.9); }
       to { opacity: 1; transform: rotate(-90deg); }
     }
-    .legend { display: flex; flex-direction: column; gap: var(--s2); flex: 1; min-width: 140px; }
+    .legend { display: flex; flex-direction: column; gap: var(--s2); flex: 1 1 12rem; max-width: 20rem; min-width: 10rem; }
     .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-data); }
     .dot { width: 8px; height: 8px; flex: none; }
     .name { flex: 1; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pct { font-variant-numeric: tabular-nums; color: var(--fg-3); }
+    @media (min-width: 1100px) {
+      :host(.breakdown-donut) .donut-wrap { flex-direction: column; align-items: stretch; }
+      :host(.breakdown-donut) .legend { max-width: none; flex: none; }
+      :host(.breakdown-donut) svg { width: 132px; height: 132px; }
+    }
     @media (prefers-reduced-motion: reduce) { .arc { opacity: 1; animation: none; } }
   `],
 })

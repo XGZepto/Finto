@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.4.8 — 2026-08-24
+
+- Size overlay menus to the trigger, capped at 360px. `min-width: 100%` of
+  the overlay host made Account search as wide as the blotter.
+- Use one control height: 36px on desktop and 44px under 880px, including
+  filter chips and Clear all.
+- Put Recurring and Ask in the desktop Money group; More stays the tools
+  overflow. Phone tabs are unchanged.
+- Use the desktop Summary row: spend beside In/Net/Saved, a taller flow
+  chart, and the ranking next to the donut instead of a 760px strip.
+- Fill the Reports row the same way: totals across the card, month bars
+  that span the plot, and a two-column ranking.
+- Open the blotter on the clicked flow month. The chart was sending that
+  month as a category, which matched nothing.
+- Render Ask answers as structured paragraphs, lists, headings, and emphasis;
+  replace the implementation badges with a compact analysis-scope card.
+- Reduce Ask latency with Haiku for the bounded tool loop and reuse complete
+  answers while the authenticated user's ledger revision is unchanged.
+
 ## 0.4.7 — 2026-08-21
 
 - Render select and date menus on a root overlay host (the usual portal

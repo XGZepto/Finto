@@ -217,12 +217,15 @@ Anthropic prompt-prefix caching covers the tool definitions, system
 instructions, and current ledger vocabulary. PostgreSQL decision caching remains
 separate and is used for deterministic categorisation and query audit records.
 
-Classification defaults to Claude Haiku 4.5. Ask uses Claude Sonnet 5 and can be
-configured independently:
+Classification and Ask default to Claude Haiku 4.5. Ask is a bounded
+tool-selection loop, so the smaller model materially reduces its two-request
+latency while SQL remains authoritative. Complete answers are reused while the
+authenticated user's ledger revision is unchanged. The web client renders the
+answer as structured text, not raw Markdown. It can be configured independently:
 
 ```bash
 finto config set llm_enabled 1
-finto config set llm_agent_model claude-sonnet-5
+finto config set llm_agent_model claude-haiku-4-5-20251001
 ```
 
 Deployments can use `FINTO_LLM_ENABLED`, `FINTO_LLM_MODEL`, and
