@@ -28,6 +28,7 @@ export class IntegrityPage {
   private router = inject(Router);
 
   loading = signal(true);
+  failed = signal(false);
   report = signal<IntegrityReport | null>(null);
   showAllChecks = signal(false);
 
@@ -47,6 +48,7 @@ export class IntegrityPage {
 
   load(): void {
     this.loading.set(true);
+    this.failed.set(false);
     this.api.integrity().subscribe({
       next: (r) => {
         this.report.set(r);
@@ -55,7 +57,11 @@ export class IntegrityPage {
         this.showAllChecks.set(r.summary.discrepancy_count === 0);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => {
+        this.report.set(null);
+        this.failed.set(true);
+        this.loading.set(false);
+      },
     });
   }
 

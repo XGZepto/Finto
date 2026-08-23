@@ -29,6 +29,7 @@ export class InvestmentsPage {
   private router = inject(Router);
 
   loading = signal(true);
+  failed = signal(false);
   snapshots = signal<InvestmentSnapshot[]>([]);
   accountNames = signal<Record<string, string>>({});
   current = signal<InvestmentDetail | null>(null);
@@ -100,6 +101,8 @@ export class InvestmentsPage {
   }
 
   private loadSnapshots(): void {
+    this.loading.set(true);
+    this.failed.set(false);
     this.api.investments().subscribe({
       next: (r) => {
         this.snapshots.set(r.snapshots);
@@ -111,7 +114,7 @@ export class InvestmentsPage {
         }
         else this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => { this.loading.set(false); this.failed.set(true); },
     });
   }
 
@@ -177,7 +180,7 @@ export class InvestmentsPage {
         this.current.set(d);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => { this.loading.set(false); if (!this.current()) this.failed.set(true); },
     });
   }
 

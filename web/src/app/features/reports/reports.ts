@@ -58,6 +58,7 @@ export class ReportsPage {
   accounts = signal<Array<{ id: string; display_name: string }>>([]);
   convertTo = this.preferences.baseCurrency;
   loading = signal(true);
+  failed = signal(false);
   rows = signal<SummaryRow[]>([]);
   monthRows = signal<SummaryRow[]>([]);
   headline = signal<{ net: Money; spend: Money; income: Money } | null>(null);
@@ -120,6 +121,7 @@ export class ReportsPage {
   load(): void {
     const version = ++this.loadVersion;
     this.loading.set(true);
+    this.failed.set(false);
     const convert = this.convertTo() || undefined;
     const { current, prior } = this.windows();
     const selected = this.selectedMonths();
@@ -133,7 +135,7 @@ export class ReportsPage {
         this.headline.set(res.normalised?.total ?? null);
         this.loading.set(false);
       },
-      error: () => { if (version === this.loadVersion) this.loading.set(false); },
+      error: () => { if (version === this.loadVersion) { this.loading.set(false); this.failed.set(true); } },
     });
 
     if (selected.length <= 1) {

@@ -22,7 +22,7 @@ let dateInstances = 0;
     </div>
     <ng-template #pane>
       <button type="button" class="date-scrim" aria-label="Close date picker" (click)="close()"></button>
-      <div class="calendar" data-scroll-surface role="dialog" [id]="id"
+      <div class="calendar" data-scroll-surface role="dialog" aria-modal="true" [id]="id"
            [attr.aria-label]="ariaLabel" [ngStyle]="menuStyle()">
           <div class="sheet-head"><strong>Choose date</strong><button type="button" aria-label="Close" (click)="close()">×</button></div>
           <header>
@@ -30,13 +30,14 @@ let dateInstances = 0;
             <strong>{{ monthLabel() }}</strong>
             <button type="button" class="month-step" (click)="move(1)" aria-label="Next month">→</button>
           </header>
-          <div class="weekdays" aria-hidden="true">
-            @for (day of weekdays; track day) { <span>{{ day }}</span> }
+          <div class="weekdays">
+            @for (day of weekdays; track $index) { <span>{{ day }}</span> }
           </div>
           <div class="days">
             @for (day of days(); track day.iso) {
               <button type="button" [class.outside]="!day.inMonth" [class.selected]="day.iso === value()"
-                      [class.today]="day.iso === today" (click)="choose(day.iso)">{{ day.day }}</button>
+                      [class.today]="day.iso === today" [attr.aria-label]="day.iso"
+                      (click)="choose(day.iso)">{{ day.day }}</button>
             }
           </div>
           <footer>
@@ -55,9 +56,9 @@ let dateInstances = 0;
     .open .date-trigger { border-color: var(--fg-3); background: var(--panel-2); }
     .calendar { position: absolute; z-index: var(--z-popover); top: calc(100% + 4px); left: 0; width: 264px; padding: 9px; border: 1px solid var(--line-2); background: var(--panel); box-shadow: var(--shadow-popover); }
     .date-scrim, .sheet-head { display: none; }
-    header { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; margin-bottom: 7px; }
+    header { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; margin-bottom: 7px; }
     header strong { color: var(--fg-2); font: 500 var(--t-label)/1 var(--mono); letter-spacing: .08em; text-align: center; text-transform: uppercase; }
-    .month-step { padding: 0; border: 0; background: transparent; }
+    .month-step { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; }
     .weekdays, .days { display: grid; grid-template-columns: repeat(7, 1fr); }
     .weekdays span { padding: 4px 0; color: var(--fg-4); font: var(--t-micro)/1 var(--mono); text-align: center; }
     .days button { min-height: 34px; padding: 0; border-color: transparent; background: transparent; color: var(--fg-2); font-size: var(--t-label); letter-spacing: 0; }
@@ -71,7 +72,7 @@ let dateInstances = 0;
       .date-trigger { min-height: var(--touch-h); }
       .date-scrim { display: block; position: fixed; z-index: var(--z-popover); inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: var(--modal-scrim); -webkit-backdrop-filter: var(--modal-scrim-filter); backdrop-filter: var(--modal-scrim-filter); animation: date-fade var(--motion-fast) var(--ease-out) both; }
       .calendar { position: fixed; z-index: calc(var(--z-popover) + 1); inset: auto 0 0; top: auto; bottom: 0; left: 0; right: 0; width: auto; padding: 0 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--line-2); background: var(--glass-surface); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); box-shadow: var(--shadow-sheet); animation: date-up var(--motion) var(--ease-out) both; }
-      .sheet-head { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: 48px; margin: 0 -12px 4px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+      .sheet-head { position: relative; display: flex; justify-content: space-between; align-items: center; min-height: var(--sheet-head-h); margin: 0 -12px 4px; padding: 0 14px; border-bottom: 1px solid var(--line); }
       .sheet-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 32px; height: 3px; border-radius: 3px; background: var(--fg-4); transform: translateX(-50%); opacity: .6; }
       .sheet-head strong { font: 550 var(--t-data)/1 var(--sans); }
       .sheet-head button { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--fg-3); font-size: 24px; }
@@ -89,7 +90,7 @@ export class FintoDate implements ControlValueAccessor, OnDestroy {
   private overlays = inject(OverlayHost);
   private pane = viewChild<TemplateRef<unknown>>('pane');
   readonly ariaLabel = 'Date';
-  readonly weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  readonly weekdays = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
   readonly today = toIso(new Date());
   readonly value = signal('');
   readonly open = signal(false);

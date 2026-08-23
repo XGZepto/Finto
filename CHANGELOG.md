@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.4.9 — 2026-08-24
+
+- Show a banner when a page's API load fails, instead of an empty shell.
+- Restore the net-worth time series on Accounts.
+- Close remaining compact-layout gaps: tab-bar inset, sticky filters with
+  visible chips, stacked import metadata, Review installment groups, and
+  44px segment and date targets.
+- Mark segmented controls as toggle groups for assistive tech.
+
 ## 0.4.8 — 2026-08-24
 
 - Size overlay menus to the trigger, capped at 360px. `min-width: 100%` of

@@ -6,9 +6,9 @@
 </div>
 
 <div class="bar">
-  <div class="seg">
+  <div class="seg" role="group" aria-label="Queue">
     @for (q of queues; track q.id) {
-      <button [class.on]="queue() === q.id" (click)="select(q.id)">
+      <button [class.on]="queue() === q.id" [attr.aria-pressed]="queue() === q.id" (click)="select(q.id)">
         {{ q.label }}
         @if (counts()[q.id]) { <span class="n">{{ counts()[q.id] }}</span> }
       </button>
@@ -23,6 +23,8 @@
 
 @if (loading()) {
   <div class="card"><finto-skeleton [rows]="5" label="Loading queue" /></div>
+} @else if (failed()) {
+  <div class="card"><p class="banner error">Couldn't load the queue.</p></div>
 } @else if (!items().length) {
   <div class="card">
     <div class="empty">Queue clear</div>

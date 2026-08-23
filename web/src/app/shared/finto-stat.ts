@@ -67,6 +67,7 @@ export class FintoDelta {
   `,
   styles: [`
     .stat { display: flex; flex-direction: column; gap: var(--s1); }
+    .label { font-family: var(--sans); font-size: var(--t-label); font-weight: 500; color: var(--fg-4); }
     .stat-figure {
       font-family: var(--mono);
       font-size: var(--t-hero);

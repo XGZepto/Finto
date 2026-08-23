@@ -21,6 +21,7 @@ export class TimelinePage {
   private filters = inject(FilterState);
 
   loading = signal(true);
+  failed = signal(false);
   comp = signal<Composition | null>(null);
   coverage = signal<Coverage | null>(null);
 
@@ -39,12 +40,13 @@ export class TimelinePage {
 
   reload(): void {
     this.loading.set(true);
+    this.failed.set(false);
     this.api.composition(this.convertTo(), this.dimension()).subscribe({
       next: (c) => {
         this.comp.set(c);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => { this.loading.set(false); this.failed.set(true); },
     });
   }
 

@@ -31,9 +31,9 @@
       }
     }
     <div class="aggregation-actions">
-      <div class="seg" aria-label="Amount display">
-        <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Converted</button>
-        <button [class.on]="showNative()" (click)="setAggregation('native')">Native</button>
+      <div class="seg" role="group" aria-label="Amount display">
+        <button [class.on]="!showNative()" [attr.aria-pressed]="!showNative()" (click)="setAggregation('normalised')">Converted</button>
+        <button [class.on]="showNative()" [attr.aria-pressed]="showNative()" (click)="setAggregation('native')">Native</button>
       </div>
       @if (!showNative()) {
         <finto-select class="currency-select" ariaLabel="Display currency"
@@ -45,6 +45,8 @@
 
   @if (loading()) {
     <finto-skeleton [rows]="8" label="Loading transactions" />
+  } @else if (failed()) {
+    <p class="banner error">Couldn't load transactions.</p>
   } @else {
     <div class="table-wrap">
       <table>
@@ -189,9 +191,9 @@
     </header>
     <div class="amount-option-row">
       <label>Amounts</label>
-      <div class="seg" aria-label="Amount display">
-        <button [class.on]="!showNative()" (click)="setAggregation('normalised')">Converted</button>
-        <button [class.on]="showNative()" (click)="setAggregation('native')">Native</button>
+      <div class="seg" role="group" aria-label="Amount display">
+        <button [class.on]="!showNative()" [attr.aria-pressed]="!showNative()" (click)="setAggregation('normalised')">Converted</button>
+        <button [class.on]="showNative()" [attr.aria-pressed]="showNative()" (click)="setAggregation('native')">Native</button>
       </div>
     </div>
     @if (!showNative()) {

@@ -53,6 +53,7 @@ export class SummaryPage {
   groupBy = signal(this.savedGroupBy());
   convertTo = this.preferences.baseCurrency;
   loading = signal(true);
+  failed = signal(false);
   rows = signal<SummaryRow[]>([]);
   monthRows = signal<SummaryRow[]>([]);
   totals = signal<TotalRow[]>([]);
@@ -259,6 +260,7 @@ export class SummaryPage {
 
   load(): void {
     this.loading.set(true);
+    this.failed.set(false);
     const convert = this.convertTo() || undefined;
 
     const period = this.periodFilter();
@@ -268,7 +270,10 @@ export class SummaryPage {
         this.totals.set(res.totals);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => {
+        this.loading.set(false);
+        this.failed.set(true);
+      },
     });
 
     // The trend is always per month: the dimension control picks what the

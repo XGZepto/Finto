@@ -8,6 +8,7 @@ import { Account, Card, Flows, Money, Position, SummaryRow, Txn } from '../../co
 import { forkJoin } from 'rxjs';
 import { Preferences } from '../../core/preferences.service';
 import { RevealOnView } from '../../shared/reveal-on-view';
+import { FintoTimeseries, SeriesPoint } from '../../shared/finto-timeseries';
 
 interface AccountRow {
   account: Account;
@@ -17,7 +18,7 @@ interface AccountRow {
 
 @Component({
   selector: 'app-accounts',
-  imports: [FintoSkeleton, FintoIcon, MoneyPipe, ShortDatePipe, RevealOnView],
+  imports: [FintoSkeleton, FintoIcon, MoneyPipe, ShortDatePipe, RevealOnView, FintoTimeseries],
   templateUrl: './accounts.html',
   styleUrl: './accounts.css',
 })
@@ -28,10 +29,12 @@ export class AccountsPage {
   preferences = inject(Preferences);
 
   loading = signal(true);
+  failed = signal(false);
   accounts = signal<Account[]>([]);
   cards = signal<Card[]>([]);
   positions = signal<Position[]>([]);
   netWorth = signal<Money | null>(null);
+  series = signal<SeriesPoint[]>([]);
   positionTypes = signal<Array<{ account_type: string; balance: Money }>>([]);
   unconvertible = signal<string[]>([]);
   flows = signal<Flows>({ internal: [], external: [], external_accounts: [], normalised: { currency: 'USD', unconvertible_currencies: [], external_accounts: [], internal: [], external_nodes: [] } });
@@ -62,9 +65,9 @@ export class AccountsPage {
     this.api.cards().subscribe({ next: (r) => this.cards.set(r.cards) });
     effect(() => {
       const currency = this.preferences.baseCurrency();
-      this.api.flows({}, currency).subscribe({
-        next: (r) => this.flows.set(r),
-      });
+      this.failed.set(false);
+      this.series.set([]);
+      this.api.flows({}, currency).subscribe({ next: (r) => this.flows.set(r) });
       this.api.positions(currency).subscribe({
         next: (r) => {
           this.positions.set(r.positions);
@@ -73,7 +76,10 @@ export class AccountsPage {
           this.unconvertible.set(r.normalised?.unconvertible_currencies ?? []);
           this.loading.set(false);
         },
-        error: () => this.loading.set(false),
+        error: () => { this.loading.set(false); this.failed.set(true); },
+      });
+      this.api.netWorthSeries(currency).subscribe({
+        next: (r) => this.series.set(r.points.map((p) => ({ label: p.bucket, value: p.balance.amount }))),
       });
     });
   }

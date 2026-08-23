@@ -59,9 +59,9 @@
   <section class="card">
     <div class="section-head">
       <h2>Balance reconciliation</h2>
-      <div class="seg">
-        <button [class.on]="!showAllChecks()" (click)="showAllChecks.set(false)">Problems</button>
-        <button [class.on]="showAllChecks()" (click)="showAllChecks.set(true)">All periods</button>
+      <div class="seg" role="group" aria-label="Reconciliation filter">
+        <button [class.on]="!showAllChecks()" [attr.aria-pressed]="!showAllChecks()" (click)="showAllChecks.set(false)">Problems</button>
+        <button [class.on]="showAllChecks()" [attr.aria-pressed]="showAllChecks()" (click)="showAllChecks.set(true)">All periods</button>
       </div>
     </div>
 
@@ -113,8 +113,6 @@
       </table>
     </div>
 
-    @if (checks().length && !showAllChecks()) {
-    }
   </section>
 
   <!-- Nothing checked is not the same as nothing wrong. -->
@@ -140,6 +138,12 @@
         </table>
       </div>
     } @else {
+      <p class="small muted clean">All accounts have a balance assertion.</p>
     }
   </section>
+} @else if (failed()) {
+  <div class="card">
+    <p class="small muted clean">Integrity check failed. Re-run it, or confirm the API is reachable.</p>
+    <button class="ghost" type="button" (click)="load()">Re-run</button>
+  </div>
 }

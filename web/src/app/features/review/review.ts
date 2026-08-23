@@ -29,6 +29,7 @@ export class ReviewPage {
   counts = signal<Record<string, number>>({});
   cursor = signal(0);
   loading = signal(true);
+  failed = signal(false);
   busy = signal(false);
 
   current = computed(() => this.items()[this.cursor()] ?? null);
@@ -58,6 +59,7 @@ export class ReviewPage {
 
   load(): void {
     this.loading.set(true);
+    this.failed.set(false);
     this.api.reviewQueue(this.queue()).subscribe({
       next: (r) => {
         this.items.set(r.items);
@@ -65,7 +67,7 @@ export class ReviewPage {
         this.cursor.set(Math.min(this.cursor(), Math.max(0, r.items.length - 1)));
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => { this.loading.set(false); this.failed.set(true); },
     });
   }
 

@@ -72,7 +72,7 @@
 }
 .activity-row > span:nth-child(2) { display: grid; gap: 3px; }
 
-@media (max-width: 680px) {
+@media (max-width: 880px) {
   .mpf-import > summary { min-height: 58px; }
   .import-picker { align-items: stretch; flex-direction: column; }
   .button-like { display: grid; place-items: center; min-height: var(--touch-h); }

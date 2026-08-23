@@ -122,7 +122,15 @@ import { FintoDate } from './finto-date';
     </div>
   `,
   styles: [`
-    .filter-bar { margin-bottom: 14px; padding: 12px 14px; }
+    .filter-bar { margin-bottom: var(--s3); padding: var(--s3) 14px; }
+    @media (min-width: 881px) {
+      .filter-bar {
+        position: sticky;
+        top: var(--offline-h, 0px);
+        z-index: var(--z-sticky);
+        background: var(--panel);
+      }
+    }
     .filter-primary { display: flex; align-items: end; gap: 10px; }
     .filter-primary .search { flex: 1; }
     .filter-primary input { width: 100%; }
@@ -179,11 +187,13 @@ import { FintoDate } from './finto-date';
     }
     .chips > .chip { padding-inline: var(--s3); }
     .chips .chip button {
+      position: relative;
       width: 18px;
       height: 18px;
       min-height: 18px;
       padding: 0;
     }
+    .chips .chip button::after { content: ''; position: absolute; inset: -13px; }
     /* Inline on desktop, so nothing to dim. */
     .sheet-scrim { display: none; }
     @media (prefers-reduced-motion: reduce) {
@@ -199,9 +209,7 @@ import { FintoDate } from './finto-date';
       .filter-bar.sheet-open { z-index: var(--z-overlay); }
       .filter-bar {
         position: sticky;
-        /* Counteract the content pane's top padding so the bar pins flush under
-           the status bar with no gap above it. */
-        top: calc(-1 * var(--s3));
+        top: calc(-1 * var(--s3) + var(--offline-h, 0px));
         z-index: var(--z-sticky);
         margin-inline: calc(-1 * var(--s3));
         padding: var(--s3);
@@ -251,9 +259,15 @@ import { FintoDate } from './finto-date';
       .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .field.narrow { max-width: none; }
       .toggles { display: grid; grid-template-columns: 1fr; gap: 9px; }
-      /* The count on Filters is the compact summary. Repeating every active
-         value here turns the sticky search bar into a second form. */
-      .chips { display: none; }
+      /* A compact chip row keeps active filters visible without repeating the form. */
+      .chips {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .chips::-webkit-scrollbar { display: none; }
+      .check { min-height: var(--touch-h); }
     }
   `],
 })

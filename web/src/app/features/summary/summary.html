@@ -67,6 +67,8 @@
 
   @if (loading()) {
     <div class="spinner">loading</div>
+  } @else if (failed()) {
+    <p class="banner error">Couldn't load this summary.</p>
   } @else {
     @if (trend().length > 1) {
       <div class="trend-head">
