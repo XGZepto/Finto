@@ -4,8 +4,8 @@ import { Observable, tap } from 'rxjs';
 import {
   Account, Card, CategorySuggestion, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
   ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentActivity, InvestmentDetail,
-  InvestmentHistory, InvestmentSnapshot, Job, MpfBundlePreview,
-  LedgerFilter, Money, Page, Position, QueryResult, StagePreview, StatementFreshness, SummaryRow,
+  InvestmentHistory, InvestmentSnapshot, Job, MpfBundlePreview, MpfImportResult,
+  LedgerFilter, Money, Page, Position, QueryResult, ReviewCandidate, StagePreview, StatementFreshness, SummaryRow,
   TotalRow, Txn,
 } from './models';
 import { ReadCache } from './read-cache';
@@ -264,7 +264,7 @@ addTag(id: string, tag: string): Observable<Txn> {
   // --- Review -------------------------------------------------------------
 
   reviewQueue(queue: 'duplicates' | 'transfers' | 'installments'):
-    Observable<{ items: any[]; total: number }> {
+    Observable<{ items: ReviewCandidate[]; total: number }> {
     return this.cached<any>(`${this.base}/review/${queue}`, this.activityTtl);
   }
 
@@ -293,12 +293,12 @@ addTag(id: string, tag: string): Observable<Txn> {
       `${this.base}/investments/imports/preview`, form);
   }
 
-  confirmMpfBundle(files: File[], expectedBundleSha256: string): Observable<any> {
+  confirmMpfBundle(files: File[], expectedBundleSha256: string): Observable<MpfImportResult> {
     this.invalidateReads();
     const form = new FormData();
     files.forEach((file) => form.append('files', file, file.name));
     form.append('expected_bundle_sha256', expectedBundleSha256);
-    return this.http.post<any>(`${this.base}/investments/imports/confirm`, form);
+    return this.http.post<MpfImportResult>(`${this.base}/investments/imports/confirm`, form);
   }
 
   investment(id: string): Observable<InvestmentDetail> {

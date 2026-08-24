@@ -2,7 +2,7 @@
   <h1>Integrity</h1>
 </div>
 
-@if (loading()) {
+@if (status() === 'loading') {
   <div class="card"><finto-skeleton [rows]="5" label="Checking statements" /></div>
 } @else if (report(); as r) {
   <div class="verdict" [class.bad]="!r.healthy">
@@ -141,7 +141,7 @@
       <p class="small muted clean">All accounts have a balance assertion.</p>
     }
   </section>
-} @else if (failed()) {
+} @else if (status() === 'failed') {
   <div class="card">
     <p class="small muted clean">Integrity check failed. Re-run it, or confirm the API is reachable.</p>
     <button class="ghost" type="button" (click)="load()">Re-run</button>

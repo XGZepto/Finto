@@ -1,10 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Api } from '../../core/api.service';
+import { PageStatus } from '../../core/page-status';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import {
   InvestmentActivity, InvestmentDetail, InvestmentHistory, InvestmentSnapshot, MpfBundlePreview,
+  MpfImportResult,
 } from '../../core/models';
 import { FormsModule } from '@angular/forms';
 import { FintoSelect } from '../../shared/finto-select';
@@ -28,8 +30,12 @@ export class InvestmentsPage {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
-  loading = signal(true);
-  failed = signal(false);
+  status = signal<PageStatus>('loading');
+  private snapId = 0;
+  private openId = 0;
+  private historyId = 0;
+  private activityId = 0;
+  opening = signal(false);
   snapshots = signal<InvestmentSnapshot[]>([]);
   accountNames = signal<Record<string, string>>({});
   current = signal<InvestmentDetail | null>(null);
@@ -41,7 +47,7 @@ export class InvestmentsPage {
   mpfPreview = signal<MpfBundlePreview | null>(null);
   mpfBusy = signal(false);
   mpfError = signal('');
-  mpfResult = signal<any>(null);
+  mpfResult = signal<MpfImportResult | null>(null);
 
   scopedSnapshots = computed(() => {
     const scheme = this.scheme();
@@ -94,17 +100,18 @@ export class InvestmentsPage {
       next: (response) => this.accountNames.set(Object.fromEntries(
         response.accounts.map((account) => [account.id, account.display_name]),
       )),
-      error: () => undefined,
+      error: () => this.accountNames.set({}),
     });
     this.loadSnapshots();
     this.loadActivities();
   }
 
   private loadSnapshots(): void {
-    this.loading.set(true);
-    this.failed.set(false);
+    const id = ++this.snapId;
+    this.status.set('loading');
     this.api.investments().subscribe({
       next: (r) => {
+        if (id !== this.snapId) return;
         this.snapshots.set(r.snapshots);
         const first = this.scopedSnapshots()[0];
         if (first) {
@@ -112,16 +119,17 @@ export class InvestmentsPage {
           this.select(first.id);
           this.loadHistory();
         }
-        else this.loading.set(false);
+        this.status.set('ok');
       },
-      error: () => { this.loading.set(false); this.failed.set(true); },
+      error: () => { if (id === this.snapId) this.status.set('failed'); },
     });
   }
 
   private loadActivities(): void {
+    const id = ++this.activityId;
     this.api.investmentActivities(this.accountId() || undefined).subscribe({
-      next: (result) => this.activities.set(result.activities),
-      error: () => this.activities.set([]),
+      next: (result) => { if (id === this.activityId) this.activities.set(result.activities); },
+      error: () => { if (id === this.activityId) this.activities.set([]); },
     });
   }
 
@@ -167,20 +175,23 @@ export class InvestmentsPage {
   }
 
   private loadHistory(): void {
+    const id = ++this.historyId;
     this.api.investmentHistory(this.scheme() || undefined, this.accountId() || undefined).subscribe({
-      next: (history) => this.history.set(history),
-      error: () => this.history.set(null),
+      next: (history) => { if (id === this.historyId) this.history.set(history); },
+      error: () => { if (id === this.historyId) this.history.set(null); },
     });
   }
 
   select(id: string): void {
-    this.loading.set(true);
+    const req = ++this.openId;
+    this.opening.set(true);
     this.api.investment(id).subscribe({
       next: (d) => {
+        if (req !== this.openId) return;
         this.current.set(d);
-        this.loading.set(false);
+        this.opening.set(false);
       },
-      error: () => { this.loading.set(false); if (!this.current()) this.failed.set(true); },
+      error: () => { if (req === this.openId) this.opening.set(false); },
     });
   }
 

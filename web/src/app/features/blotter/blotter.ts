@@ -6,6 +6,7 @@ import { Api } from '../../core/api.service';
 import { Refresh } from '../../core/refresh.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { FilterState } from '../../core/filter-state';
+import { PageStatus } from '../../core/page-status';
 import { DetailKeyPipe, MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { CategorySuggestion, Money, TotalRow, Txn } from '../../core/models';
 import { scrollPane } from '../../core/scroll';
@@ -76,8 +77,7 @@ export class BlotterPage implements OnDestroy {
   private tailObserver?: IntersectionObserver;
   private inflight?: Subscription;
 
-  loading = signal(true);
-  failed = signal(false);
+  status = signal<PageStatus>('loading');
   rows = signal<Txn[]>([]);
   total = signal(0);
   scopeTotals = signal<TotalRow[]>([]);
@@ -117,6 +117,8 @@ export class BlotterPage implements OnDestroy {
   private inspectorHistoryActive = false;
   private afterClose: (() => void) | null = null;
   private scrollLockOffset = 0;
+  /** Deep-link id already opened this visit, so a filter merge cannot reopen it. */
+  private openedFromQuery: string | null = null;
 
   /**
    * Rows banded by day, each band carrying its own total.
@@ -163,12 +165,16 @@ export class BlotterPage implements OnDestroy {
   private readonly REVEAL = 96;
 
   constructor() {
-    // Token starts at 0, so this arms the reload without firing one now.
+    // Token starts at 0; queryParams already loads on first paint.
     effect(() => { if (this.refreshes.token()) this.load(); });
     this.api.facets().subscribe({
       next: (facets) => {
         this.currencies.set([...new Set(['USD', ...facets.currencies])]);
         this.categories.set(facets.categories ?? []);
+      },
+      error: () => {
+        this.currencies.set(['USD']);
+        this.categories.set([]);
       },
     });
     this.route.queryParams.subscribe((params) => {
@@ -181,21 +187,21 @@ export class BlotterPage implements OnDestroy {
   /** Start again from the top — a filter, sort or currency change. */
   load(): void {
     this.offset.set(0);
-    this.loading.set(true);
+    this.status.set('loading');
     this.loadingMore.set(false);
     this.fetch(true);
   }
 
   /** Append the next page. Driven by the sentinel, never by a button. */
   loadMore(): void {
-    if (this.loading() || this.loadingMore() || !this.hasMore()) return;
+    if (this.status() === 'loading' || this.loadingMore() || !this.hasMore()) return;
     this.offset.set(this.rows().length);
     this.loadingMore.set(true);
     this.fetch(false);
   }
 
   private fetch(reset: boolean): void {
-    if (reset) this.failed.set(false);
+    if (reset) this.status.set('loading');
     this.inflight?.unsubscribe();
     this.inflight = this.api
       .transactions(this.filters.filter(), {
@@ -212,14 +218,14 @@ export class BlotterPage implements OnDestroy {
           else if (!reset && !page.items.length) this.total.set(this.rows().length);
           if (page.totals) this.scopeTotals.set(page.totals);
           if (page.normalised !== undefined) this.normalised.set(page.normalised ?? null);
-          this.loading.set(false);
+          this.status.set('ok');
           this.loadingMore.set(false);
           this.queueTailCheck();
+          if (reset) this.openFromQuery();
         },
         error: () => {
-          this.loading.set(false);
           this.loadingMore.set(false);
-          if (reset) this.failed.set(true);
+          if (reset) this.status.set('failed');
         },
       });
   }
@@ -230,7 +236,7 @@ export class BlotterPage implements OnDestroy {
     requestAnimationFrame(() => {
       const el = this.sentinelEl;
       const pane = scrollPane() ?? this.host.nativeElement.closest('.content');
-      if (!el || this.loading() || this.loadingMore() || !this.hasMore()) return;
+      if (!el || this.status() === 'loading' || this.loadingMore() || !this.hasMore()) return;
       const root = pane instanceof HTMLElement ? pane.getBoundingClientRect() : {
         bottom: window.innerHeight,
       };
@@ -371,6 +377,22 @@ export class BlotterPage implements OnDestroy {
   openFromKeyboard(event: Event, txn: Txn): void {
     if ((event as KeyboardEvent).key === ' ') event.preventDefault();
     this.open(txn, event.currentTarget as HTMLElement);
+  }
+
+  /** Accounts (and Recurring) pass `txn` beside the filter; open that row once. */
+  private openFromQuery(): void {
+    const id = this.route.snapshot.queryParamMap.get('txn');
+    if (!id || this.openedFromQuery === id) return;
+    this.openedFromQuery = id;
+    const found = this.rows().find((row) => row.id === id);
+    if (found) {
+      this.open(found);
+      return;
+    }
+    this.api.transaction(id).subscribe({
+      next: (full) => this.open(full),
+      error: () => {},
+    });
   }
 
   open(txn: Txn, trigger?: HTMLElement): void {

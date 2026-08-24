@@ -11,6 +11,7 @@ import { FintoDonut, Slice } from '../../shared/finto-viz';
 import { Preferences } from '../../core/preferences.service';
 import { FilterState } from '../../core/filter-state';
 import { forkJoin } from 'rxjs';
+import { PageStatus } from '../../core/page-status';
 import { RevealOnView } from '../../shared/reveal-on-view';
 
 /**
@@ -52,8 +53,8 @@ export class SummaryPage {
 
   groupBy = signal(this.savedGroupBy());
   convertTo = this.preferences.baseCurrency;
-  loading = signal(true);
-  failed = signal(false);
+  status = signal<PageStatus>('loading');
+  private loadId = 0;
   rows = signal<SummaryRow[]>([]);
   monthRows = signal<SummaryRow[]>([]);
   totals = signal<TotalRow[]>([]);
@@ -168,12 +169,6 @@ export class SummaryPage {
   });
 
   /**
-   * Spend per period, oldest first.
-   *
-   * Only one currency at a time. Bars are comparable because they share a scale,
-   * and two currencies on one scale would imply an exchange rate nobody chose.
-   */
-  /**
    * Out and in per period, on a shared scale so the two are comparable and a
    * month that earned more than it spent is visible as such.
    */
@@ -249,39 +244,35 @@ export class SummaryPage {
   });
 
   constructor() {
-    // Token starts at 0, so this arms the reload without firing one now.
-    effect(() => { if (this.refreshes.token()) this.load(); });
     this.api.statementFreshness().subscribe({ next: (r) => this.freshness.set(r) });
     effect(() => {
       this.convertTo();
+      this.refreshes.token();
       this.load();
     });
   }
 
   load(): void {
-    this.loading.set(true);
-    this.failed.set(false);
+    const id = ++this.loadId;
+    this.status.set('loading');
     const convert = this.convertTo() || undefined;
 
     const period = this.periodFilter();
     this.api.summary(this.groupBy(), period, convert).subscribe({
       next: (res) => {
+        if (id !== this.loadId) return;
         this.rows.set(res.rows);
         this.totals.set(res.totals);
-        this.loading.set(false);
+        this.status.set('ok');
       },
-      error: () => {
-        this.loading.set(false);
-        this.failed.set(true);
-      },
+      error: () => { if (id === this.loadId) this.status.set('failed'); },
     });
 
     // The trend is always per month: the dimension control picks what the
     // breakdown splits by, never how time is bucketed.
     this.api.summary('month', period, convert).subscribe({
-      next: (res) => {
-        this.monthRows.set(res.rows);
-      },
+      next: (res) => { if (id === this.loadId) this.monthRows.set(res.rows); },
+      error: () => { if (id === this.loadId) this.monthRows.set([]); },
     });
 
     const comparison = this.comparisonFilters();
@@ -290,8 +281,14 @@ export class SummaryPage {
       previous: this.api.summary('month', comparison.previous, convert),
     }).subscribe({
       next: ({ current, previous }) => {
+        if (id !== this.loadId) return;
         this.monthToDate.set(current.normalised?.total ?? null);
         this.previousMonthToDate.set(previous.normalised?.total ?? null);
+      },
+      error: () => {
+        if (id !== this.loadId) return;
+        this.monthToDate.set(null);
+        this.previousMonthToDate.set(null);
       },
     });
   }

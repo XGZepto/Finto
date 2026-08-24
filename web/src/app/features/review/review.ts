@@ -2,8 +2,9 @@ import { Component, HostListener, computed, effect, inject, signal } from '@angu
 import { Api } from '../../core/api.service';
 import { Refresh } from '../../core/refresh.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
+import { PageStatus } from '../../core/page-status';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { Money } from '../../core/models';
+import { Money, ReviewCandidate } from '../../core/models';
 
 type Queue = 'duplicates' | 'transfers' | 'installments';
 
@@ -25,11 +26,11 @@ export class ReviewPage {
   ];
 
   queue = signal<Queue>('duplicates');
-  items = signal<any[]>([]);
+  items = signal<ReviewCandidate[]>([]);
   counts = signal<Record<string, number>>({});
   cursor = signal(0);
-  loading = signal(true);
-  failed = signal(false);
+  status = signal<PageStatus>('loading');
+  private loadId = 0;
   busy = signal(false);
 
   current = computed(() => this.items()[this.cursor()] ?? null);
@@ -58,16 +59,17 @@ export class ReviewPage {
   }
 
   load(): void {
-    this.loading.set(true);
-    this.failed.set(false);
+    const id = ++this.loadId;
+    this.status.set('loading');
     this.api.reviewQueue(this.queue()).subscribe({
       next: (r) => {
+        if (id !== this.loadId) return;
         this.items.set(r.items);
         this.counts.update((c) => ({ ...c, [this.queue()]: r.total }));
         this.cursor.set(Math.min(this.cursor(), Math.max(0, r.items.length - 1)));
-        this.loading.set(false);
+        this.status.set('ok');
       },
-      error: () => { this.loading.set(false); this.failed.set(true); },
+      error: () => { if (id === this.loadId) this.status.set('failed'); },
     });
   }
 
@@ -118,21 +120,21 @@ export class ReviewPage {
   }
 
   /** The two sides of a candidate, whatever the queue calls them. */
-  sides(item: any): Array<{ role: string; id: string; date: string; account: string; description: string; amount: Money }> {
+  sides(item: ReviewCandidate): Array<{ role: string; id: string; date: string; account: string; description: string; amount: Money }> {
     if (this.queue() === 'duplicates') {
       return [
-        { role: 'keep', id: item.keep_id, date: item.keep_date, account: item.keep_account,
-          description: item.keep_desc, amount: this.asMoney(item.keep_amount, item.keep_currency) },
-        { role: 'drop', id: item.dupe_id, date: item.dupe_date, account: item.dupe_account,
-          description: item.dupe_desc, amount: this.asMoney(item.dupe_amount, item.dupe_currency) },
+        { role: 'keep', id: item.keep_id ?? '', date: item.keep_date ?? '', account: item.keep_account ?? '',
+          description: item.keep_desc ?? '', amount: this.asMoney(item.keep_amount ?? 0, item.keep_currency ?? '') },
+        { role: 'drop', id: item.dupe_id ?? '', date: item.dupe_date ?? '', account: item.dupe_account ?? '',
+          description: item.dupe_desc ?? '', amount: this.asMoney(item.dupe_amount ?? 0, item.dupe_currency ?? '') },
       ];
     }
     if (this.queue() === 'transfers') {
       return [
-        { role: 'out', id: item.out_id, date: item.out_date, account: item.out_account,
-          description: item.out_desc, amount: this.asMoney(item.out_amount, item.out_currency) },
-        { role: 'in', id: item.in_id, date: item.in_date, account: item.in_account,
-          description: item.in_desc, amount: this.asMoney(item.in_amount, item.in_currency) },
+        { role: 'out', id: item.out_id ?? '', date: item.out_date ?? '', account: item.out_account ?? '',
+          description: item.out_desc ?? '', amount: this.asMoney(item.out_amount ?? 0, item.out_currency ?? '') },
+        { role: 'in', id: item.in_id ?? '', date: item.in_date ?? '', account: item.in_account ?? '',
+          description: item.in_desc ?? '', amount: this.asMoney(item.in_amount ?? 0, item.in_currency ?? '') },
       ];
     }
     return [];

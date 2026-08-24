@@ -2,8 +2,9 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
+import { PageStatus } from '../../core/page-status';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { IntegrityReport } from '../../core/models';
+import { BalanceCheck, IntegrityReport } from '../../core/models';
 
 /**
  * Integrity.
@@ -27,8 +28,8 @@ export class IntegrityPage {
   private api = inject(Api);
   private router = inject(Router);
 
-  loading = signal(true);
-  failed = signal(false);
+  status = signal<PageStatus>('loading');
+  private loadId = 0;
   report = signal<IntegrityReport | null>(null);
   showAllChecks = signal(false);
 
@@ -47,20 +48,21 @@ export class IntegrityPage {
   }
 
   load(): void {
-    this.loading.set(true);
-    this.failed.set(false);
+    const id = ++this.loadId;
+    this.status.set('loading');
     this.api.integrity().subscribe({
       next: (r) => {
+        if (id !== this.loadId) return;
         this.report.set(r);
         // If everything reconciles there is nothing to triage, so show the
         // passing checks rather than an empty table.
         this.showAllChecks.set(r.summary.discrepancy_count === 0);
-        this.loading.set(false);
+        this.status.set('ok');
       },
       error: () => {
+        if (id !== this.loadId) return;
         this.report.set(null);
-        this.failed.set(true);
-        this.loading.set(false);
+        this.status.set('failed');
       },
     });
   }
@@ -70,7 +72,7 @@ export class IntegrityPage {
    * missing? — so send the reader straight to the rows it covers. Transfers and
    * duplicates are included because the balance check counts them too.
    */
-  inspect(check: any): void {
+  inspect(check: BalanceCheck): void {
     this.router.navigate(['/blotter'], {
       queryParams: {
         accounts: check.account_id,

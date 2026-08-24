@@ -2,7 +2,7 @@ import { Component, EventEmitter, HostListener, Output, inject, signal } from '@
 import { FormsModule } from '@angular/forms';
 import { Api } from '../core/api.service';
 import { FilterState } from '../core/filter-state';
-import { Facets } from '../core/models';
+import { Facets, LedgerFilter } from '../core/models';
 import { FintoSelect } from './finto-select';
 import { FintoDate } from './finto-date';
 
@@ -305,13 +305,14 @@ export class FilterBar {
     return v?.length === 1 ? v[0] : '';
   }
 
-  patch(change: Record<string, unknown>): void {
-    this.filters.patch(change as any);
+  patch(change: Partial<LedgerFilter>): void {
+    this.filters.patch(change);
     this.changed.emit();
   }
 
   patchArray(key: 'accounts' | 'categories', value: string): void {
-    this.patch({ [key]: value ? [value] : undefined });
+    if (key === 'accounts') this.patch({ accounts: value ? [value] : undefined });
+    else this.patch({ categories: value ? [value] : undefined });
   }
 
   /** Debounced so typing doesn't fire a request per keystroke. */
