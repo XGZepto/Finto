@@ -102,11 +102,16 @@
 .history { display: flex; flex-direction: column; }
 .hrow {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: var(--s3); align-items: baseline;
-  padding: var(--s2) 0; border-bottom: 1px solid var(--line);
+  gap: var(--s3); align-items: center;
+  width: 100%; min-height: var(--control-h);
+  margin: 0; padding: var(--s2) 0;
+  border: 0; border-bottom: 1px solid var(--line);
+  background: transparent; color: inherit;
+  text-align: left; letter-spacing: 0; cursor: pointer;
   font-size: var(--t-data); font-variant-numeric: tabular-nums;
 }
 .hrow:last-child { border-bottom: 0; }
+.hrow:hover { background: var(--panel-2); }
 .hrow .acct { color: var(--fg-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn.wide { width: 100%; margin-top: var(--s5); }
 

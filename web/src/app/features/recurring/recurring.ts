@@ -252,6 +252,12 @@ export class RecurringPage {
     });
   }
 
+  openCharge(txn: Txn): void {
+    this.router.navigate(['/blotter'], {
+      queryParams: { accounts: txn.account_id, txn: txn.id },
+    });
+  }
+
   openPlans(): void {
     this.router.navigate(['/installments']);
   }

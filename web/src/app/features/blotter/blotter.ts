@@ -117,6 +117,8 @@ export class BlotterPage implements OnDestroy {
   private inspectorHistoryActive = false;
   private afterClose: (() => void) | null = null;
   private scrollLockOffset = 0;
+  /** Deep-link id already opened this visit, so a filter merge cannot reopen it. */
+  private openedFromQuery: string | null = null;
 
   /**
    * Rows banded by day, each band carrying its own total.
@@ -219,6 +221,7 @@ export class BlotterPage implements OnDestroy {
           this.status.set('ok');
           this.loadingMore.set(false);
           this.queueTailCheck();
+          if (reset) this.openFromQuery();
         },
         error: () => {
           this.loadingMore.set(false);
@@ -374,6 +377,22 @@ export class BlotterPage implements OnDestroy {
   openFromKeyboard(event: Event, txn: Txn): void {
     if ((event as KeyboardEvent).key === ' ') event.preventDefault();
     this.open(txn, event.currentTarget as HTMLElement);
+  }
+
+  /** Accounts (and Recurring) pass `txn` beside the filter; open that row once. */
+  private openFromQuery(): void {
+    const id = this.route.snapshot.queryParamMap.get('txn');
+    if (!id || this.openedFromQuery === id) return;
+    this.openedFromQuery = id;
+    const found = this.rows().find((row) => row.id === id);
+    if (found) {
+      this.open(found);
+      return;
+    }
+    this.api.transaction(id).subscribe({
+      next: (full) => this.open(full),
+      error: () => {},
+    });
   }
 
   open(txn: Txn, trigger?: HTMLElement): void {

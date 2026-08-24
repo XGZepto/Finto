@@ -38,6 +38,8 @@ export class AccountsPage {
   preferences = inject(Preferences);
 
   status = signal<PageStatus>('loading');
+  accountsReady = signal(false);
+  detailFailed = signal(false);
   private loadId = 0;
   private detailId = 0;
   accounts = signal<Account[]>([]);
@@ -71,9 +73,13 @@ export class AccountsPage {
     this.api.accounts().subscribe({
       next: (r) => {
         this.accounts.set(r.accounts);
+        this.accountsReady.set(true);
         if (this.selectedGroup()) this.loadGroupDetail(this.selectedGroup()!);
       },
-      error: () => this.accounts.set([]),
+      error: () => {
+        this.accounts.set([]);
+        this.accountsReady.set(true);
+      },
     });
     this.api.cards().subscribe({
       next: (r) => this.cards.set(r.cards),
@@ -158,6 +164,13 @@ export class AccountsPage {
 
   current = computed(() => this.rows().find((r) => r.account.id === this.selected()));
   groupCurrent = computed(() => this.groups().find((group) => group.key === this.selectedGroup()));
+  /** The product a subaccount belongs to — used for back and the sibling strip. */
+  parentGroup = computed(() => {
+    const group = this.current()?.account.balance_group;
+    if (!group || this.siblings().length < 2) return null;
+    return this.groups().find((item) => item.key === group) ?? null;
+  });
+  backLabel = computed(() => this.parentGroup()?.name ?? 'Accounts');
   groupIds = computed(() => this.groupCurrent()?.children.map((child) => child.account.id) ?? []);
   groupCardCount = computed(() => this.groupCurrent()?.children.reduce((sum, child) => sum + child.cards, 0) ?? 0);
   siblings = computed(() => {
@@ -277,6 +290,7 @@ export class AccountsPage {
     const id = ++this.detailId;
     const scope = { accounts };
     this.detailLoading.set(true);
+    this.detailFailed.set(false);
     this.byKind.set([]);
     this.byCategory.set([]);
     this.byHolder.set([]);
@@ -298,7 +312,11 @@ export class AccountsPage {
         this.recent.set(result.recent.items);
         this.detailLoading.set(false);
       },
-      error: () => { if (id === this.detailId) this.detailLoading.set(false); },
+      error: () => {
+        if (id !== this.detailId) return;
+        this.detailLoading.set(false);
+        this.detailFailed.set(true);
+      },
     });
   }
 
@@ -321,12 +339,24 @@ export class AccountsPage {
     }
     this.router.navigate(['/accounts/group', group]);
   }
-  back(): void { this.router.navigate(['/accounts']); }
+  back(): void {
+    const group = this.parentGroup();
+    if (group) {
+      this.openGroup(group.key);
+      return;
+    }
+    this.router.navigate(['/accounts']);
+  }
   openInBlotter(id: string): void {
     this.router.navigate(['/blotter'], { queryParams: { accounts: id } });
   }
   openGroupInBlotter(ids: string[]): void {
     this.router.navigate(['/blotter'], { queryParams: { accounts: ids } });
+  }
+  /** Same drill as a blotter row: the account's ledger, with this line open. */
+  openTxn(txn: Txn): void {
+    const accounts = this.selected() ? [this.selected()!] : this.groupIds();
+    this.router.navigate(['/blotter'], { queryParams: { accounts, txn: txn.id } });
   }
   humanize(value: string): string {
     return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())

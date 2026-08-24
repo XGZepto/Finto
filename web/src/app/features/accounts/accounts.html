@@ -1,13 +1,17 @@
 @if (selectedGroup()) {
   @if (groupCurrent(); as g) {
     <div class="page-head account-head">
-      <button class="bare back" (click)="back()">← Accounts</button>
+      <button class="bare back" (click)="back()">← {{ backLabel() }}</button>
       <div>
         <h1>{{ g.name }}</h1>
         <p class="sub">{{ humanize(g.institution) }} · {{ g.children.length }} subaccounts@if (groupCardCount()) { · {{ groupCardCount() }} cards }</p>
       </div>
-      <button class="ghost" (click)="openGroupInBlotter(groupIds())">Open transactions →</button>
+      <button class="ghost" (click)="openGroupInBlotter(groupIds())">Open in blotter</button>
     </div>
+
+    @if (status() === 'failed') {
+      <p class="banner error">Couldn't load accounts.</p>
+    }
 
     <section class="card group-hero">
       <div class="group-hero-copy">
@@ -67,27 +71,45 @@
         <section class="card recent">
           <div class="section-head"><h2>Recent activity</h2><button class="bare" (click)="openGroupInBlotter(groupIds())">View all →</button></div>
           @for (t of recent(); track t.id) {
-            <div class="txn-row"><span class="mono small muted">{{ t.date | shortDate }}</span><span class="txn-desc">{{ t.merchant || t.description }}</span><span class="mono" [class.pos]="t.booked.amount > 0">{{ t.booked | money }}</span></div>
+            <button type="button" class="txn-row" (click)="openTxn(t)">
+              <span class="mono small muted">{{ t.date | shortDate }}</span>
+              <span class="txn-who">
+                <span class="glyph"><finto-icon kind="merchant" [name]="t.merchant || t.description" [fallbackCategory]="t.category || 'other'" /></span>
+                <span class="txn-desc">{{ t.merchant || t.description }}</span>
+              </span>
+              <span class="mono" [class.pos]="t.booked.amount > 0">{{ t.booked | money }}</span>
+            </button>
           }
         </section>
       </div>
+    } @else if (detailFailed()) {
+      <p class="banner error">Couldn't load account activity.</p>
     } @else {
       <section class="card empty compact-group-empty">No ledger activity for this product yet</section>
     }
+  } @else if (accountsReady()) {
+    <div class="page-head account-head">
+      <button class="bare back" (click)="back()">← Accounts</button>
+    </div>
+    <p class="banner error">Couldn't find this account group.</p>
   } @else {
     <div class="card"><finto-skeleton [rows]="6" label="Loading account group" /></div>
   }
 } @else if (selected(); as selectedId) {
   <div class="page-head account-head">
-    <button class="bare back" (click)="back()">← Accounts</button>
+    <button class="bare back" (click)="back()">← {{ backLabel() }}</button>
     @if (current(); as c) {
       <div>
         <h1>{{ c.account.display_name }}</h1>
         <p class="sub">{{ humanize(c.account.institution_id) }} · {{ humanize(c.account.account_type) }} · {{ c.account.masked_number || humanize(c.account.id) }}</p>
       </div>
-      <button class="ghost" (click)="openInBlotter(c.account.id)">Open transactions →</button>
+      <button class="ghost" (click)="openInBlotter(c.account.id)">Open in blotter</button>
     }
   </div>
+
+  @if (status() === 'failed') {
+    <p class="banner error">Couldn't load accounts.</p>
+  }
 
   @if (current(); as c) {
     <section class="account-hero">
@@ -112,12 +134,23 @@
 
     @if (siblings().length > 1) {
       <section class="card sibling-card">
-        <div class="section-head"><h2>{{ humanize(c.account.balance_group || '') }}</h2><span class="small muted">Subaccounts</span></div>
+        <div class="section-head">
+          @if (parentGroup(); as pg) {
+            <button type="button" class="bare sibling-parent" (click)="openGroup(pg.key)">{{ pg.name }}</button>
+          } @else {
+            <h2>{{ humanize(c.account.balance_group || '') }}</h2>
+          }
+          <span class="small muted">Subaccounts</span>
+        </div>
         <div class="subaccount-strip">
           @for (s of siblings(); track s.account.id) {
             <button class="subaccount" [class.on]="s.account.id === selectedId" (click)="open(s.account.id)">
               <span>{{ s.account.display_name }}</span>
-              <small class="mono">{{ s.account.primary_currency }}</small>
+              <span class="sibling-balances">
+                @for (p of s.positions; track p.currency) {
+                  <small class="mono" [class.neg]="p.balance.amount < 0" [class.pos]="p.balance.amount > 0">{{ p.balance | money }}</small>
+                } @empty { <small class="mono dim">—</small> }
+              </span>
             </button>
           }
         </div>
@@ -170,7 +203,7 @@
             <div class="month-row">
               <span class="mono small">{{ m.bucket }}</span>
               <span class="month-track"><i [style.width]="monthWidth(m)"></i></span>
-              <span class="mono">{{ m.spend | money: 'bare' }} <small>{{ m.currency }}</small></span>
+              <span class="mono">{{ m.spend | money }}</span>
             </div>
           } @empty { <div class="empty">No outflow history</div> }
         </div>
@@ -192,7 +225,7 @@
         @if (byHolder().length) {
           <h3>Spend by cardholder</h3>
           @for (h of byHolder(); track h.bucket + h.currency) {
-            <div class="stat-row"><span class="k">{{ h.bucket }}</span><span class="v mono">{{ h.spend | money: 'bare' }}</span><span class="c mono">{{ h.currency }}</span></div>
+            <div class="stat-row"><span class="k">{{ h.bucket }}</span><span class="v mono">{{ h.spend | money }}</span><span class="n muted">{{ h.txn_count }}</span></div>
           }
         }
         @if (accountFlows().length) {
@@ -201,8 +234,14 @@
             <div class="flow-row" [class.out]="f.from_account === c.account.id">
               <span class="arrow mono">{{ f.from_account === c.account.id ? '→' : '←' }}</span>
               <span class="peer">{{ f.from_account === c.account.id ? f.to_account : f.from_account }}</span>
-              <span class="v mono">{{ f.amount | money: 'bare' }} {{ f.amount.currency }}</span>
+              <span class="v mono">{{ f.amount | money }}</span>
             </div>
+          }
+        }
+        @if (byKind().length) {
+          <h3>By type</h3>
+          @for (k of byKind(); track k.bucket + k.currency) {
+            <div class="stat-row"><span class="k">{{ humanize(k.bucket) }}</span><span class="v mono">{{ k.spend | money }}</span><span class="n muted">{{ k.txn_count }}</span></div>
           }
         }
       </section>
@@ -210,25 +249,34 @@
 
     <div class="detail-grid lower">
       <section class="card">
-        <h2>By transaction type</h2>
-        @for (k of byKind(); track k.bucket + k.currency) {
-          <div class="stat-row"><span class="k">{{ humanize(k.bucket) }}</span><span class="v mono">{{ k.spend | money: 'bare' }}</span><span class="c mono">{{ k.currency }}</span><span class="n muted">{{ k.txn_count }}</span></div>
-        }
+        <div class="section-head"><h2>Top spending</h2><span class="muted small">By category</span></div>
+        @for (row of byCategory().slice(0, 7); track row.bucket + row.currency) {
+          <div class="stat-row"><span class="k">{{ humanize(row.bucket) }}</span><span class="v mono">{{ row.spend | money }}</span><span class="n muted">{{ row.txn_count }}</span></div>
+        } @empty { <div class="empty">No spending yet</div> }
       </section>
       <section class="card recent">
         <div class="section-head"><h2>Recent activity</h2><button class="bare" (click)="openInBlotter(c.account.id)">View all →</button></div>
         @for (t of recent(); track t.id) {
-          <div class="txn-row">
+          <button type="button" class="txn-row" (click)="openTxn(t)">
             <span class="mono small muted">{{ t.date | shortDate }}</span>
-            <span class="txn-desc">{{ t.merchant || t.description }}</span>
+            <span class="txn-who">
+              <span class="glyph"><finto-icon kind="merchant" [name]="t.merchant || t.description" [fallbackCategory]="t.category || 'other'" /></span>
+              <span class="txn-desc">{{ t.merchant || t.description }}</span>
+            </span>
             <span class="mono" [class.pos]="t.booked.amount > 0">{{ t.booked | money }}</span>
-          </div>
+          </button>
         }
       </section>
     </div>
+    } @else if (detailFailed()) {
+      <p class="banner error">Couldn't load account activity.</p>
     } @else {
-      <section class="card empty compact-group-empty">No ledger activity for this subaccount yet</section>
+      <section class="card empty compact-group-empty">No ledger activity for this {{ parentGroup() ? 'subaccount' : 'account' }} yet</section>
     }
+  } @else if (accountsReady()) {
+    <p class="banner error">Couldn't find this account.</p>
+  } @else {
+    <div class="card"><finto-skeleton [rows]="6" label="Loading account" /></div>
   }
 } @else {
   <div class="page-head">
