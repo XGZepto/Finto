@@ -16,7 +16,7 @@ const ARRAY_KEYS = [
   'detail', 'tags',
 ] as const;
 const BOOL_KEYS = [
-  'includeTransfers', 'includeDuplicates', 'uncategorisedOnly', 'installmentsOnly',
+  'includeTransfers', 'uncategorisedOnly', 'installmentsOnly',
 ] as const;
 const NUM_KEYS = ['minAmount', 'maxAmount'] as const;
 
@@ -54,15 +54,18 @@ export function filterFromParams(params: Params): LedgerFilter {
 
   for (const key of ARRAY_KEYS) {
     const v = params[key];
-    if (v) (f as any)[key] = Array.isArray(v) ? v : [v];
+    if (v) f[key] = Array.isArray(v) ? v : [v];
   }
   for (const key of BOOL_KEYS) {
-    if (params[key] === 'true') (f as any)[key] = true;
+    if (params[key] === 'true') f[key] = true;
+  }
+  if (params['includeDuplicates'] === 'true' || params['includeDuplicates'] === 'true') {
+    f.includeDuplicates = true;
   }
   for (const key of NUM_KEYS) {
     if (params[key] != null && params[key] !== '') {
       const n = Number(params[key]);
-      if (!Number.isNaN(n)) (f as any)[key] = n;
+      if (!Number.isNaN(n)) f[key] = n;
     }
   }
   return f;
@@ -82,9 +85,10 @@ export function filterToParams(f: LedgerFilter): Params {
   set('to', f.to);
   set('q', f.q);
   set('currency', f.currency);
-  for (const key of ARRAY_KEYS) set(key, (f as any)[key]);
-  for (const key of BOOL_KEYS) set(key, (f as any)[key]);
-  for (const key of NUM_KEYS) set(key, (f as any)[key]);
+  for (const key of ARRAY_KEYS) set(key, f[key]);
+  for (const key of BOOL_KEYS) set(key, f[key]);
+  set('includeDuplicates', f.includeDuplicates);
+  for (const key of NUM_KEYS) set(key, f[key]);
   return p;
 }
 
@@ -99,7 +103,7 @@ export function describeFilter(f: LedgerFilter): Array<{ key: string; label: str
   }
   for (const key of ARRAY_KEYS) {
     if (key === 'months') continue;
-    const v = (f as any)[key] as string[] | undefined;
+    const v = f[key];
     if (!v?.length) continue;
     chips.push({
       key,
@@ -111,6 +115,7 @@ export function describeFilter(f: LedgerFilter): Array<{ key: string; label: str
   if (f.minAmount != null) chips.push({ key: 'minAmount', label: `min ${f.minAmount}` });
   if (f.maxAmount != null) chips.push({ key: 'maxAmount', label: `max ${f.maxAmount}` });
   if (f.includeTransfers) chips.push({ key: 'includeTransfers', label: 'incl. transfers' });
+  if (f.includeDuplicates) chips.push({ key: 'includeDuplicates', label: 'incl. duplicates' });
   if (f.uncategorisedOnly) chips.push({ key: 'uncategorisedOnly', label: 'uncategorised only' });
   if (f.installmentsOnly) chips.push({ key: 'installmentsOnly', label: 'instalments only' });
   return chips;
@@ -152,7 +157,7 @@ export class FilterState {
       delete next.from;
       delete next.to;
     } else {
-      delete (next as any)[key];
+      delete next[key as keyof LedgerFilter];
     }
     this.set(next);
   }

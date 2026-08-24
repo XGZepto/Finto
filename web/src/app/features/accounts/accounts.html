@@ -235,9 +235,9 @@
     <h1>Accounts</h1>
   </div>
 
-  @if (loading()) {
+  @if (status() === 'loading') {
     <div class="card"><finto-skeleton [rows]="6" label="Loading accounts" /></div>
-  } @else if (failed()) {
+  } @else if (status() === 'failed') {
     <p class="banner error">Couldn't load accounts.</p>
   } @else {
     @if (netWorth(); as worth) {

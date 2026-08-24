@@ -7,6 +7,7 @@ import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { Account, Card, Flows, Money, Position, SummaryRow, Txn } from '../../core/models';
 import { forkJoin } from 'rxjs';
 import { Preferences } from '../../core/preferences.service';
+import { PageStatus } from '../../core/page-status';
 import { RevealOnView } from '../../shared/reveal-on-view';
 import { FintoTimeseries, SeriesPoint } from '../../shared/finto-timeseries';
 
@@ -15,6 +16,14 @@ interface AccountRow {
   positions: Position[];
   cards: number;
 }
+
+const EMPTY_FLOWS: Flows = {
+  internal: [], external: [], external_accounts: [],
+  normalised: {
+    currency: 'USD', unconvertible_currencies: [],
+    external_accounts: [], internal: [], external_nodes: [],
+  },
+};
 
 @Component({
   selector: 'app-accounts',
@@ -28,8 +37,9 @@ export class AccountsPage {
   private route = inject(ActivatedRoute);
   preferences = inject(Preferences);
 
-  loading = signal(true);
-  failed = signal(false);
+  status = signal<PageStatus>('loading');
+  private loadId = 0;
+  private detailId = 0;
   accounts = signal<Account[]>([]);
   cards = signal<Card[]>([]);
   positions = signal<Position[]>([]);
@@ -37,7 +47,7 @@ export class AccountsPage {
   series = signal<SeriesPoint[]>([]);
   positionTypes = signal<Array<{ account_type: string; balance: Money }>>([]);
   unconvertible = signal<string[]>([]);
-  flows = signal<Flows>({ internal: [], external: [], external_accounts: [], normalised: { currency: 'USD', unconvertible_currencies: [], external_accounts: [], internal: [], external_nodes: [] } });
+  flows = signal<Flows>(EMPTY_FLOWS);
   selected = signal<string | null>(null);
   selectedGroup = signal<string | null>(null);
   detailLoading = signal(false);
@@ -58,29 +68,46 @@ export class AccountsPage {
       if (id) this.loadDetail(id);
       if (group && this.accounts().length) this.loadGroupDetail(group);
     });
-    this.api.accounts().subscribe({ next: (r) => {
-      this.accounts.set(r.accounts);
-      if (this.selectedGroup()) this.loadGroupDetail(this.selectedGroup()!);
-    }});
-    this.api.cards().subscribe({ next: (r) => this.cards.set(r.cards) });
-    effect(() => {
-      const currency = this.preferences.baseCurrency();
-      this.failed.set(false);
-      this.series.set([]);
-      this.api.flows({}, currency).subscribe({ next: (r) => this.flows.set(r) });
-      this.api.positions(currency).subscribe({
-        next: (r) => {
-          this.positions.set(r.positions);
-          this.netWorth.set(r.normalised?.net_worth ?? null);
-          this.positionTypes.set(r.normalised?.by_type ?? []);
-          this.unconvertible.set(r.normalised?.unconvertible_currencies ?? []);
-          this.loading.set(false);
-        },
-        error: () => { this.loading.set(false); this.failed.set(true); },
-      });
-      this.api.netWorthSeries(currency).subscribe({
-        next: (r) => this.series.set(r.points.map((p) => ({ label: p.bucket, value: p.balance.amount }))),
-      });
+    this.api.accounts().subscribe({
+      next: (r) => {
+        this.accounts.set(r.accounts);
+        if (this.selectedGroup()) this.loadGroupDetail(this.selectedGroup()!);
+      },
+      error: () => this.accounts.set([]),
+    });
+    this.api.cards().subscribe({
+      next: (r) => this.cards.set(r.cards),
+      error: () => this.cards.set([]),
+    });
+    effect(() => this.reload(this.preferences.baseCurrency()));
+  }
+
+  private reload(currency: string): void {
+    const id = ++this.loadId;
+    this.status.set('loading');
+    this.series.set([]);
+    this.flows.set(EMPTY_FLOWS);
+    this.api.positions(currency).subscribe({
+      next: (r) => {
+        if (id !== this.loadId) return;
+        this.positions.set(r.positions);
+        this.netWorth.set(r.normalised?.net_worth ?? null);
+        this.positionTypes.set(r.normalised?.by_type ?? []);
+        this.unconvertible.set(r.normalised?.unconvertible_currencies ?? []);
+        this.status.set('ok');
+      },
+      error: () => { if (id === this.loadId) this.status.set('failed'); },
+    });
+    this.api.flows({}, currency).subscribe({
+      next: (r) => { if (id === this.loadId) this.flows.set(r); },
+      error: () => { if (id === this.loadId) this.flows.set(EMPTY_FLOWS); },
+    });
+    this.api.netWorthSeries(currency).subscribe({
+      next: (r) => {
+        if (id !== this.loadId) return;
+        this.series.set(r.points.map((p) => ({ label: p.bucket, value: p.balance.amount })));
+      },
+      error: () => { if (id === this.loadId) this.series.set([]); },
     });
   }
 
@@ -247,8 +274,14 @@ export class AccountsPage {
   }
 
   private loadScope(accounts: string[]): void {
+    const id = ++this.detailId;
     const scope = { accounts };
     this.detailLoading.set(true);
+    this.byKind.set([]);
+    this.byCategory.set([]);
+    this.byHolder.set([]);
+    this.byMonth.set([]);
+    this.recent.set([]);
     forkJoin({
       byKind: this.api.summary('kind', scope),
       byCategory: this.api.summary('category', scope),
@@ -257,6 +290,7 @@ export class AccountsPage {
       recent: this.api.transactions(scope, { limit: 12, sort: 'date', direction: 'desc' }),
     }).subscribe({
       next: (result) => {
+        if (id !== this.detailId) return;
         this.byKind.set(result.byKind.rows);
         this.byCategory.set(result.byCategory.rows);
         this.byHolder.set(result.byHolder.rows);
@@ -264,7 +298,7 @@ export class AccountsPage {
         this.recent.set(result.recent.items);
         this.detailLoading.set(false);
       },
-      error: () => this.detailLoading.set(false),
+      error: () => { if (id === this.detailId) this.detailLoading.set(false); },
     });
   }
 

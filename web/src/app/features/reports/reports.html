@@ -52,9 +52,9 @@
   </section>
 }
 
-@if (loading() && !bands().length) {
+@if (status() === 'loading' && !bands().length) {
   <div class="card"><div class="spinner">loading</div></div>
-} @else if (failed()) {
+} @else if (status() === 'failed') {
   <div class="card"><p class="banner error">Couldn't load this report.</p></div>
 } @else if (!bands().length) {
   <div class="card"><div class="empty">Nothing to report for this filter</div></div>

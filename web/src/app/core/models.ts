@@ -308,11 +308,24 @@ export interface ImportCapabilities {
   contribution: { guide: string; request: string };
 }
 
+export interface BalanceCheck {
+  account_id: string;
+  account_name?: string;
+  period: string;
+  period_start: string;
+  period_end: string;
+  expected_delta: Money;
+  actual_delta: Money;
+  discrepancy: Money;
+  currency: string;
+  status: string;
+}
+
 export interface IntegrityReport {
   healthy: boolean;
   violations: Array<{ check: string; count: number; description: string }>;
-  balance_checks: Array<any>;
-  discrepancies: Array<any>;
+  balance_checks: BalanceCheck[];
+  discrepancies: BalanceCheck[];
   unverified_accounts: Array<{ account_id: string; display_name: string; txn_count: number }>;
   summary: {
     checks_run: number;
@@ -404,6 +417,56 @@ export interface InvestmentActivity {
   contribution_type: string;
   activity_type: string;
   amount: Money;
+}
+
+export interface MpfImportResult {
+  bundle_sha256: string;
+  documents: unknown;
+  snapshot: { status: string; id: string };
+  activities: { inserted: number; skipped: number };
+}
+
+/** One open review candidate. Field names follow the queue. */
+export interface ReviewCandidate {
+  id: string;
+  score: number;
+  reasons?: string[];
+  description?: string;
+  term_months?: number;
+  account_id?: string;
+  transactions?: Array<{
+    id: string;
+    txn_date: string;
+    description_raw: string;
+    amount_booked: number;
+    currency_booked: string;
+  }>;
+  date_delta?: number | null;
+  amount_delta?: number | null;
+  keep_id?: string;
+  keep_date?: string;
+  keep_account?: string;
+  keep_desc?: string;
+  keep_amount?: number;
+  keep_currency?: string;
+  dupe_id?: string;
+  dupe_date?: string;
+  dupe_account?: string;
+  dupe_desc?: string;
+  dupe_amount?: number;
+  dupe_currency?: string;
+  out_id?: string;
+  out_date?: string;
+  out_account?: string;
+  out_desc?: string;
+  out_amount?: number;
+  out_currency?: string;
+  in_id?: string;
+  in_date?: string;
+  in_account?: string;
+  in_desc?: string;
+  in_amount?: number;
+  in_currency?: string;
 }
 
 export interface MpfBundlePreview {

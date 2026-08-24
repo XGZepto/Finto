@@ -6,6 +6,7 @@ import { MoneyPipe } from '../../core/money.pipe';
 import { LedgerFilter, Money, SummaryRow } from '../../core/models';
 import { Preferences } from '../../core/preferences.service';
 import { FilterState } from '../../core/filter-state';
+import { PageStatus } from '../../core/page-status';
 import { FintoPills } from '../../shared/finto-pills';
 import { FintoSelect } from '../../shared/finto-select';
 import { FintoBars, Bar } from '../../shared/finto-bars';
@@ -42,7 +43,7 @@ export class ReportsPage {
   private filters = inject(FilterState);
   private preferences = inject(Preferences);
   readonly money = new MoneyPipe();
-  private loadVersion = 0;
+  private loadId = 0;
 
   readonly dimensions = ['category', 'subcategory', 'tag', 'merchant',
                          'cardholder', 'account', 'kind'];
@@ -57,8 +58,7 @@ export class ReportsPage {
   accountId = signal('');
   accounts = signal<Array<{ id: string; display_name: string }>>([]);
   convertTo = this.preferences.baseCurrency;
-  loading = signal(true);
-  failed = signal(false);
+  status = signal<PageStatus>('loading');
   rows = signal<SummaryRow[]>([]);
   monthRows = signal<SummaryRow[]>([]);
   headline = signal<{ net: Money; spend: Money; income: Money } | null>(null);
@@ -68,13 +68,15 @@ export class ReportsPage {
     ['All accounts', ...this.accounts().map((a) => a.display_name)]);
 
   constructor() {
-    // Token starts at 0, so this arms the reload without firing one now.
-    effect(() => { if (this.refreshes.token()) this.load(); });
-    this.api.accounts().subscribe({
-      next: (res: any) => this.accounts.set(res.accounts ?? res ?? []),
-      error: () => undefined,
+    effect(() => {
+      this.refreshes.token();
+      this.convertTo();
+      this.load();
     });
-    this.load();
+    this.api.accounts().subscribe({
+      next: (res) => this.accounts.set(res.accounts),
+      error: () => this.accounts.set([]),
+    });
   }
 
   /** The selected window, and the one immediately before it for comparison. */
@@ -119,39 +121,38 @@ export class ReportsPage {
   }
 
   load(): void {
-    const version = ++this.loadVersion;
-    this.loading.set(true);
-    this.failed.set(false);
+    const version = ++this.loadId;
+    this.status.set('loading');
     const convert = this.convertTo() || undefined;
     const { current, prior } = this.windows();
     const selected = this.selectedMonths();
     const view = selected.length ? undefined : current;
     const priorView = selected.length === 1 ? this.priorMonth(selected[0]) : prior;
 
-    this.api.summary(this.splitBy(), this.scope(view) as any, convert).subscribe({
+    this.api.summary(this.splitBy(), this.scope(view), convert).subscribe({
       next: (res) => {
-        if (version !== this.loadVersion) return;
+        if (version !== this.loadId) return;
         this.rows.set(res.rows);
         this.headline.set(res.normalised?.total ?? null);
-        this.loading.set(false);
+        this.status.set('ok');
       },
-      error: () => { if (version === this.loadVersion) { this.loading.set(false); this.failed.set(true); } },
+      error: () => { if (version === this.loadId) this.status.set('failed'); },
     });
 
     if (selected.length <= 1) {
-      this.api.summary('kind', this.scope(priorView, false) as any, convert).subscribe({
+      this.api.summary('kind', this.scope(priorView, false), convert).subscribe({
         next: (res) => {
-          if (version === this.loadVersion) this.priorHeadline.set(res.normalised?.total ?? null);
+          if (version === this.loadId) this.priorHeadline.set(res.normalised?.total ?? null);
         },
-        error: () => { if (version === this.loadVersion) this.priorHeadline.set(null); },
+        error: () => { if (version === this.loadId) this.priorHeadline.set(null); },
       });
     } else {
       this.priorHeadline.set(null);
     }
 
-    this.api.summary('month', this.scope(current, false) as any, convert).subscribe({
-      next: (res) => { if (version === this.loadVersion) this.monthRows.set(res.rows); },
-      error: () => { if (version === this.loadVersion) this.monthRows.set([]); },
+    this.api.summary('month', this.scope(current, false), convert).subscribe({
+      next: (res) => { if (version === this.loadId) this.monthRows.set(res.rows); },
+      error: () => { if (version === this.loadId) this.monthRows.set([]); },
     });
   }
 
@@ -168,7 +169,6 @@ export class ReportsPage {
 
   setConvertTo(currency: string): void {
     this.preferences.setBaseCurrency(currency);
-    this.load();
   }
 
   setAccount(value: string): void {

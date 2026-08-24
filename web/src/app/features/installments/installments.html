@@ -36,9 +36,9 @@
     </div>
   </div>
 
-  @if (loading()) {
+  @if (status() === 'loading') {
     <finto-skeleton [rows]="6" label="Loading plans" />
-  } @else if (failed()) {
+  } @else if (status() === 'failed') {
     <p class="banner error">Couldn't load instalment plans.</p>
   } @else {
     <div class="table-wrap">

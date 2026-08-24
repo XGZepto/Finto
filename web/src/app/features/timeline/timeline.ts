@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api } from '../../core/api.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
+import { PageStatus } from '../../core/page-status';
 import { MoneyPipe } from '../../core/money.pipe';
 import { Composition, Coverage } from '../../core/models';
 import { FilterState, bucketRange } from '../../core/filter-state';
@@ -20,8 +21,8 @@ export class TimelinePage {
   private api = inject(Api);
   private filters = inject(FilterState);
 
-  loading = signal(true);
-  failed = signal(false);
+  status = signal<PageStatus>('loading');
+  private loadId = 0;
   comp = signal<Composition | null>(null);
   coverage = signal<Coverage | null>(null);
 
@@ -34,19 +35,23 @@ export class TimelinePage {
   readonly currencies = ['HKD', 'USD', 'CNY', 'EUR', 'GBP'];
 
   constructor() {
-    this.api.coverage().subscribe({ next: (c) => this.coverage.set(c) });
+    this.api.coverage().subscribe({
+      next: (c) => this.coverage.set(c),
+      error: () => this.coverage.set(null),
+    });
     this.reload();
   }
 
   reload(): void {
-    this.loading.set(true);
-    this.failed.set(false);
+    const id = ++this.loadId;
+    this.status.set('loading');
     this.api.composition(this.convertTo(), this.dimension()).subscribe({
       next: (c) => {
+        if (id !== this.loadId) return;
         this.comp.set(c);
-        this.loading.set(false);
+        this.status.set('ok');
       },
-      error: () => { this.loading.set(false); this.failed.set(true); },
+      error: () => { if (id === this.loadId) this.status.set('failed'); },
     });
   }
 

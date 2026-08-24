@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api } from '../../core/api.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
+import { PageStatus } from '../../core/page-status';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { InstallmentPlan, Money } from '../../core/models';
 
@@ -37,13 +38,14 @@ interface ScheduleRow {
 export class InstallmentsPage {
   private api = inject(Api);
 
-  loading = signal(true);
-  failed = signal(false);
+  status = signal<PageStatus>('loading');
+  private loadId = 0;
   activeOnly = signal(true);
   plans = signal<InstallmentPlan[]>([]);
   outstanding = signal<Money[]>([]);
   monthly = signal<Money[]>([]);
   expanded = signal<string | null>(null);
+  private detailId = 0;
   detail = signal<InstallmentPlan | null>(null);
 
   constructor() {
@@ -51,16 +53,17 @@ export class InstallmentsPage {
   }
 
   load(): void {
-    this.loading.set(true);
-    this.failed.set(false);
+    const id = ++this.loadId;
+    this.status.set('loading');
     this.api.installments(this.activeOnly()).subscribe({
       next: (res) => {
+        if (id !== this.loadId) return;
         this.plans.set(res.plans);
         this.outstanding.set(res.outstanding_by_currency);
         this.monthly.set(res.committed_monthly_by_currency);
-        this.loading.set(false);
+        this.status.set('ok');
       },
-      error: () => { this.loading.set(false); this.failed.set(true); },
+      error: () => { if (id === this.loadId) this.status.set('failed'); },
     });
   }
 
@@ -74,9 +77,13 @@ export class InstallmentsPage {
       this.expanded.set(null);
       return;
     }
+    const id = ++this.detailId;
     this.expanded.set(plan.id);
     this.detail.set(null);
-    this.api.installment(plan.id).subscribe({ next: (p) => this.detail.set(p) });
+    this.api.installment(plan.id).subscribe({
+      next: (p) => { if (id === this.detailId) this.detail.set(p); },
+      error: () => { if (id === this.detailId) this.detail.set(null); },
+    });
   }
 
   progress(plan: InstallmentPlan): string {

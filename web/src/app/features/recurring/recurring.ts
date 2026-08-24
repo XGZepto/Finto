@@ -1,8 +1,10 @@
+import { catchError, forkJoin, map, of } from 'rxjs';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { Refresh } from '../../core/refresh.service';
+import { PageStatus } from '../../core/page-status';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
 import { InstallmentPlan, Money, Txn } from '../../core/models';
@@ -87,8 +89,8 @@ export class RecurringPage {
   readonly cadences = ['Any', 'weekly', 'monthly', 'quarterly', 'yearly', 'irregular'];
 
   convertTo = this.preferences.baseCurrency;
-  loading = signal(true);
-  failed = signal(false);
+  status = signal<PageStatus>('loading');
+  private loadId = 0;
   search = signal('');
   kind = signal('All');
   cadence = signal('Any');
@@ -97,45 +99,42 @@ export class RecurringPage {
   selected = signal<Commitment | null>(null);
 
   constructor() {
-    // Token starts at 0, so this arms the reload without firing one now.
-    effect(() => { if (this.refreshes.token()) this.load(); });
-    this.load();
+    effect(() => {
+      this.refreshes.token();
+      this.convertTo();
+      this.load();
+    });
   }
 
   load(): void {
-    this.loading.set(true);
-    this.failed.set(false);
+    const id = ++this.loadId;
+    this.status.set('loading');
     const convert = this.convertTo() || undefined;
 
     // Cadence needs the dates of individual charges, which a rollup discards.
     // The tag filter is conjunctive, so each marker is asked for separately and
     // the results merged; a charge carrying both must not be counted twice.
     const opts = { limit: 500, sort: 'date', direction: 'desc', convertTo: convert };
-    let pending = 2;
-    const merged = new Map<string, Txn>();
-    const absorb = (rows: Txn[]) => {
-      for (const row of rows) merged.set(row.id, row);
-      if (--pending === 0) {
-        this.charges.set([...merged.values()]);
-        this.loading.set(false);
-      }
-    };
-    for (const tag of ['subscription', 'recurring']) {
-      this.api.transactions({ tags: [tag] }, opts).subscribe({
-        next: (page) => absorb(page.items ?? []),
-        error: () => { this.failed.set(true); absorb([]); },
-      });
-    }
+    const tagged = (tag: string) => this.api.transactions({ tags: [tag] }, opts).pipe(
+      map((page) => ({ items: page.items ?? [], ok: true })),
+      catchError(() => of({ items: [] as Txn[], ok: false })),
+    );
+    forkJoin([tagged('subscription'), tagged('recurring')]).subscribe((parts) => {
+      if (id !== this.loadId) return;
+      const merged = new Map<string, Txn>();
+      for (const part of parts) for (const row of part.items) merged.set(row.id, row);
+      this.charges.set([...merged.values()]);
+      this.status.set(parts.some((part) => !part.ok) && !merged.size ? 'failed' : 'ok');
+    });
 
     this.api.installments(true).subscribe({
-      next: (res) => this.plans.set(res.plans ?? []),
-      error: () => this.plans.set([]),
+      next: (res) => { if (id === this.loadId) this.plans.set(res.plans ?? []); },
+      error: () => { if (id === this.loadId) this.plans.set([]); },
     });
   }
 
   setConvertTo(currency: string): void {
     this.preferences.setBaseCurrency(currency);
-    this.load();
   }
 
   /** Charges grouped per merchant, each read for its cadence. */

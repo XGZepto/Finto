@@ -65,9 +65,9 @@
     </div>
   </div>
 
-  @if (loading()) {
+  @if (status() === 'loading') {
     <div class="spinner">loading</div>
-  } @else if (failed()) {
+  } @else if (status() === 'failed') {
     <p class="banner error">Couldn't load this summary.</p>
   } @else {
     @if (trend().length > 1) {

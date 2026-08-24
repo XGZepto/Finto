@@ -12,9 +12,9 @@
   </div>
 </div>
 
-@if (loading()) {
+@if (status() === 'loading') {
   <finto-skeleton [rows]="6" label="Loading composition" />
-} @else if (failed()) {
+} @else if (status() === 'failed') {
   <p class="banner error">Couldn't load the timeline.</p>
 } @else if (comp(); as c) {
   <div class="card">

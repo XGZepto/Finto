@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Collapse page load into one `status` (`loading` | `ok` | `failed`) instead of
+  two booleans that could both be true.
+- Ignore stale in-flight responses when a page reloads (currency, filter, queue,
+  snapshot, account detail, instalment schedule).
+- Recurring fails only when both tag requests fail and no rows arrived; merge
+  those requests with `forkJoin` instead of a pending counter.
+- Investment snapshot list success no longer becomes a page error if opening
+  the first valuation fails.
+- Drop overlapping Summary effects; one effect owns currency and refresh.
+  Reports and Recurring follow the same rule.
+- Parse filter URLs into `LedgerFilter` without `as any`.
+
 ## 0.4.9 — 2026-08-24
 
 - Show a banner when a page's API load fails, instead of an empty shell.

@@ -61,11 +61,11 @@
   </div>
 </details>
 
-@if (loading()) {
+@if (status() === 'loading') {
   <finto-skeleton [rows]="6" label="Loading investments" />
-} @else if (failed()) {
+} @else if (status() === 'failed') {
   <p class="banner error">Couldn't load investments.</p>
-} @else if (!current()) {
+} @else if (!snapshots().length) {
   <div class="card empty-state">
     <p class="muted">No valuation snapshots imported.</p>
   </div>
@@ -156,6 +156,10 @@
       }
     </div>
   </section>
+} @else if (opening()) {
+  <finto-skeleton [rows]="6" label="Opening snapshot" />
+} @else {
+  <p class="banner error">Couldn't open this snapshot.</p>
 }
 
 @if (activities().length) {
