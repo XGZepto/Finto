@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.11 — 2026-09-14
+
+- Keep a CR-suffixed card statement balance as a credit. HSBC prints
+  `1,803.34CR` when the account is in credit; applying `negate` on top of
+  that flipped the closing figure and refused a complete EveryMile import.
+
 ## 0.4.10 — 2026-08-25
 
 - Collapse page load into one `status` (`loading` | `ok` | `failed`) instead of

@@ -731,8 +731,7 @@ def _document_balances(
                 value = parse_amount(figure.text, currency)
             except ValueError:
                 continue
-            if rule.negate:
-                value = Money(amount=-value.amount, currency=value.currency)
+            value = _signed_balance(value, figure.text, rule)
             if rule.cr_following_line and _cr_applies(lines, src, figure):
                 value = Money(amount=-value.amount, currency=value.currency)
             result.balances.append(
@@ -773,6 +772,19 @@ def _cr_applies(lines: list[TextLine], src: int, figure: Word) -> bool:
     return False
 
 
+def _signed_balance(value: Money, token: str, rule: BalanceRule) -> Money:
+    """Apply `negate` unless the figure is already a CR credit.
+
+    Card issuers print the amount owed, so `negate` turns that into Finto's
+    liability convention. A trailing CR means the opposite — the account is in
+    credit — and `parse_amount` has already signed it as money in. Negating
+    that a second time would report a credit balance as a debt.
+    """
+    if rule.negate and not _CR_MARKER.search(token):
+        return Money(amount=-value.amount, currency=value.currency)
+    return value
+
+
 def _match_balance(
     line, raw, balance_rules, cols, currency, spec, result, anchor, tpl
 ) -> bool:
@@ -793,8 +805,7 @@ def _match_balance(
             value = parse_amount(token, currency)
         except ValueError:
             continue
-        if rule.negate:
-            value = Money(amount=-value.amount, currency=value.currency)
+        value = _signed_balance(value, token, rule)
         when = _read_date(cols.cells(line), tpl, anchor) if cols else None
         result.balances.append(
             (when, value, rule.kind, _section_key(spec, currency), spec.account_hint))
