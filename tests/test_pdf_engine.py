@@ -254,6 +254,34 @@ def test_cr_beneath_a_fx_continuation_flips_the_row():
     assert "UNITED STATES DOLLAR" not in result.rows[0].description
 
 
+def test_cr_suffix_on_a_negated_balance_stays_a_credit():
+    """HSBC prints a card in credit as 1,803.34CR on the STATEMENT BALANCE row.
+
+    parse_amount already treats the suffix as money in. `negate` is for the
+    unsigned amount-owed figure; applying it on top of CR would turn a credit
+    balance back into a liability and fail opening+rows==closing by 2x.
+    """
+    doc = make_document(statement(
+        row((10, "PREVIOUS BALANCE"), right(60, "100.00")),
+        row((0, "06 Jan"), (10, "PAYMENT"), right(60, "150.00CR")),
+        row((10, "STATEMENT BALANCE"), right(60, "50.00CR")),
+    ))
+    tpl = build(
+        {"mode": "cr_marker", "column": "amount"},
+        balances=[
+            {"pattern": r"^PREVIOUS\s+BALANCE\b", "kind": "opening",
+             "column": "amount", "negate": True},
+            {"pattern": r"^STATEMENT\s+BALANCE\b", "kind": "closing",
+             "column": "amount", "negate": True},
+        ],
+    )
+    result = apply_template(doc, tpl)
+    kinds = {kind: money.amount for _when, money, kind, _sec, _hint in result.balances}
+    assert kinds == {"opening": -10000, "closing": 5000}
+    report = verify_extraction(result)
+    assert report.ok and report.status == "verified"
+
+
 def test_cr_beneath_the_summary_marks_a_credit_balance():
     """AMEX HK drops a lone CR under the New Balance column when the account
     is in credit; the figure needs its sign flipped back to reconcile."""
