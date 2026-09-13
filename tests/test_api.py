@@ -7,6 +7,8 @@ plus a currency code, and nothing ever sums across currencies.
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from conftest import write_pdf
@@ -326,29 +328,32 @@ def test_empty_statement_advances_freshness_for_every_covered_account(
     client, database_url,
 ):
     """An idle month is coverage, including on a consolidated statement."""
+    covered = (
+        datetime.now(ZoneInfo("Asia/Hong_Kong")).date() - timedelta(days=10)
+    ).isoformat()
     conn = dbm.connect(database_url)
     conn.execute(
         "INSERT INTO statement_file "
         "(id,source_path,file_sha256,institution_id,account_id,file_format,parser_id,"
         " parser_version,imported_at,row_count) "
         "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        ("empty-aug", "Mox_2026-08.pdf", "empty-aug-hash", "mox", "mox_main",
-         "pdf", "pdf_statement", "2.0", "2026-08-04", 0),
+        ("empty-aug", f"Mox_{covered}.pdf", "empty-aug-hash", "mox", "mox_main",
+         "pdf", "pdf_statement", "2.0", covered, 0),
     )
     conn.execute(
         "INSERT INTO statement_file "
         "(id,source_path,file_sha256,institution_id,account_id,file_format,parser_id,"
         " parser_version,imported_at,row_count) "
         "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        ("export-aug", "AMEX_transactions_2025-01-01_to_2026-08-03.csv",
+        ("export-aug", f"AMEX_transactions_2025-01-01_to_{covered}.csv",
          "export-aug-hash", "amex_us", "amex_us_main", "csv", "amex_csv",
-         "1.0", "2026-08-04", 2),
+         "1.0", covered, 2),
     )
     conn.execute(
         "INSERT INTO balance_assertion "
         "(id,account_id,as_of_date,balance,currency,kind,statement_file_id) "
         "VALUES (%s,%s,%s,%s,%s,%s,%s)",
-        ("empty-aug-wise", "wise_hkd", "2026-08-03", 0, "HKD", "closing", "empty-aug"),
+        ("empty-aug-wise", "wise_hkd", covered, 0, "HKD", "closing", "empty-aug"),
     )
     conn.commit()
     conn.close()
@@ -358,7 +363,7 @@ def test_empty_statement_advances_freshness_for_every_covered_account(
     assert rows["mox_main"]["statement_empty"] is True
     assert rows["wise_hkd"]["status"] == "current"
     assert rows["amex_us_main"]["status"] == "current"
-    assert rows["amex_us_main"]["statement_date"] == "2026-08-03"
+    assert rows["amex_us_main"]["statement_date"] == covered
     assert rows["amex_us_main"]["statement_empty"] is False
 
 
