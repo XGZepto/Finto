@@ -872,7 +872,8 @@ def load_installment_plans(conn, *, active_only: bool = False) -> list[dict]:
     """Plans with progress: how many instalments are in the ledger, and what's left."""
     sql = """
         SELECT p.*,
-               COUNT(t.id) FILTER (WHERE t.installment_seq IS NOT NULL) AS paid_count,
+               COUNT(t.id) FILTER (WHERE t.installment_seq IS NOT NULL) AS ledger_count,
+               MAX(t.installment_seq) AS paid_through,
                COALESCE(SUM(t.amount_booked), 0) AS paid_minor
         FROM installment_plan p
         LEFT JOIN txn t ON t.installment_plan_id = p.id AND t.duplicate_of_id IS NULL
@@ -883,9 +884,12 @@ def load_installment_plans(conn, *, active_only: bool = False) -> list[dict]:
     out = []
     for r in conn.execute(sql):
         per = abs(r["principal"]) // r["term_months"] if r["term_months"] else 0
-        settled_early = r["status"] == "completed" and r["paid_count"] < r["term_months"]
+        # Highest sequence billed, not how many rows we imported. Months before
+        # the first imported statement already happened.
+        paid_through = int(r["paid_through"] or r["ledger_count"] or 0)
+        settled_early = r["status"] == "completed" and paid_through < r["term_months"]
         remaining = (0 if r["status"] == "completed"
-                     else max(0, r["term_months"] - r["paid_count"]))
+                     else max(0, r["term_months"] - paid_through))
         out.append(
             {
                 "id": r["id"],
@@ -899,7 +903,7 @@ def load_installment_plans(conn, *, active_only: bool = False) -> list[dict]:
                 "status": r["status"],
                 "confidence": r["confidence"],
                 "is_confirmed": bool(r["is_confirmed"]),
-                "paid_count": r["paid_count"],
+                "paid_count": paid_through,
                 "settled_early": settled_early,
                 "paid": {"amount": r["paid_minor"], "currency": r["currency"]},
                 "remaining_count": remaining,

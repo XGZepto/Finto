@@ -700,6 +700,7 @@ def reconcile(
     dbm.insert_duplicate_candidates(conn, report.candidates)
 
     live = [t for t in txns if t.duplicate_of_id is None]
+    live_by_id = {t.id: t for t in live}
     semantic_kinds_corrected = correct_semantic_kinds(live, accounts)
 
     # Transfer matching needs rates on its first clean run. Harvesting at the
@@ -719,15 +720,31 @@ def reconcile(
 
     # Instalment plans. Runs after dedup so a plan is never built out of two
     # copies of the same charge, and before refunds so an instalment reversal
-    # is not mistaken for a merchant refund.
-    inst = find_installments(live)
+    # is not mistaken for a merchant refund. Detection always sees the whole
+    # ledger: a focused import window would otherwise rebuild a plan from
+    # months 7–8 and leave months 1–6 looking unpaid.
+    installment_txns = live
+    extra_installments: list = []
+    if from_date and to_date:
+        installment_txns = [
+            t for t in dbm.load_txns(conn, include_duplicates=True)
+            if t.duplicate_of_id is None
+        ]
+    inst = find_installments(installment_txns)
     dbm.insert_installment_plans(conn, inst.plans)
     dbm.insert_installment_candidates(conn, inst.candidates)
-    for t in live:
+    for t in installment_txns:
         assignment = inst.assignments.get(t.id)
-        if assignment:
-            t.installment_plan_id, t.installment_seq = assignment
-            t.kind = TxnKind.INSTALLMENT
+        if not assignment:
+            continue
+        t.installment_plan_id, t.installment_seq = assignment
+        t.kind = TxnKind.INSTALLMENT
+        if t.id in live_by_id:
+            live_by_id[t.id].installment_plan_id = t.installment_plan_id
+            live_by_id[t.id].installment_seq = t.installment_seq
+            live_by_id[t.id].kind = TxnKind.INSTALLMENT
+        else:
+            extra_installments.append(t)
 
     # Gross-then-reversed plan bookings net to zero; pair them so they do.
     origination_groups = []
@@ -763,8 +780,9 @@ def reconcile(
     summary_kinds = assign_default_kinds(live, accounts)
     apply_category_rules(conn, live)
     kind_categories = apply_kind_categories(live, accounts)
+    apply_kind_categories(extra_installments, accounts)
 
-    dbm.update_txn_links(conn, txns)
+    dbm.update_txn_links(conn, [*txns, *extra_installments])
     conn.commit()
 
     summary = {

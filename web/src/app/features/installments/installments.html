@@ -103,7 +103,7 @@
                             <span class="seq mono">{{ s.settlement ? '↳' : s.seq }}</span>
                             <span class="date mono">{{ s.date | shortDate }}</span>
                             <span class="amt mono">{{ s.amount | money: 'bare' }}</span>
-                            <span class="state">{{ s.settlement ? 'settled' : (s.paid ? 'charged' : 'projected') }}</span>
+                            <span class="state">{{ s.settlement ? 'settled' : (s.inferred ? 'billed' : (s.paid ? 'charged' : 'projected')) }}</span>
                           </li>
                         }
                       </ol>
