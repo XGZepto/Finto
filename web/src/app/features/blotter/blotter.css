@@ -156,7 +156,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
     border-right: 0;
   }
   /* The ledger card supplies the table's edge alignment. */
-  .table-wrap { overflow-x: visible; margin-inline: 0; }
+  .table-wrap { overflow: visible; margin-inline: 0; }
   /* The mobile drawer is the statement-data scroll surface. */
   .details.raw { max-height: none; overflow-y: visible; padding-right: 0; }
   .table-wrap table,
@@ -367,6 +367,10 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 @media (max-width: 880px) { .glyph { border: 0; background: var(--panel-2); } }
 /* Desktop rows hide the mobile monogram. */
 @media (min-width: 881px) { td.desc .glyph { display: none; } }
+
+/* Horizontal overflow must not compute a vertical scroller — that eats wheel
+   events on desktop and leaves the page pane (and the sentinel) unmoved. */
+.ledger-card .table-wrap { overflow-x: auto; overflow-y: clip; }
 
 /* Infinite-list loading and completion states share fixed geometry. */
 .sentinel, .list-end {

@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, Injector, OnDestroy, ViewChild, afterNextRender, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -13,6 +13,7 @@ import { scrollPane } from '../../core/scroll';
 import { FilterBar } from '../../shared/filter-bar';
 import { FintoIcon } from '../../shared/finto-icon';
 import { FintoSelect } from '../../shared/finto-select';
+import { BLOTTER_PREFETCH_PX, blotterTailDue } from './blotter-tail';
 
 /**
  * The blotter.
@@ -36,6 +37,7 @@ export class BlotterPage implements OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private host = inject(ElementRef<HTMLElement>);
+  private injector = inject(Injector);
   filters = inject(FilterState);
 
   /**
@@ -58,24 +60,32 @@ export class BlotterPage implements OnDestroy {
   /**
    * Append when the tail comes into view.
    *
-   * The scroll pane is the shell's content element, not the document, so the
-   * observer has to be told that — with the default root it would compare
-   * against the viewport, which never scrolls, and fire once forever.
+   * MDN's infinite-scroll example is an IntersectionObserver on a sentinel.
+   * Angular prefers that (and ResizeObserver / MutationObserver) over
+   * afterRenderEffect for "is this in view?". The observer root has to be the
+   * shell's `.content` pane — the document viewport never scrolls.
    */
   @ViewChild('sentinel') set sentinel(el: ElementRef<HTMLElement> | undefined) {
     this.tailObserver?.disconnect();
     this.sentinelEl = el?.nativeElement ?? null;
     if (!el) return;
-    const root = scrollPane() ?? this.host.nativeElement.closest('.content');
+    const root = this.scrollRoot();
     this.tailObserver = new IntersectionObserver(
       (entries) => { if (entries.some((e) => e.isIntersecting)) this.loadMore(); },
-      { root: root instanceof HTMLElement ? root : null, rootMargin: '240px 0px' },
+      {
+        root: root instanceof HTMLElement ? root : null,
+        rootMargin: `${BLOTTER_PREFETCH_PX}px 0px`,
+        threshold: 0,
+      },
     );
     this.tailObserver.observe(el.nativeElement);
+    this.queueTailCheck();
   }
   private sentinelEl: HTMLElement | null = null;
   private tailObserver?: IntersectionObserver;
   private inflight?: Subscription;
+  /** Ignore a page that lands after a newer filter/sort reset has started. */
+  private fetchSeq = 0;
 
   status = signal<PageStatus>('loading');
   rows = signal<Txn[]>([]);
@@ -186,21 +196,22 @@ export class BlotterPage implements OnDestroy {
 
   /** Start again from the top — a filter, sort or currency change. */
   load(): void {
+    this.fetchSeq += 1;
     this.offset.set(0);
     this.status.set('loading');
     this.loadingMore.set(false);
-    this.fetch(true);
+    this.fetch(true, this.fetchSeq);
   }
 
-  /** Append the next page. Driven by the sentinel, never by a button. */
+  /** Append the next page. Driven by the tail, never by a button. */
   loadMore(): void {
     if (this.status() === 'loading' || this.loadingMore() || !this.hasMore()) return;
     this.offset.set(this.rows().length);
     this.loadingMore.set(true);
-    this.fetch(false);
+    this.fetch(false, this.fetchSeq);
   }
 
-  private fetch(reset: boolean): void {
+  private fetch(reset: boolean, seq: number): void {
     if (reset) this.status.set('loading');
     this.inflight?.unsubscribe();
     this.inflight = this.api
@@ -213,6 +224,7 @@ export class BlotterPage implements OnDestroy {
       })
       .subscribe({
         next: (page) => {
+          if (seq !== this.fetchSeq) return;
           this.rows.update((rows) => (reset ? page.items : [...rows, ...page.items]));
           if (page.total != null) this.total.set(page.total);
           else if (!reset && !page.items.length) this.total.set(this.rows().length);
@@ -224,24 +236,52 @@ export class BlotterPage implements OnDestroy {
           if (reset) this.openFromQuery();
         },
         error: () => {
+          if (seq !== this.fetchSeq) return;
           this.loadingMore.set(false);
           if (reset) this.status.set('failed');
         },
       });
   }
 
-  /** IntersectionObserver only fires on a change. After a page lands, the
-   * sentinel may still be on screen — especially on a phone — so check again. */
+  private scrollRoot(): HTMLElement | null {
+    return scrollPane() ?? this.host.nativeElement.closest('.content');
+  }
+
+  /**
+   * IntersectionObserver only notifies when intersection *changes*. After a
+   * page lands the sentinel may still sit in the prefetch zone with no new
+   * event. Re-observe after the next paint (Angular's `read` phase) so the
+   * observer reports the current state against the updated layout.
+   */
   private queueTailCheck(): void {
-    requestAnimationFrame(() => {
-      const el = this.sentinelEl;
-      const pane = scrollPane() ?? this.host.nativeElement.closest('.content');
-      if (!el || this.status() === 'loading' || this.loadingMore() || !this.hasMore()) return;
-      const root = pane instanceof HTMLElement ? pane.getBoundingClientRect() : {
-        bottom: window.innerHeight,
-      };
-      if (el.getBoundingClientRect().top < root.bottom + 240) this.loadMore();
-    });
+    afterNextRender({
+      read: () => {
+        const el = this.sentinelEl;
+        const observer = this.tailObserver;
+        if (el && observer) {
+          observer.unobserve(el);
+          observer.observe(el);
+        }
+        this.checkTail();
+      },
+    }, { injector: this.injector });
+  }
+
+  private checkTail(): void {
+    const el = this.sentinelEl;
+    const pane = this.scrollRoot();
+    const root = pane instanceof HTMLElement ? pane.getBoundingClientRect() : {
+      bottom: window.innerHeight,
+    };
+    if (blotterTailDue({
+      hasMore: this.hasMore(),
+      busy: this.status() === 'loading' || this.loadingMore(),
+      sentinelTop: el ? el.getBoundingClientRect().top : null,
+      rootBottom: root.bottom,
+      scrollRemain: pane instanceof HTMLElement
+        ? pane.scrollHeight - pane.scrollTop - pane.clientHeight
+        : null,
+    })) this.loadMore();
   }
 
   setAggregation(mode: 'normalised' | 'native'): void {
