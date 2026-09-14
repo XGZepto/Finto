@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.14 — 2026-09-14
+
+- Keep the blotter loading the next page after the list paints. A sentinel
+  IntersectionObserver watches the tail; after each page Angular re-observes
+  in the post-render read phase so a sentinel that stayed on screen still
+  fetches. The desktop table wrap no longer becomes a nested vertical
+  scroller that eats the wheel.
+
 ## 0.4.13 — 2026-09-14
 
 - Instalment progress counts billed sequence, not how many rows happen to be in
