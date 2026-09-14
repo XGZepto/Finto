@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.4.12 — 2026-09-14
+
+- Closed and idle accounts no longer appear on the home overdue banner. Mark
+  an account closed or “don’t expect statements” from its account page.
+  Investment accounts are ignored automatically. CSV imports without a printed
+  statement date still count as coverage via their newest row.
+- Fill categories that rules never claimed: transfers, card payments, FX,
+  interest, fees, and common Hong Kong merchants (MTR, Octopus, DiDi,
+  ParknShop). Undisclosed Alipay/Tenpay charges stay `proxy_payment` in the
+  taxonomy instead of looking uncategorised.
+
 ## 0.4.11 — 2026-09-14
 
 - Keep a CR-suffixed card statement balance as a credit. HSBC prints

@@ -24,12 +24,43 @@ BASE_TAXONOMY: dict[str, tuple[str, ...]] = {
     "housing": ("rent", "utilities", "internet", "maintenance"),
     "health": ("medical", "pharmacy", "fitness"),
     "entertainment": ("streaming", "events", "gaming", "hobbies"),
-    "fees": ("bank", "card", "service"),
+    "fees": ("bank", "card", "service", "cash_advance"),
     "interest": ("interest",),
     "income": ("salary", "refund", "other_income"),
     "rewards": ("cashback", "points"),
+    "transfers": ("internal", "card_payment", "fx"),
+    "credit": ("installment",),
+    "proxy_payment": (
+        "alipay", "alipayhk", "tenpay", "wechat_pay", "unionpay", "taobao",
+        "e-wallet", "apple_pay", "google_pay", "kpay",
+    ),
     "other": ("charity", "gifts", "cash", "uncategorised"),
 }
+
+# Deterministic merchant rules. Priority 80 so a user rule at the default 100
+# still wins; exact LLM promotions at 50 win over these.
+BUILTIN_CATEGORY_RULES: tuple[dict[str, str | int], ...] = (
+    {"id": "builtin-parknshop", "pattern": "PARKNSHOP",
+     "set_category": "groceries", "set_subcategory": "supermarket"},
+    {"id": "builtin-wellcome", "pattern": "WELLCOME",
+     "set_category": "groceries", "set_subcategory": "supermarket"},
+    {"id": "builtin-7eleven", "pattern": r"7[- ]?ELEVEN", "match_type": "regex",
+     "set_category": "groceries", "set_subcategory": "convenience"},
+    {"id": "builtin-octopus", "pattern": "OCTOPUS",
+     "set_category": "transport", "set_subcategory": "transit"},
+    {"id": "builtin-mtr", "pattern": "MTR",
+     "set_category": "transport", "set_subcategory": "transit"},
+    {"id": "builtin-didi", "pattern": "DIDI",
+     "set_category": "transport", "set_subcategory": "taxi_rideshare"},
+    {"id": "builtin-uber", "pattern": "UBER",
+     "set_category": "transport", "set_subcategory": "taxi_rideshare"},
+    {"id": "builtin-hktvmall", "pattern": "HKTVMALL",
+     "set_category": "shopping", "set_subcategory": "general"},
+    {"id": "builtin-starbucks", "pattern": "STARBUCKS",
+     "set_category": "dining", "set_subcategory": "coffee"},
+    {"id": "builtin-mcdonalds", "pattern": "MCDONALD",
+     "set_category": "dining", "set_subcategory": "fast_food"},
+)
 
 
 def _now() -> str:
@@ -72,6 +103,26 @@ def seed_base_taxonomy(conn) -> int:
                  _now()),
             )
             created += cur.rowcount
+    return created
+
+
+def seed_builtin_category_rules(conn) -> int:
+    """Idempotent merchant rules so a new import is labelled without the model."""
+    created = 0
+    for rule in BUILTIN_CATEGORY_RULES:
+        cur = conn.execute(
+            "INSERT INTO category_rule (id, priority, match_field, match_type, pattern, "
+            "set_category, set_subcategory, enabled) "
+            "VALUES (%s,%s,'description_norm',%s,%s,%s,%s,1) "
+            "ON CONFLICT (id) DO UPDATE SET "
+            "priority=EXCLUDED.priority, match_type=EXCLUDED.match_type, "
+            "pattern=EXCLUDED.pattern, set_category=EXCLUDED.set_category, "
+            "set_subcategory=EXCLUDED.set_subcategory",
+            (rule["id"], int(rule.get("priority", 80)),
+             rule.get("match_type", "contains"), rule["pattern"],
+             rule["set_category"], rule["set_subcategory"]),
+        )
+        created += cur.rowcount
     return created
 
 

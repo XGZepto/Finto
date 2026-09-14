@@ -185,6 +185,9 @@ export interface Account {
   settlement_currencies: string[];
   balance_group: string | null;
   masked_number: string | null;
+  opened_on: string | null;
+  closed_on: string | null;
+  watch_statements: boolean;
 }
 
 export interface StatementFreshness {
@@ -196,7 +199,7 @@ export interface StatementFreshness {
     statement_date: string | null;
     latest_activity: string | null;
     expected_on: string | null;
-    status: 'current' | 'stale' | 'unknown' | 'closed';
+    status: 'current' | 'stale' | 'unknown' | 'closed' | 'ignored';
     statement_empty: boolean;
     days_overdue: number;
   }>;

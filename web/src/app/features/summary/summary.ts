@@ -61,6 +61,8 @@ export class SummaryPage {
   monthToDate = signal<{ net: Money; spend: Money; income: Money } | null>(null);
   previousMonthToDate = signal<{ net: Money; spend: Money; income: Money } | null>(null);
   freshness = signal<StatementFreshness | null>(null);
+  staleAccounts = computed(() =>
+    (this.freshness()?.accounts ?? []).filter((a) => a.status === 'stale'));
   readonly reportingCurrencies = ['USD', 'HKD', 'GBP', 'EUR', 'JPY', 'CNY', 'SGD', 'AUD', 'CAD'];
 
   /**
@@ -332,6 +334,8 @@ export class SummaryPage {
   }
 
   go(path: string): void { this.router.navigate([path]); }
+
+  goAccount(id: string): void { this.router.navigate(['/accounts', id]); }
 
   humanize(value: string): string {
     return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());

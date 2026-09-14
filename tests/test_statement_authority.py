@@ -332,6 +332,42 @@ def test_undisclosed_gateway_charges_are_categorised_not_left_blank():
     assert plain.details == {}
 
 
+def test_kind_defaults_fill_transfer_and_fee_categories():
+    from fin.ingest import apply_kind_categories
+    from fin.models import Account, AccountType, TxnKind
+
+    card = Account(id="card", institution_id="amex", display_name="Card",
+                   account_type=AccountType.CREDIT_CARD, primary_currency="HKD")
+    bank = Account(id="bank", institution_id="hsbc", display_name="Bank",
+                   account_type=AccountType.CHECKING, primary_currency="HKD")
+    transfer = _txn(kind=TxnKind.TRANSFER, account_id="bank")
+    fee = _txn(kind=TxnKind.FEE, account_id="card")
+    purchase = _txn(kind=TxnKind.PURCHASE, account_id="card")
+    already = _txn(kind=TxnKind.CC_PAYMENT, category="dining", account_id="bank")
+
+    assert apply_kind_categories([transfer, fee, purchase, already],
+                                 {"card": card, "bank": bank}) == 2
+    assert (transfer.category, transfer.subcategory) == ("transfers", "internal")
+    assert (fee.category, fee.subcategory) == ("fees", "card")
+    assert purchase.category is None
+    assert already.category == "dining"
+
+
+def test_builtin_merchant_rules_label_mtr_and_skip_labelled_rows(database_url):
+    from fin.ingest import apply_category_rules
+
+    conn = dbm.connect(database_url)
+    dbm.init_db(conn)
+    conn.commit()
+    metro = _txn(description_raw="MTR TSUEN WAN")
+    labelled = _txn(description_raw="MTR TSUEN WAN", category="other")
+    apply_category_rules(conn, [metro, labelled])
+    assert metro.category == "transport"
+    assert metro.subcategory == "transit"
+    assert labelled.category == "other"
+    conn.close()
+
+
 def test_an_existing_category_is_never_overwritten_by_the_gateway_label():
     from fin.ingest import label_payment_gateways
 

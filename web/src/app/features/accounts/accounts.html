@@ -130,6 +130,28 @@
         <span><label>Cardholders</label><b class="mono">{{ spenderCount() || '—' }}</b></span>
         <span class="top-spend"><label>Top spending</label>@if (topCategory(); as top) { <b>{{ humanize(top.bucket) }}</b><small class="mono">{{ top.spend | money }}</small> } @else { <b>—</b> }</span>
       </section>
+      <section class="card account-status">
+        @if (c.account.closed_on) {
+          <div>
+            <span class="label">Closed</span>
+            <p>This account is closed as of {{ c.account.closed_on }}. History stays in the ledger; new statements are not expected.</p>
+          </div>
+          <button class="ghost" type="button" [disabled]="watchBusy()" (click)="reopenAccount()">Reopen</button>
+        } @else {
+          <div>
+            <span class="label">{{ c.account.watch_statements === false ? 'Not watching' : 'Open' }}</span>
+            <p>@if (c.account.watch_statements === false) { Unused or dormant — missing statements will not show on the home banner. } @else { Missing statements for this account appear on the home banner. }</p>
+          </div>
+          <div class="status-actions">
+            @if (c.account.watch_statements === false) {
+              <button class="ghost" type="button" [disabled]="watchBusy()" (click)="setWatch(true)">Watch statements</button>
+            } @else {
+              <button class="ghost" type="button" [disabled]="watchBusy()" (click)="setWatch(false)">Don't expect statements</button>
+            }
+            <button class="ghost" type="button" [disabled]="watchBusy()" (click)="closeAccount()">Mark closed</button>
+          </div>
+        }
+      </section>
     }
 
     @if (siblings().length > 1) {
@@ -313,7 +335,7 @@
           @if (g.children.length === 1) {
             <button class="single-account" (click)="open(g.children[0].account.id)">
               <span class="issuer-mark"><finto-icon kind="issuer" [name]="g.institution" /></span>
-              <span class="child-main"><span class="eyebrow">{{ humanize(g.children[0].account.account_type) }}</span><strong>{{ g.name }}</strong></span>
+              <span class="child-main"><span class="eyebrow">{{ humanize(g.children[0].account.account_type) }}@if (g.children[0].account.closed_on) { · Closed } @else if (g.children[0].account.watch_statements === false) { · Idle }</span><strong>{{ g.name }}</strong></span>
               <span class="group-totals">@for (total of g.totals; track total.currency) { <span class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money: 'bare' }} <small>{{ total.currency }}</small></span> }</span>
               <span class="arrow">→</span>
             </button>
@@ -327,7 +349,7 @@
             <div class="children">
               @for (r of g.children; track r.account.id) {
                 <button class="account-child" (click)="open(r.account.id)">
-                  <span class="child-main"><strong>{{ r.account.display_name }}</strong></span>
+                  <span class="child-main"><strong>{{ r.account.display_name }}</strong>@if (r.account.closed_on) { <small>Closed</small> } @else if (r.account.watch_statements === false) { <small>Idle</small> }</span>
                   <span class="child-balances">@for (p of r.positions; track p.currency) { <span class="mono" [class.neg]="p.balance.amount < 0" [class.pos]="p.balance.amount > 0">{{ p.balance | money: 'bare' }} <small>{{ p.currency }}</small></span> } @empty { <span class="dim">—</span> }</span>
                   <span class="arrow">→</span>
                 </button>

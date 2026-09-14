@@ -173,7 +173,9 @@ def test_promote_to_rules_creates_deterministic_rule(conn):
     ]})
     apply_to_ledger(conn, provider)
     assert promote_to_rules(conn) == 1
-    rule = conn.execute("SELECT * FROM category_rule").fetchone()
+    rule = conn.execute(
+        "SELECT * FROM category_rule WHERE pattern=%s", ("PARKNSHOP TST",)
+    ).fetchone()
     assert rule["set_category"] == "groceries"
     # The point of promotion: the model is never consulted about this again.
 

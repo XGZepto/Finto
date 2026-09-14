@@ -55,7 +55,8 @@ clearly apply.
 "other", subcategory "uncategorised", and set confidence below 0.5. Guessing is \
 worse than abstaining here.
 - Hong Kong context matters: "PARKNSHOP" and "WELLCOME" are supermarkets, \
-"OCTOPUS" is transit stored-value, "MTR" is the metro, "HKTVMALL" is retail.
+"OCTOPUS" is transit stored-value, "MTR" is the metro, "HKTVMALL" is retail, \
+"DIDI" and "UBER" are rideshare, "7-ELEVEN" is convenience.
 - Return only the JSON array. No commentary."""
 
 

@@ -53,6 +53,7 @@ export class AccountsPage {
   selected = signal<string | null>(null);
   selectedGroup = signal<string | null>(null);
   detailLoading = signal(false);
+  watchBusy = signal(false);
   byKind = signal<SummaryRow[]>([]);
   byCategory = signal<SummaryRow[]>([]);
   byHolder = signal<SummaryRow[]>([]);
@@ -352,6 +353,33 @@ export class AccountsPage {
   }
   openGroupInBlotter(ids: string[]): void {
     this.router.navigate(['/blotter'], { queryParams: { accounts: ids } });
+  }
+  closeAccount(): void {
+    const now = new Date();
+    const closedOn = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
+    this.patchAccount({ closed_on: closedOn, watch_statements: false });
+  }
+  reopenAccount(): void {
+    this.patchAccount({ closed_on: null, watch_statements: true });
+  }
+  setWatch(watch: boolean): void {
+    this.patchAccount({ watch_statements: watch });
+  }
+  private patchAccount(patch: { closed_on?: string | null; watch_statements?: boolean }): void {
+    const id = this.selected();
+    if (!id || this.watchBusy()) return;
+    this.watchBusy.set(true);
+    this.api.patchAccount(id, patch).subscribe({
+      next: (account) => {
+        this.accounts.set(this.accounts().map((row) => row.id === account.id ? { ...row, ...account } : row));
+        this.watchBusy.set(false);
+      },
+      error: () => this.watchBusy.set(false),
+    });
   }
   /** Same drill as a blotter row: the account's ledger, with this line open. */
   openTxn(txn: Txn): void {

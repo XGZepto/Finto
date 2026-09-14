@@ -136,6 +136,8 @@ section.card { margin-bottom: var(--s3); }
 .freshness-copy span { display: flex; gap: var(--s3); overflow-x: auto; color: var(--fg-3); font-size: var(--t-label); }
 .freshness-copy b { flex: none; color: var(--fg-2); font-weight: 500; }
 .freshness-copy small { margin-left: 5px; color: var(--fg-4); }
+.stale-account { display: inline-flex; align-items: baseline; min-height: 44px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; letter-spacing: 0; }
+.stale-account:hover b { text-decoration: underline; }
 
 @media (max-width: 880px) {
   .hero-figure { gap: var(--s4); }
