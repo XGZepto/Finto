@@ -21,6 +21,7 @@ transfer_candidate for you to accept or reject.
 from __future__ import annotations
 
 import hashlib
+import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -47,6 +48,16 @@ AUTO_LINK_THRESHOLD = 0.90
 REVIEW_THRESHOLD = 0.55
 # FX legs rarely reconcile exactly; allow spread + fee before rejecting.
 FX_TOLERANCE_PCT = Decimal("0.03")
+
+_PAYMENT_WORDS = (
+    "TRANSFER", "FPS", "FASTER PAYMENT", "AUTOPAY", "PAYMENT RECEIVED",
+    "THANK YOU", "EPAYMENT", "ACH PMT", "MOX CREDIT PAYMENT", "IFS PAYMENT",
+    "PPS PAYMENT", "AMERICAN EXPRESS CARDS", "HSBC CREDIT CARDS",
+    "CREDIT CARDS", "ONLINE TRANSFER", "OWN ACCOUNT",
+)
+_TRANSFER_IN_KINDS = {
+    TxnKind.CC_PAYMENT, TxnKind.TRANSFER, TxnKind.FX_CONVERSION, TxnKind.ATM,
+}
 
 
 @dataclass
@@ -105,7 +116,8 @@ def find_transfers(
     outs = [t for t in txns if t.duplicate_of_id is None
             and t.booked.amount < 0 and t.account_id in own]
     ins = [t for t in txns if t.duplicate_of_id is None
-           and t.booked.amount > 0 and t.account_id in own]
+           and t.booked.amount > 0 and t.account_id in own
+           and _plausible_transfer_inflow(t, accounts)]
 
     by_date: dict[object, list[Txn]] = defaultdict(list)
     for t in ins:
@@ -180,6 +192,41 @@ def _norm_blob(*parts: str | None) -> str:
     return normalize_alias(" ".join(p for p in parts if p))
 
 
+def _has_payment_wording(text: str) -> bool:
+    return any(w in text for w in _PAYMENT_WORDS)
+
+
+def _plausible_transfer_inflow(t: Txn, accounts: Mapping[str, Account]) -> bool:
+    """Card credits that are rewards or refunds are not the inbound leg of a transfer."""
+    acct = accounts.get(t.account_id)
+    is_card = bool(
+        acct and acct.account_type in (AccountType.CREDIT_CARD, AccountType.CHARGE_CARD)
+    )
+    if not is_card:
+        return True
+    if t.kind in _TRANSFER_IN_KINDS:
+        return True
+    blob = f"{t.description_norm} {(t.description_raw or '').upper()}"
+    return _has_payment_wording(blob)
+
+
+def _names_self(raw: str | None, blob: str, aliases: set[str]) -> bool:
+    """True when the text names the owner, including masked FPS names.
+
+    ``ZHOU Y******`` normalises to ``ZHOUY``, which is a prefix of
+    ``ZHOUYIXIANG`` rather than a substring of the blob.
+    """
+    if any(a in blob for a in aliases if len(a) >= 4):
+        return True
+    if not raw:
+        return False
+    for match in re.finditer(r"([A-Za-z]+(?:\s+[A-Za-z]+)*)\s*\*+", raw):
+        prefix = re.sub(r"[^A-Z0-9]", "", match.group(1).upper())
+        if len(prefix) >= 5 and any(a.startswith(prefix) for a in aliases):
+            return True
+    return False
+
+
 def _score_pair(
     out: Txn, inc: Txn, accounts, fx_lookup, ctx: TransferContext
 ) -> tuple[float, list[str], int]:
@@ -225,9 +272,7 @@ def _score_pair(
     evidence = 0
 
     text = f"{out.description_norm} {inc.description_norm}"
-    has_payment_wording = any(w in text for w in (
-        "TRANSFER", "FPS", "FASTER PAYMENT", "AUTOPAY", "PAYMENT RECEIVED",
-        "THANK YOU", "EPAYMENT", "ACH PMT", "MOX CREDIT PAYMENT", "IFS PAYMENT"))
+    has_payment_wording = _has_payment_wording(text)
     if has_payment_wording:
         score += 0.12
         evidence += 1
@@ -304,8 +349,14 @@ def _score_pair(
             break
 
     if ctx.self_aliases:
-        out_names_self = any(a in out_blob for a in ctx.self_aliases if len(a) >= 4)
-        inc_names_self = any(a in inc_blob for a in ctx.self_aliases if len(a) >= 4)
+        out_names_self = _names_self(
+            out.description_raw, out_blob, ctx.self_aliases)
+        inc_names_self = _names_self(
+            inc.description_raw, inc_blob, ctx.self_aliases)
+        # A card credit that merely prints the cardholder ("YIXIANG ZHOU
+        # Platinum Walmart+ Credit") is not a self-transfer.
+        if is_cc_in and not has_payment_wording:
+            inc_names_self = False
         if out_names_self and inc_names_self:
             score += 0.08
             evidence += 1

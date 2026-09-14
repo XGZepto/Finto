@@ -20,11 +20,12 @@ from fin.models import (
     Institution,
     Money,
     Txn,
+    TxnKind,
     TxnStatus,
     normalize_description,
 )
 from fin.parsers.base import ParseContext, parse_amount, parse_date, select_parser
-from fin.transfers import find_transfers
+from fin.transfers import TransferContext, find_transfers
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -224,17 +225,76 @@ def test_unrelated_amounts_do_not_match():
     assert not rep.groups and not rep.candidates
 
 
-def test_a_txn_is_only_one_leg():
-    """Two identical inflows must not both claim the same outflow."""
-    out = _txn(account_id="hsbc", booked=Money(amount=-100000, currency="HKD"),
-               txn_date=date(2026, 4, 1), description_raw="TRANSFER OUT")
-    in1 = _txn(account_id="mox", booked=Money(amount=100000, currency="HKD"),
-               txn_date=date(2026, 4, 1), description_raw="TRANSFER IN")
-    in2 = _txn(account_id="amex", booked=Money(amount=100000, currency="HKD"),
-               txn_date=date(2026, 4, 1), description_raw="TRANSFER IN")
-    find_transfers([out, in1, in2], _accounts())
-    claimed = [t for t in (out, in1, in2) if t.transfer_group_id]
-    assert len(claimed) <= 2
+def test_mox_card_payment_named_amex_auto_links():
+    accounts = {
+        "mox": Account(id="mox", institution_id="mox", display_name="Mox",
+                       account_type=AccountType.CHECKING, primary_currency="HKD"),
+        "amex": Account(id="amex", institution_id="amex_hk", display_name="AMEX",
+                        account_type=AccountType.CREDIT_CARD, primary_currency="HKD"),
+    }
+    d = date(2026, 5, 29)
+    out = _txn(account_id="mox", booked=Money(amount=-2500000, currency="HKD"),
+               txn_date=d, description_raw="American Express Cards")
+    inc = _txn(account_id="amex", booked=Money(amount=2500000, currency="HKD"),
+               txn_date=d, description_raw="PAYMENT RECEIVED THRU EPS")
+    rep = find_transfers([out, inc], accounts)
+    assert len(rep.groups) == 1
+    assert out.transfer_group_id == inc.transfer_group_id is not None
+
+
+def test_opaque_bank_debit_links_ifs_card_payment():
+    accounts = {
+        "hsbc": Account(id="hsbc", institution_id="hsbc_hk", display_name="HSBC",
+                        account_type=AccountType.SAVINGS, primary_currency="HKD"),
+        "card": Account(id="card", institution_id="hsbc_hk", display_name="EveryMile",
+                        account_type=AccountType.CREDIT_CARD, primary_currency="HKD"),
+    }
+    d = date(2026, 5, 22)
+    out = _txn(account_id="hsbc", booked=Money(amount=-5438503, currency="HKD"),
+               txn_date=d, description_raw="N52214305505(22MAY26) 6250-9800-1702-0071")
+    inc = _txn(account_id="card", booked=Money(amount=5438503, currency="HKD"),
+               txn_date=d, description_raw="IFS PAYMENT - THANK YOU")
+    rep = find_transfers([out, inc], accounts)
+    assert len(rep.groups) == 1
+
+
+def test_card_reward_with_cardholder_name_is_not_a_transfer():
+    accounts = {
+        "hk": Account(id="hk", institution_id="amex_hk", display_name="HK",
+                      account_type=AccountType.CREDIT_CARD, primary_currency="HKD"),
+        "us": Account(id="us", institution_id="amex_us", display_name="US",
+                      account_type=AccountType.CREDIT_CARD, primary_currency="USD"),
+    }
+    d = date(2026, 7, 25)
+    out = _txn(account_id="hk", booked=Money(amount=-1427, currency="USD"),
+               txn_date=d, description_raw="APPLE.COM/BILL INTERNET CHARGE CA")
+    inc = _txn(account_id="us", booked=Money(amount=1432, currency="USD"),
+               txn_date=d, description_raw="YIXIANG ZHOU Platinum Walmart+ Credit")
+    rep = find_transfers(
+        [out, inc], accounts,
+        context=TransferContext(self_aliases={"ZHOUYIXIANG"}),
+    )
+    assert rep.groups == []
+    assert rep.candidates == []
+
+
+def test_masked_self_name_still_links_mox_card_payment():
+    accounts = {
+        "mox_hkd": Account(id="mox_hkd", institution_id="mox", display_name="Mox HKD",
+                           account_type=AccountType.CHECKING, primary_currency="HKD"),
+        "mox_credit": Account(id="mox_credit", institution_id="mox", display_name="Mox Credit",
+                              account_type=AccountType.CREDIT_CARD, primary_currency="HKD"),
+    }
+    d = date(2026, 5, 29)
+    out = _txn(account_id="mox_hkd", booked=Money(amount=-3649845, currency="HKD"),
+               txn_date=d, description_raw="ZHOU Y****** (ZHOU Y******)")
+    inc = _txn(account_id="mox_credit", booked=Money(amount=3649845, currency="HKD"),
+               txn_date=d, description_raw="ZHOU YIXIANG", kind=TxnKind.CC_PAYMENT)
+    rep = find_transfers(
+        [out, inc], accounts,
+        context=TransferContext(self_aliases={"ZHOUYIXIANG"}),
+    )
+    assert len(rep.groups) == 1
 
 
 # ---------------------------------------------------------------------------

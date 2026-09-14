@@ -199,9 +199,74 @@ def find_installments(txns: Sequence[Txn]) -> InstallmentReport:
                 reasons=reasons,
             ))
 
+    _attach_unlabelled_siblings(txns, report)
     _find_early_settlements(txns, report)
     _find_unnumbered_completed_plans(txns, report)
     return report
+
+
+def _add_months(d: date, months: int) -> date:
+    """Same day-of-month, clamped like `_inferred_start` (never the 29–31st)."""
+    year, month = d.year, d.month + months
+    while month > 12:
+        month -= 12
+        year += 1
+    while month < 1:
+        month += 12
+        year -= 1
+    return date(year, month, min(d.day, 28))
+
+
+def _seq_near_start(start: date, when: date, term: int) -> int | None:
+    """Which instalment number `when` is, if it lands on the monthly cadence."""
+    best: tuple[int, int] | None = None
+    for seq in range(1, term + 1):
+        gap = abs((when - _add_months(start, seq - 1)).days)
+        if gap <= 8 and (best is None or gap < best[0]):
+            best = (gap, seq)
+    return best[1] if best else None
+
+
+def _attach_unlabelled_siblings(txns: Sequence[Txn], report: InstallmentReport) -> None:
+    """Fill missing months from equal charges that never printed 03/12.
+
+    HSBC started wrapping ``6th of 12 instalments`` on later statements. The
+    Jan–May rows of the same BT plan are identical amounts on the 13th, but
+    without a marker they stayed off the plan and the schedule treated them as
+    still unpaid.
+    """
+    by_id = {t.id: t for t in txns}
+    assigned = set(report.assignments)
+    for plan in report.plans:
+        members = [
+            (seq, by_id[txn_id])
+            for txn_id, (pid, seq) in report.assignments.items()
+            if pid == plan.id and seq is not None and txn_id in by_id
+        ]
+        if not members:
+            continue
+        amounts = [abs(t.booked.amount) for _, t in members]
+        typical = amounts[0] if max(amounts) - min(amounts) <= 5 else None
+        subject = plan_subject(members[0][1].description_raw)
+        have = {seq for seq, _ in members}
+        for t in txns:
+            if (t.id in assigned or t.duplicate_of_id is not None
+                    or t.account_id != plan.account_id
+                    or t.booked.currency != plan.principal.currency
+                    or t.booked.amount >= 0 or _is_installment_fee(t)):
+                continue
+            if plan_subject(t.description_raw) != subject:
+                continue
+            if typical is not None and abs(abs(t.booked.amount) - typical) > 5:
+                continue
+            seq = _seq_near_start(plan.start_date, t.txn_date, plan.term_months)
+            if seq is None or seq in have:
+                continue
+            report.assignments[t.id] = (plan.id, seq)
+            assigned.add(t.id)
+            have.add(seq)
+        if have and max(have) >= plan.term_months:
+            plan.status = PlanStatus.COMPLETED
 
 
 _EARLY_SETTLEMENT = re.compile(
@@ -515,7 +580,12 @@ def _now_iso() -> str:
 
 
 def outstanding(plan: InstallmentPlan, paid_count: int) -> Money:
-    """What is still owed on a plan after `paid_count` instalments."""
+    """What is still owed on a plan after `paid_count` instalments.
+
+    `paid_count` is the highest sequence billed (or inferred), not how many
+    rows happen to be in the ledger. Missing month 1 while month 6 is posted
+    means five charges already happened, not five still outstanding.
+    """
     per = abs(plan.principal.amount) // plan.term_months
     remaining = max(0, plan.term_months - paid_count)
     return Money(amount=-(per * remaining), currency=plan.principal.currency)

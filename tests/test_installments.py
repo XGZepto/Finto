@@ -123,6 +123,58 @@ def test_partial_plan_backdates_its_start():
     assert plan.start_date == date(2025, 1, 20)
 
 
+def test_unlabelled_equal_charges_join_the_numbered_plan():
+    """HSBC printed 06/12 on later statements; earlier months have no marker."""
+    txns = [
+        _txn("BT INSTALMENT PGM-IPP HONG KONG HK", -950000, date(2026, i, 13))
+        for i in range(1, 6)
+    ]
+    for i in range(6, 9):
+        t = _txn("BT INSTALMENT PGM-IPP HONG KONG HK", -950000, date(2026, i, 13))
+        t.details = {"installment.sequence": str(i), "installment.term": "12",
+                     "raw.line_0": f"{i}th of 12 instalments"}
+        txns.append(t)
+
+    report = find_installments(txns)
+    assert len(report.plans) == 1
+    plan = report.plans[0]
+    assert plan.status.value == "active"
+    seqs = sorted(seq for _, seq in report.assignments.values() if seq is not None)
+    assert seqs == list(range(1, 9))
+    assert len(report.assignments) == 8
+
+
+def test_progress_uses_highest_sequence_not_imported_count(conn):
+    """Months before the first imported statement already happened."""
+    from fin.models import InstallmentPlan, PlanStatus
+    plan = InstallmentPlan(
+        id="plan-bt", account_id="amex_hk_main",
+        description="BT PGM-IPP", principal=Money(amount=-11400000, currency="HKD"),
+        term_months=12, start_date=date(2026, 1, 13),
+        status=PlanStatus.ACTIVE, confidence=1.0,
+    )
+    conn.execute(
+        "INSERT INTO statement_file (id,source_path,file_sha256,institution_id,account_id,"
+        "file_format,parser_id,parser_version,imported_at,row_count) "
+        "VALUES ('sf','x','x','amex_hk','amex_hk_main','csv','test','1',CURRENT_TIMESTAMP::text,0)"
+    )
+    dbm.insert_installment_plans(conn, [plan])
+    rows = []
+    for seq, month in ((6, 6), (7, 7), (8, 8)):
+        t = _txn("BT INSTALMENT PGM-IPP", -950000, date(2026, month, 13))
+        t.installment_plan_id = plan.id
+        t.installment_seq = seq
+        t.kind = TxnKind.INSTALLMENT
+        rows.append(t)
+    dbm.insert_txns(conn, rows)
+    conn.commit()
+
+    loaded = dbm.load_installment_plans(conn)
+    assert loaded[0]["paid_count"] == 8
+    assert loaded[0]["remaining_count"] == 4
+    assert loaded[0]["outstanding"]["amount"] == -3800000
+
+
 def test_irregular_spacing_goes_to_review_not_auto_created():
     txns = [
         _txn("INSTALMENT 01/12 ODD CO", -100000, date(2025, 1, 15)),

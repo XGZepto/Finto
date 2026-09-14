@@ -12,6 +12,7 @@ interface ScheduleRow {
   date: string;
   amount: Money;
   paid: boolean;
+  inferred?: boolean;
   settlement?: boolean;
   description?: string;
   txnId?: string;
@@ -95,13 +96,16 @@ export class InstallmentsPage {
    * The full term: charges we hold, then the ones still to come.
    *
    * Remaining instalments are the only genuinely predictable part of a spending
-   * forecast — the amount and the date are both already agreed.
+   * forecast — the amount and the date are both already agreed. Months before
+   * the latest billed sequence are treated as already charged even when that
+   * statement was never imported.
    */
   schedule(plan: InstallmentPlan): ScheduleRow[] {
     const charges = plan.charges ?? [];
     const bySeq = new Map<number, (typeof charges)[number]>();
     charges.filter((c) => c.installment_seq != null)
       .forEach((c) => bySeq.set(c.installment_seq!, c));
+    const maxSeq = Math.max(0, ...bySeq.keys());
 
     const rows: ScheduleRow[] = [];
     for (let seq = 1; seq <= plan.term_months; seq++) {
@@ -116,8 +120,16 @@ export class InstallmentsPage {
           description: charge.description_raw,
           txnId: charge.id,
         });
-      } else {
-        if (plan.status === 'completed') continue;
+      } else if (seq <= maxSeq) {
+        rows.push({
+          key: `prior-${seq}`,
+          seq,
+          date: addMonths(plan.start_date, seq - 1),
+          amount: plan.per_installment,
+          paid: true,
+          inferred: true,
+        });
+      } else if (plan.status !== 'completed') {
         rows.push({
           key: `due-${seq}`,
           seq,

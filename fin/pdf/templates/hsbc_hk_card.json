@@ -131,6 +131,13 @@
           "keys": [
             "payment.method"
           ]
+        },
+        {
+          "match": "^(\\d{1,2})(?:st|nd|rd|th)? of (\\d{1,2}) instalments?$",
+          "keys": [
+            "installment.sequence",
+            "installment.term"
+          ]
         }
       ],
       "markers": [
@@ -256,6 +263,13 @@
           "match": "^(UNIONPAY QR)$",
           "keys": [
             "payment.method"
+          ]
+        },
+        {
+          "match": "^(\\d{1,2})(?:st|nd|rd|th)? of (\\d{1,2}) instalments?$",
+          "keys": [
+            "installment.sequence",
+            "installment.term"
           ]
         }
       ],

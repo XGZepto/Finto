@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.4.13 — 2026-09-14
+
+- Instalment progress counts billed sequence, not how many rows happen to be in
+  the ledger. Equal monthly charges without a printed 03/12 marker still join
+  the plan, so earlier months of a BT loan are no longer treated as unpaid.
+- Cross-account payments that name the destination card, IFS/PPS thank-you
+  credits, and masked self FPS names auto-link. Card rewards that only print
+  the cardholder are no longer proposed as transfers.
+
 ## 0.4.12 — 2026-09-14
 
 - Closed and idle accounts no longer appear on the home overdue banner. Mark
