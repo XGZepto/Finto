@@ -5,18 +5,18 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from ... import db as dbm
+from ...models import Account
 from ..deps import get_conn
 
 router = APIRouter(tags=["accounts"])
 
 
-@router.get("/accounts")
-def list_accounts(conn=Depends(get_conn)) -> dict:
-    accounts = dbm.load_accounts(conn)
-    return {"accounts": [{
+def _serialize_account(a: Account) -> dict:
+    return {
         "id": a.id,
         "institution_id": a.institution_id,
         "display_name": a.display_name,
@@ -27,7 +27,46 @@ def list_accounts(conn=Depends(get_conn)) -> dict:
         "settlement_currencies": a.settlement_currencies,
         "balance_group": a.balance_group,
         "masked_number": a.masked_number,
-    } for a in accounts.values()]}
+        "opened_on": str(a.opened_on) if a.opened_on else None,
+        "closed_on": str(a.closed_on) if a.closed_on else None,
+        "watch_statements": a.watch_statements,
+    }
+
+
+@router.get("/accounts")
+def list_accounts(conn=Depends(get_conn)) -> dict:
+    accounts = dbm.load_accounts(conn)
+    return {"accounts": [_serialize_account(a) for a in accounts.values()]}
+
+
+class AccountPatch(BaseModel):
+    closed_on: date | None = None
+    watch_statements: bool | None = None
+
+
+@router.patch("/accounts/{account_id}")
+def patch_account(account_id: str, patch: AccountPatch, conn=Depends(get_conn)) -> dict:
+    """Mark an account closed or stop expecting monthly statements."""
+    fields = patch.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(400, "nothing to update")
+    row = conn.execute("SELECT id FROM account WHERE id=%s", (account_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "account not found")
+    sets = [f"{k}=%s" for k in fields]
+    params = [
+        int(v) if k == "watch_statements" else (str(v) if v is not None else None)
+        for k, v in fields.items()
+    ]
+    conn.execute(
+        f"UPDATE account SET {', '.join(sets)} WHERE id=%s",
+        [*params, account_id],
+    )
+    conn.commit()
+    updated = dbm.load_accounts(conn).get(account_id)
+    if updated is None:
+        raise HTTPException(404, "account not found")
+    return _serialize_account(updated)
 
 
 @router.get("/cards")
@@ -63,6 +102,8 @@ def statement_freshness(conn=Depends(get_conn)) -> dict:
                                substring(sf.source_path from 'to_(20[0-9]{2}-[0-9]{2}-[0-9]{2})'),
                                substring(sf.source_path from
                                          '_(20[0-9]{2}-[0-9]{2}-[0-9]{2})\.[^.]+$'),
+                               (SELECT MAX(t.txn_date)::text FROM txn t
+                                 WHERE t.statement_file_id=sf.id),
                                CASE WHEN sf.row_count=0
                                     THEN substr(sf.imported_at, 1, 10) END) AS covered_on
                  FROM statement_file sf
@@ -77,7 +118,8 @@ def statement_freshness(conn=Depends(get_conn)) -> dict:
                  FROM balance_assertion ba
                  JOIN statement_file sf ON sf.id=ba.statement_file_id
            )
-           SELECT a.id AS account_id, a.display_name, a.closed_on,
+           SELECT a.id AS account_id, a.display_name, a.closed_on, a.account_type,
+                  COALESCE(a.watch_statements, 1) AS watch_statements,
                   latest.covered_on AS statement_date,
                   latest.row_count AS statement_row_count,
                   (SELECT MAX(t.txn_date) FROM txn t
@@ -99,16 +141,27 @@ def statement_freshness(conn=Depends(get_conn)) -> dict:
             statement_date = date.fromisoformat(statement_date[:10])
         expected_on = statement_date + timedelta(days=31) if statement_date else None
         closed = bool(row["closed_on"] and date.fromisoformat(str(row["closed_on"])[:10]) <= today)
-        stale = bool(not closed and expected_on and today > expected_on + timedelta(days=7))
+        watched = bool(row["watch_statements"]) and row["account_type"] != "investment"
+        stale = bool(
+            not closed and watched and expected_on and today > expected_on + timedelta(days=7)
+        )
+        if closed:
+            status = "closed"
+        elif not watched:
+            status = "ignored"
+        elif stale:
+            status = "stale"
+        elif statement_date:
+            status = "current"
+        else:
+            status = "unknown"
         accounts.append({
             "account_id": row["account_id"],
             "display_name": row["display_name"],
             "statement_date": str(statement_date) if statement_date else None,
             "latest_activity": str(row["latest_activity"]) if row["latest_activity"] else None,
             "expected_on": str(expected_on) if expected_on else None,
-            "status": "closed" if closed else (
-                "stale" if stale else ("current" if statement_date else "unknown")
-            ),
+            "status": status,
             "statement_empty": row["statement_row_count"] == 0,
             "days_overdue": max(0, (today - expected_on).days) if stale else 0,
         })

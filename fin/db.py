@@ -68,9 +68,10 @@ def execute_many(conn: psycopg.Connection, query: str, params) -> None:
 def init_db(conn: psycopg.Connection) -> None:
     """Create the PostgreSQL schema idempotently."""
     conn.execute(SCHEMA_PATH.read_text())
-    from .taxonomy import seed_base_taxonomy
+    from .taxonomy import seed_base_taxonomy, seed_builtin_category_rules
 
     seed_base_taxonomy(conn)
+    seed_builtin_category_rules(conn)
     execute_many(
         conn,
         "INSERT INTO setting (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING",
@@ -133,11 +134,14 @@ def upsert_account(conn, a: Account, *, user_id: str = "owner") -> None:
     conn.execute(
         "INSERT INTO account (id, user_id, institution_id, display_name, account_type, "
         "primary_currency, balance_group, masked_number, is_own_account, "
-        "opened_on, closed_on, notes) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+        "opened_on, closed_on, watch_statements, notes) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
         "ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name, "
         "account_type=excluded.account_type, primary_currency=excluded.primary_currency, "
         "balance_group=excluded.balance_group, masked_number=excluded.masked_number, "
-        "is_own_account=excluded.is_own_account, notes=excluded.notes",
+        "is_own_account=excluded.is_own_account, notes=excluded.notes, "
+        "opened_on=excluded.opened_on, closed_on=excluded.closed_on, "
+        "watch_statements=excluded.watch_statements",
         (
             a.id,
             user_id,
@@ -150,6 +154,7 @@ def upsert_account(conn, a: Account, *, user_id: str = "owner") -> None:
             int(a.is_own_account),
             _iso(a.opened_on),
             _iso(a.closed_on),
+            int(a.watch_statements),
             a.notes,
         ),
     )
@@ -311,6 +316,9 @@ def load_accounts(conn) -> dict[str, Account]:
             masked_number=r["masked_number"],
             is_own_account=bool(r["is_own_account"]),
             aliases=aliases.get(r["id"], []),
+            opened_on=date.fromisoformat(r["opened_on"]) if r["opened_on"] else None,
+            closed_on=date.fromisoformat(r["closed_on"]) if r["closed_on"] else None,
+            watch_statements=bool(r["watch_statements"]),
             notes=r["notes"],
         )
     return out

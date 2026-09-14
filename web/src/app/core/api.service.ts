@@ -197,6 +197,12 @@ addTag(id: string, tag: string): Observable<Txn> {
     return this.cached<{ accounts: Account[] }>(`${this.base}/accounts`, this.referenceTtl);
   }
 
+  patchAccount(id: string, patch: { closed_on?: string | null; watch_statements?: boolean }):
+    Observable<Account> {
+    this.invalidateReads();
+    return this.http.patch<Account>(`${this.base}/accounts/${id}`, patch);
+  }
+
   cards(): Observable<{ cards: Card[] }> {
     return this.cached<{ cards: Card[] }>(`${this.base}/cards`, this.referenceTtl);
   }

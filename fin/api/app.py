@@ -50,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.4.7",
+    version="0.4.12",
 )
 
 
@@ -111,6 +111,27 @@ def _ensure_live_schema() -> None:
         ).fetchone()
         if not all(ready.values()):
             dbm.init_db(conn)
+        conn.execute(
+            "ALTER TABLE account ADD COLUMN IF NOT EXISTS watch_statements "
+            "BIGINT NOT NULL DEFAULT 1"
+        )
+        from ..taxonomy import seed_base_taxonomy, seed_builtin_category_rules
+
+        seed_base_taxonomy(conn)
+        seed_builtin_category_rules(conn)
+        from ..ingest import LEDGER_CATEGORY_BACKFILL, backfill_existing_categories
+
+        marker = conn.execute(
+            "SELECT value FROM setting WHERE key='ledger_category_backfill'"
+        ).fetchone()
+        if marker is None or marker["value"] != LEDGER_CATEGORY_BACKFILL:
+            backfill_existing_categories(conn)
+            conn.execute(
+                "INSERT INTO setting (key, value) VALUES (%s,%s) "
+                "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+                ("ledger_category_backfill", LEDGER_CATEGORY_BACKFILL),
+            )
+        conn.commit()
     finally:
         conn.close()
 

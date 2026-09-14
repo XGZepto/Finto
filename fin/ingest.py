@@ -233,6 +233,8 @@ def apply_category_rules(conn, txns: Iterable[Txn]) -> int:
         return 0
     touched = 0
     for t in txns:
+        if t.category is not None:
+            continue
         for r in rules:
             if r["account_id"] and r["account_id"] != t.account_id:
                 continue
@@ -395,6 +397,7 @@ def ingest_file(
     dbm.insert_statement_file(conn, sf)
     dbm.insert_raw_records(conn, raws)
     apply_category_rules(conn, txns)
+    apply_kind_categories(txns, accounts)
     dbm.insert_txns(conn, txns)
 
     # Store the statement's own balance figures — the independent check that we
@@ -531,6 +534,43 @@ def label_payment_gateways(txns: Iterable[Txn]) -> int:
             t.category = "proxy_payment"
             t.subcategory = gateway.lower().replace(" ", "_")
     return labelled
+
+
+KIND_CATEGORIES = {
+    TxnKind.TRANSFER: ("transfers", "internal"),
+    TxnKind.CC_PAYMENT: ("transfers", "card_payment"),
+    TxnKind.FX_CONVERSION: ("transfers", "fx"),
+    TxnKind.INTEREST: ("interest", "interest"),
+    TxnKind.REWARD: ("rewards", "points"),
+    TxnKind.ATM: ("other", "cash"),
+    TxnKind.INCOME: ("income", "other_income"),
+    TxnKind.INSTALLMENT: ("credit", "installment"),
+}
+
+
+def apply_kind_categories(txns: Iterable[Txn], accounts: dict | None = None) -> int:
+    """Fill a category from kind when no merchant rule applied.
+
+    Transfers, card payments and FX swaps are not spend; leaving them blank
+    inflates the uncategorised queue. A fee on a card is a card fee.
+    """
+    accounts = accounts or {}
+    cards = {aid for aid, a in accounts.items()
+             if a.account_type in (AccountType.CREDIT_CARD, AccountType.CHARGE_CARD)}
+    touched = 0
+    for t in txns:
+        if t.category is not None:
+            continue
+        if t.kind is TxnKind.FEE:
+            t.category = "fees"
+            t.subcategory = "card" if t.account_id in cards else "bank"
+            touched += 1
+            continue
+        pair = KIND_CATEGORIES.get(t.kind)
+        if pair:
+            t.category, t.subcategory = pair
+            touched += 1
+    return touched
 
 
 def assign_default_kinds(txns: Iterable[Txn], accounts: dict) -> int:
@@ -721,6 +761,8 @@ def reconcile(
     # default kinds, so a gateway charge is a purchase like any other.
     gateways = label_payment_gateways(live)
     summary_kinds = assign_default_kinds(live, accounts)
+    apply_category_rules(conn, live)
+    kind_categories = apply_kind_categories(live, accounts)
 
     dbm.update_txn_links(conn, txns)
     conn.commit()
@@ -740,6 +782,7 @@ def reconcile(
         "income_streams": len(income_streams),
         "income_labelled": income_labelled,
         "kinds_defaulted": summary_kinds,
+        "kind_categories": kind_categories,
         "payment_gateways_labelled": gateways,
         "semantic_kinds_corrected": semantic_kinds_corrected,
     }
@@ -762,3 +805,28 @@ def reconcile(
     summary["balance_checks"] = [c for c in check_all(conn)
                                  if c.get("status") == "discrepancy"]
     return summary
+
+
+LEDGER_CATEGORY_BACKFILL = "0.4.12"
+
+
+def backfill_existing_categories(conn) -> dict[str, int]:
+    """Apply gateway labels, merchant rules and kind defaults to the live ledger.
+
+    Ingest only categorises the file being imported. Rows that arrived before a
+    rule existed stay blank until this runs.
+    """
+    accounts = dbm.load_accounts(conn)
+    txns = dbm.load_txns(conn, include_duplicates=True)
+    live = [t for t in txns if t.duplicate_of_id is None]
+    gateways = label_payment_gateways(live)
+    kinds = assign_default_kinds(live, accounts)
+    rules = apply_category_rules(conn, live)
+    kind_cats = apply_kind_categories(live, accounts)
+    dbm.update_txn_links(conn, live)
+    return {
+        "payment_gateways_labelled": gateways,
+        "kinds_defaulted": kinds,
+        "rules_applied": rules,
+        "kind_categories": kind_cats,
+    }

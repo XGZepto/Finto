@@ -62,6 +62,9 @@ CREATE TABLE IF NOT EXISTS account (
     is_own_account    BIGINT NOT NULL DEFAULT 1,   -- drives transfer matching
     opened_on         TEXT,
     closed_on         TEXT,
+    -- 0: keep the account in the ledger but do not nag for a new statement
+    -- (unused Wise/Mox wallets, closed products still holding history).
+    watch_statements  BIGINT NOT NULL DEFAULT 1,
     notes             TEXT
 );
 

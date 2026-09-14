@@ -158,6 +158,8 @@ class Account(BaseModel):
     aliases: list[str] = Field(default_factory=list)
     opened_on: date | None = None
     closed_on: date | None = None
+    # False keeps history in the ledger without expecting a monthly statement.
+    watch_statements: bool = True
     notes: str | None = None
 
     @model_validator(mode="after")

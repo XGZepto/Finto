@@ -12,8 +12,13 @@
       <div class="freshness-copy">
         <strong>{{ fresh.stale_count }} statement{{ fresh.stale_count === 1 ? '' : 's' }} overdue</strong>
         <span>
-          @for (a of fresh.accounts; track a.account_id) {
-            @if (a.status === 'stale') { <b>{{ a.display_name }}</b><small>expected {{ a.expected_on }}</small> }
+          @for (a of staleAccounts().slice(0, 5); track a.account_id) {
+            <button type="button" class="stale-account" (click)="goAccount(a.account_id)">
+              <b>{{ a.display_name }}</b><small>expected {{ a.expected_on }}</small>
+            </button>
+          }
+          @if (staleAccounts().length > 5) {
+            <small>and {{ staleAccounts().length - 5 }} more</small>
           }
         </span>
       </div>

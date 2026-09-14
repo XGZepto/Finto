@@ -367,6 +367,103 @@ def test_empty_statement_advances_freshness_for_every_covered_account(
     assert rows["amex_us_main"]["statement_empty"] is False
 
 
+def test_txn_dates_cover_freshness_when_the_file_has_no_period(
+    client, database_url,
+):
+    """A Wise activity CSV has no printed statement date; the newest row is coverage."""
+    covered = (
+        datetime.now(ZoneInfo("Asia/Hong_Kong")).date() - timedelta(days=5)
+    ).isoformat()
+    conn = dbm.connect(database_url)
+    conn.execute(
+        "INSERT INTO statement_file "
+        "(id,source_path,file_sha256,institution_id,account_id,file_format,parser_id,"
+        " parser_version,imported_at,row_count) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        ("wise-activity", "wise-new.csv", "wise-activity-hash", "wise", "wise_hkd",
+         "csv", "wise_csv", "1.0", covered, 1),
+    )
+    conn.execute(
+        "INSERT INTO txn (id,account_id,txn_date,status,amount_booked,currency_booked,"
+        "description_raw,description_norm,kind,dedup_key,statement_file_id,"
+        "created_at,updated_at) VALUES "
+        "(%s,%s,%s,'posted',%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        ("wise-activity-txn", "wise_hkd", covered, 20000, "HKD",
+         "TOP UP", "TOP UP", "transfer", "wise-activity-dedup", "wise-activity",
+         covered, covered),
+    )
+    conn.commit()
+    conn.close()
+    rows = {r["account_id"]: r for r in client.get("/api/statement-freshness").json()["accounts"]}
+    assert rows["wise_hkd"]["statement_date"] == covered
+    assert rows["wise_hkd"]["status"] == "current"
+
+
+def test_closed_and_idle_accounts_are_not_statement_overdue(client, database_url):
+    today = datetime.now(ZoneInfo("Asia/Hong_Kong")).date()
+    old = (today - timedelta(days=80)).isoformat()
+    conn = dbm.connect(database_url)
+    from fin.models import Account
+    dbm.upsert_account(conn, Account(
+        id="amex_us_hysa", institution_id="amex_us",
+        display_name="AMEX US High Yield Savings", account_type="savings",
+        primary_currency="USD", closed_on=today - timedelta(days=30),
+        watch_statements=False))
+    dbm.upsert_account(conn, Account(
+        id="wise_krw", institution_id="wise", display_name="Wise KRW",
+        account_type="multi_currency", primary_currency="KRW",
+        balance_group="wise_personal", watch_statements=False))
+    dbm.upsert_account(conn, Account(
+        id="hsbc_mpf", institution_id="hsbc_hk", display_name="HSBC MPF",
+        account_type="investment", primary_currency="HKD"))
+    for aid, sha in (("amex_us_hysa", "hysa-hash"), ("wise_krw", "krw-hash"),
+                     ("hsbc_mpf", "mpf-hash")):
+        conn.execute(
+            "INSERT INTO statement_file "
+            "(id,source_path,file_sha256,institution_id,account_id,file_format,parser_id,"
+            " parser_version,imported_at,row_count,statement_date) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (f"stale-{aid}", f"{aid}.pdf", sha, "amex_us" if "amex" in aid else
+             ("wise" if "wise" in aid else "hsbc_hk"),
+             aid, "pdf", "pdf_statement", "2.0", old, 1, old),
+        )
+    conn.commit()
+    conn.close()
+
+    body = client.get("/api/statement-freshness").json()
+    rows = {r["account_id"]: r for r in body["accounts"]}
+    assert rows["amex_us_hysa"]["status"] == "closed"
+    assert rows["wise_krw"]["status"] == "ignored"
+    assert rows["hsbc_mpf"]["status"] == "ignored"
+    assert rows["amex_us_hysa"]["account_id"] not in {
+        r["account_id"] for r in body["accounts"] if r["status"] == "stale"
+    }
+
+
+def test_patch_account_marks_closed_and_stops_watching(client):
+    listed = {a["id"]: a for a in client.get("/api/accounts").json()["accounts"]}
+    assert listed["amex_us_main"]["watch_statements"] is True
+    assert listed["amex_us_main"]["closed_on"] is None
+
+    closed = client.patch("/api/accounts/amex_us_main", json={
+        "closed_on": "2026-01-15", "watch_statements": False,
+    })
+    assert closed.status_code == 200
+    assert closed.json()["closed_on"] == "2026-01-15"
+    assert closed.json()["watch_statements"] is False
+    assert client.get("/api/statement-freshness").json()["accounts"]
+    row = next(r for r in client.get("/api/statement-freshness").json()["accounts"]
+               if r["account_id"] == "amex_us_main")
+    assert row["status"] == "closed"
+
+    reopened = client.patch("/api/accounts/amex_us_main", json={
+        "closed_on": None, "watch_statements": True,
+    })
+    assert reopened.status_code == 200
+    assert reopened.json()["closed_on"] is None
+    assert reopened.json()["watch_statements"] is True
+
+
 def test_transfers_are_excluded_by_default(client):
     """Money moved between your own accounts is not spending."""
     default = client.get("/api/transactions").json()["total"]

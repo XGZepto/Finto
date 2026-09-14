@@ -47,6 +47,8 @@ def test_schema_seeds_the_category_pool(conn):
     taxonomy = load_taxonomy(conn)
     assert "dining" in taxonomy
     assert "coffee" in taxonomy["dining"]
+    assert "alipay" in taxonomy["proxy_payment"]
+    assert "internal" in taxonomy["transfers"]
 
 
 def test_new_category_is_explicitly_added_to_the_pool(conn):
