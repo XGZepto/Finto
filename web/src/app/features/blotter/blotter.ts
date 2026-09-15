@@ -14,6 +14,7 @@ import { FilterBar } from '../../shared/filter-bar';
 import { FintoIcon } from '../../shared/finto-icon';
 import { FintoSelect } from '../../shared/finto-select';
 import { BLOTTER_PREFETCH_PX, blotterTailDue } from './blotter-tail';
+import { showRawDescription as rawDescriptionVisible } from './blotter-title';
 
 /**
  * The blotter.
@@ -697,6 +698,10 @@ export class BlotterPage implements OnDestroy {
           : word,
       )
       .join(' ');
+  }
+
+  showRawDescription(txn: Txn): boolean {
+    return rawDescriptionVisible(txn);
   }
 
   isTravel(txn: Txn): boolean {

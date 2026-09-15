@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.15 — 2026-09-16
+
+- HSBC One wrap keeps a dated counterparty with the next amount, so salary no
+  longer leaks onto the previous card payment. Savings rows get a readable
+  title (Mox, Pulse, EveryMile, employer) instead of the HC/N-ref line. The
+  blotter hides that issuer soup once a title exists, and a description can
+  be corrected with PATCH.
+
 ## 0.4.14 — 2026-09-14
 
 - Keep the blotter loading the next page after the list paints. A sentinel

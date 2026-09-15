@@ -121,6 +121,13 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
         raise HTTPException(400, "nothing to update")
     if fields.get("category", ...) is None or fields.get("review_state", ...) is None:
         raise HTTPException(422, "category and review_state cannot be cleared")
+    if "description" in fields:
+        raw = (fields["description"] or "").strip()
+        if not raw:
+            raise HTTPException(422, "description cannot be cleared")
+        from ...models import normalize_description
+        fields["description_raw"] = raw
+        fields["description_norm"] = normalize_description(raw)
 
     row = conn.execute(
         "SELECT t.id,t.category,t.subcategory,a.user_id FROM txn t "
@@ -140,7 +147,10 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
         if not valid:
             raise HTTPException(422, "category/subcategory is not in the taxonomy")
 
-    allowed = {"category", "subcategory", "notes", "review_state", "merchant"}
+    allowed = {
+        "category", "subcategory", "notes", "review_state", "merchant",
+        "description_raw", "description_norm",
+    }
     sets = [f"{k}=%s" for k in fields if k in allowed]
     params = [v for k, v in fields.items() if k in allowed]
     if sets:
@@ -150,7 +160,7 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
 
     now = datetime.now().isoformat()
     for key, value in fields.items():
-        if key in ("category", "merchant", "subcategory"):
+        if key in ("category", "merchant", "subcategory", "description"):
             conn.execute(
                 "INSERT INTO txn_annotation (txn_id, field, value, source, "
                 "confidence, created_at) VALUES (%s,%s,%s,'manual',1.0,%s) "

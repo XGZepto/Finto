@@ -455,7 +455,7 @@ def _apply_section(
 
     current_date: date | None = None
     current_currency = currency
-    pending_desc: list[tuple[int, str]] = []
+    pending_desc: list[tuple[int, str, bool]] = []
     last_row: ExtractedRow | None = None
     skip_until = -1
     #: Facts a marker has declared true of the rows still to come, and where the
@@ -538,14 +538,6 @@ def _apply_section(
 
         if found_date is not None:
             current_date = found_date
-            # A date on a row that carries no amount opens a new entry, so any
-            # text held over belongs to something already emitted and is
-            # dropped. When the date and the amount share a row the held text
-            # is this entry's own description, wrapped above it — Mox sets a
-            # description over three rows with the figures on the middle one —
-            # so it must survive.
-            if amount is None:
-                pending_desc.clear()
 
         if amount is None:
             if last_row is not None and found_date is None:
@@ -563,7 +555,11 @@ def _apply_section(
             if spec.wraps:
                 desc = " ".join(p for p in (date_remainder, _describe(cells, spec)) if p)
                 if desc:
-                    pending_desc.append((idx, desc))
+                    # A dated no-amount line is the next entry's counterparty
+                    # (HSBC One prints "21 Aug ZHOU YIXIANG" above the HC
+                    # figures). Undated wraps — card numbers, FPS ids — still
+                    # belong to whichever figures row they sit closer to.
+                    pending_desc.append((idx, desc, found_date is not None))
             continue
 
         if current_date is None:
@@ -968,18 +964,24 @@ def _join(parts) -> str:
 
 
 def _split_wrapped(
-    pending: list[tuple[int, str]], previous: ExtractedRow | None, row_idx: int
+    pending: list[tuple[int, str, bool]], previous: ExtractedRow | None, row_idx: int
 ) -> tuple[list[str], list[str]]:
     """Share wrapped lines between the transaction above and the one below.
 
-    A line goes to the nearer figures row; a tie goes to the row above.
+    Undated continuation text goes to the nearer figures row; a tie goes to
+    the row above. A line that carried its own date is the start of the next
+    entry, so it always stays with this row even when it sits closer to the
+    figures already emitted.
     Returns (this row's lines, the previous row's lines).
     """
     if previous is None:
-        return [text for _i, text in pending], []
+        return [text for _i, text, _dated in pending], []
     mine, theirs = [], []
-    for i, text in pending:
-        (theirs if i - previous.line_index <= row_idx - i else mine).append(text)
+    for i, text, dated in pending:
+        if dated or i - previous.line_index > row_idx - i:
+            mine.append(text)
+        else:
+            theirs.append(text)
     return mine, theirs
 
 

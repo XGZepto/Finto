@@ -114,7 +114,7 @@
                   <span class="muted small block">{{ t.description }}</span>
                 } @else {
                   <span class="primary">{{ displayTitle(t) }}@if (t.review_state === 'flagged') { <i class="review-flag" title="Flagged for review" aria-label="Flagged for review">!</i> }</span>
-                  @if (t.merchant && t.description !== t.merchant) {
+                  @if (showRawDescription(t)) {
                     <span class="muted small block">{{ t.description }}</span>
                   }
                 }
@@ -254,7 +254,7 @@
                     [fallbackCategory]="txn.category || 'other'" />
       </span>
       <h2 id="transaction-title">{{ txn.merchant || txn.description }}</h2>
-      @if (txn.description !== (txn.merchant || txn.description)) { <p class="transaction-description">{{ txn.description }}</p> }
+      @if (showRawDescription(txn)) { <p class="transaction-description">{{ txn.description }}</p> }
       <div class="amount-hero" [class.pos]="txn.booked.amount > 0">
         {{ txn.booked | money }}
       </div>

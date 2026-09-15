@@ -104,6 +104,37 @@ def test_dropped_row_is_caught_by_reconciliation():
     assert any("100.00" in p or "unaccounted" in p for p in report.problems)
 
 
+def test_hsbc_savings_dated_name_stays_with_the_next_amount():
+    """HSBC One prints the counterparty on a dated line above the figures.
+
+    Geometric wrap used to glue that name onto the previous debit when the
+    name sat closer to it than to its own amount — salary leaked onto a card
+    payment, and the salary row kept only the masked self-name.
+    """
+    doc = "\n".join([
+        row((0, "MR A CUSTOMER"), (40, "Portfolio Summary")),
+        row((0, "14 January 2025")),
+        row((0, "HSBC One Account Transaction History")),
+        row((0, "HKD Savings")),
+        row((0, "Date"), (10, "Transaction Details"),
+            right(55, "Deposit"), right(70, "Withdrawal"), right(85, "Balance")),
+        row((0, "14 Dec"), (10, "B/F BALANCE"), right(85, "200.00")),
+        row((0, "20 Dec"), (10, "N82079150069(20DEC24)"),
+            right(70, "100.00"), right(85, "100.00")),
+        row((0, "21 Dec"), (10, "QUBE R & T HK LTD")),
+        row((10, "SALARY 21DEC"), right(55, "50.00"), right(85, "150.00")),
+        row((0, "Total Relationship Balance")),
+    ])
+    result, report = run(make_document(doc), "hsbc_hk_savings")
+    assert amounts(result) == [
+        ("2024-12-20", -10000),
+        ("2024-12-21", 5000),
+    ]
+    assert "QUBE" not in result.rows[0].description.upper()
+    assert "QUBE" in result.rows[1].description.upper()
+    assert report.status == "verified"
+
+
 # ---------------------------------------------------------------------------
 # Chase — running balance, and invisible markers colliding with real rows
 # ---------------------------------------------------------------------------
