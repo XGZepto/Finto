@@ -30,6 +30,7 @@ from pathlib import Path
 from . import db as dbm
 from .dedup import run_dedup
 from .enrich import payment_gateway
+from .hsbc_labels import label_hsbc_savings_merchants
 from .installments import find_installments, find_origination_pairs
 from .integrity import (
     check_all,
@@ -397,6 +398,7 @@ def ingest_file(
     dbm.insert_statement_file(conn, sf)
     dbm.insert_raw_records(conn, raws)
     apply_category_rules(conn, txns)
+    label_hsbc_savings_merchants(txns)
     apply_kind_categories(txns, accounts)
     dbm.insert_txns(conn, txns)
 

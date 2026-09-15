@@ -82,6 +82,7 @@ class TransactionPatch(BaseModel):
     notes: str | None = None
     review_state: Literal["unreviewed", "confirmed", "flagged"] | None = None
     merchant: str | None = None
+    description: str | None = None
 
 
 class ResolveRequest(BaseModel):

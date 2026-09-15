@@ -552,6 +552,18 @@ def test_patch_records_a_manual_annotation(client):
     assert again["notes"] == "team lunch"
 
 
+def test_patch_can_rewrite_a_bad_statement_description(client):
+    txn_id = client.get("/api/transactions").json()["items"][0]["id"]
+    r = client.patch(
+        f"/api/transactions/{txn_id}",
+        json={"merchant": "Mox", "description": "Mox"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["merchant"] == "Mox"
+    assert body["description"] == "Mox"
+
+
 def test_patch_can_clear_subcategory_when_category_changes(client, conn):
     txn_id = client.get("/api/transactions").json()["items"][0]["id"]
     categorised = client.patch(
