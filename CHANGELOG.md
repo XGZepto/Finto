@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.16 — 2026-09-25
+
+- Import an HSBC MPF print that lists the three account balances on Member
+  Returns, without separate Account Returns PDFs. The snapshot date stays on
+  the printed balance date when that page does not show an earlier unit price.
+
 ## 0.4.15 — 2026-09-16
 
 - HSBC One wrap keeps a dated counterparty with the next amount, so salary no

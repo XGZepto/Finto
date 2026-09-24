@@ -139,7 +139,33 @@ def _parse_member_returns(path: str | Path) -> InvestmentSnapshot:
         total_value=Money.from_decimal(total, "HKD"),
         source="hsbc_mpf_pdf",
         holdings=holdings,
+        subaccounts=_member_subaccounts(text),
     )
+
+
+def _member_subaccounts(text: str) -> list[SubaccountBalance]:
+    """Account split printed on Member Returns, when Account Returns PDFs are absent."""
+    found: list[SubaccountBalance] = []
+    seen: set[str] = set()
+    for label, account_id in _MPF_ACCOUNT_ROLES.items():
+        match = re.search(rf"{re.escape(label)}\S*\s+(\d+)\s+{_MONEY}", text)
+        if not match or account_id in seen:
+            continue
+        seen.add(account_id)
+        found.append(SubaccountBalance(
+            account_id=account_id,
+            member_no=match.group(1),
+            balance=Money.from_decimal(_decimal(match.group(2)), "HKD"),
+        ))
+    return found
+
+
+def _unit_price_date(text: str) -> date | None:
+    match = re.search(
+        r"unit price of Constituent Fund as at (\d{1,2} [A-Z][a-z]{2} \d{4})",
+        text,
+    )
+    return _date(match.group(1)) if match else None
 
 
 def _parse_account_returns(path: str | Path) -> SubaccountBalance:
@@ -405,17 +431,26 @@ def parse_hsbc_mpf_pdf_bundle(
     member_docs = [item for item in parsed if item[1] == "member_returns"]
     account_docs = [item for item in parsed if item[1] == "account_returns"]
     activity_docs = [item for item in parsed if item[1] == "contribution_history"]
-    if len(member_docs) != 1 or len(account_docs) != 3 or not activity_docs:
+    if len(member_docs) != 1 or not activity_docs:
+        raise ValueError(
+            "MPF bundle needs one Member Returns PDF and at least one "
+            "Contribution History PDF")
+    if account_docs and len(account_docs) != 3:
         raise ValueError(
             "MPF bundle needs one Member Returns, three Account Returns, "
             "and at least one Contribution History PDF")
     snapshot = member_docs[0][2]
     if not isinstance(snapshot, InvestmentSnapshot):
         raise ValueError("MPF member returns extraction produced the wrong data type")
-    subaccounts = [item[2] for item in account_docs]
-    if not all(isinstance(item, SubaccountBalance) for item in subaccounts):
-        raise ValueError("MPF account returns extraction produced the wrong data type")
-    snapshot.subaccounts = subaccounts
+    if account_docs:
+        subaccounts = [item[2] for item in account_docs]
+        if not all(isinstance(item, SubaccountBalance) for item in subaccounts):
+            raise ValueError("MPF account returns extraction produced the wrong data type")
+        snapshot.subaccounts = subaccounts
+    elif len(snapshot.subaccounts) != 3:
+        raise ValueError(
+            "MPF bundle needs one Member Returns, three Account Returns, "
+            "and at least one Contribution History PDF")
     if len({item.account_id for item in snapshot.subaccounts}) != 3:
         raise ValueError("MPF bundle contains duplicate or missing member accounts")
     sub_total = sum(item.balance.amount for item in snapshot.subaccounts)
@@ -424,14 +459,29 @@ def parse_hsbc_mpf_pdf_bundle(
         raise ValueError(
             f"MPF bundle does not reconcile: reported={snapshot.total_value.amount}, "
             f"accounts={sub_total}, holdings={holding_total}")
-    # Account Returns explicitly state their holdings use 18 Aug prices; retain
-    # the 19 Aug reporting date in notes but value the coherent snapshot at 18 Aug.
+    # Older Account Returns price holdings the day before the member report
+    # date. A printed "unit price ... as at" date wins; a Member Returns
+    # accounts table uses the balance date it prints.
     if not snapshot.notes:
+        reported = snapshot.as_of_date
+        from .pdf.extract import extract_document as extract_text
+        priced = []
+        if account_docs:
+            for path, _kind, _value, _meta in account_docs:
+                found = _unit_price_date(extract_text(path).text)
+                if found is not None:
+                    priced.append(found)
+        if priced:
+            valuation = priced[0]
+        elif account_docs:
+            valuation = reported - timedelta(days=1)
+        else:
+            valuation = reported
         snapshot.notes = (
-            f"Reported {snapshot.as_of_date.isoformat()}; holdings valued "
-            f"{(snapshot.as_of_date - timedelta(days=1)).isoformat()}"
+            f"Reported {reported.isoformat()}; holdings valued "
+            f"{valuation.isoformat()}"
         )
-        snapshot.as_of_date -= timedelta(days=1)
+        snapshot.as_of_date = valuation
     activities = []
     for _path, _kind, values, _metadata in activity_docs:
         if not isinstance(values, list) or not all(
