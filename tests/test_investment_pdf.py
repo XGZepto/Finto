@@ -62,6 +62,46 @@ def _mpf_bundle(tmp_path):
     return [member, *accounts, *histories]
 
 
+def test_member_returns_accounts_table_replaces_account_pdfs(tmp_path):
+    member = write_pdf(tmp_path / "member.pdf", [
+        "MPF Member Returns",
+        "Overall account balance (HKD) Net contributions and net transfer-in (HKD) "
+        "Account gain/(loss) (HKD)",
+        "192,751.01 180,572.46 12,178.55",
+        "Balances as at 23 Sep 2026",
+        "ValueChoice North America Equity Tracker Fund 1,083.0237 59.6911 64,646.87",
+        "Global Equity Fund 567.5456 34.8636 19,786.68",
+        "ValueChoice Balanced Fund 1,544.8298 21.0463 32,512.95",
+        "Core Accumulation Fund (with de-risking nature) 1,380.9074 32.1868 44,446.99",
+        "Stable Fund 888.5730 14.0561 12,489.87",
+        "ValueChoice Asia Pacific Equity Tracker Fund 68.2641 22.4761 1,534.31",
+        "Growth Fund 209.5036 33.7256 7,065.62",
+        "ValueChoice Europe Equity Tracker Fund 35.8432 26.7440 958.59",
+        "Global Bond Fund 804.9395 11.5650 9,309.13",
+        "Regular Employee 65841230 75,911.37",
+        "Personal Account Holder 15921678 47,773.08",
+        "Tax Deductible Voluntary Contribution Account Holder 84303079 69,066.56",
+    ])
+    history = write_pdf(tmp_path / "history.pdf", [
+        "MPF Contribution History",
+        "MPF Transaction history",
+        "Member account number: 65841230",
+        "11 Sep 2026 Employee mandatory contributions Regular Contribution 1,500.00",
+    ])
+    snapshot, activities, documents = parse_hsbc_mpf_pdf_bundle([member, history])
+    assert snapshot.as_of_date.isoformat() == "2026-09-23"
+    assert snapshot.total_value.amount == 19275101
+    assert {item.account_id: item.balance.amount for item in snapshot.subaccounts} == {
+        "hsbc_mpf_regular": 7591137,
+        "hsbc_mpf_personal": 4777308,
+        "hsbc_mpf_tdvc": 6906656,
+    }
+    assert len(activities) == 1
+    assert {item["classification"] for item in documents} == {
+        "member_returns", "contribution_history",
+    }
+
+
 def test_hsbc_mpf_pdf_bundle_reconciles_snapshot_and_activities(tmp_path):
     snapshot, activities, documents = parse_hsbc_mpf_pdf_bundle(_mpf_bundle(tmp_path))
 
