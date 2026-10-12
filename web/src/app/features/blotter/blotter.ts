@@ -1,7 +1,7 @@
 import { Component, ElementRef, HostListener, Injector, OnDestroy, ViewChild, afterNextRender, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, timeout } from 'rxjs';
 import { Api } from '../../core/api.service';
 import { Refresh } from '../../core/refresh.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
@@ -71,6 +71,7 @@ export class BlotterPage implements OnDestroy {
     this.sentinelEl = el?.nativeElement ?? null;
     if (!el) return;
     const root = this.scrollRoot();
+    this.watchScroll(root);
     this.tailObserver = new IntersectionObserver(
       (entries) => { if (entries.some((e) => e.isIntersecting)) this.loadMore(); },
       {
@@ -84,6 +85,18 @@ export class BlotterPage implements OnDestroy {
   }
   private sentinelEl: HTMLElement | null = null;
   private tailObserver?: IntersectionObserver;
+  private scrollPaneEl: HTMLElement | null = null;
+  private scrollQueued = false;
+  /** Scroll position is the source of truth for "near the end"; the observer
+      alone left a phone idle at the end of the first page. */
+  private onPaneScroll = (): void => {
+    if (this.scrollQueued) return;
+    this.scrollQueued = true;
+    requestAnimationFrame(() => {
+      this.scrollQueued = false;
+      this.checkTail();
+    });
+  };
   private inflight?: Subscription;
   /** Ignore a page that lands after a newer filter/sort reset has started. */
   private fetchSeq = 0;
@@ -228,6 +241,8 @@ export class BlotterPage implements OnDestroy {
         direction: this.direction(),
         convertTo: this.showNative() ? undefined : this.convertTo(),
       })
+      // A request that never answers would hold loadingMore forever.
+      .pipe(timeout({ first: 30_000 }))
       .subscribe({
         next: (page) => {
           if (seq !== this.fetchSeq) return;
@@ -248,6 +263,13 @@ export class BlotterPage implements OnDestroy {
           else this.tailFailed.set(true);
         },
       });
+  }
+
+  private watchScroll(root: HTMLElement | null): void {
+    if (root === this.scrollPaneEl) return;
+    this.scrollPaneEl?.removeEventListener('scroll', this.onPaneScroll);
+    this.scrollPaneEl = root;
+    root?.addEventListener('scroll', this.onPaneScroll, { passive: true });
   }
 
   private scrollRoot(): HTMLElement | null {
@@ -557,6 +579,7 @@ export class BlotterPage implements OnDestroy {
     this.inflight?.unsubscribe();
     this.filterObserver?.disconnect();
     this.tailObserver?.disconnect();
+    this.scrollPaneEl?.removeEventListener('scroll', this.onPaneScroll);
     const pane = scrollPane();
     if (pane) pane.style.overflowY = '';
     this.afterClose = null;

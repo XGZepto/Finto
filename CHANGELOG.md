@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.18 — 2026-10-12
+
+- Keep the blotter loading after the first page on a phone. The tail was
+  driven only by an IntersectionObserver; when it stays silent the list sat
+  at 50 rows with an empty sentinel. The pane's scroll position now drives
+  the same check, the sentinel shows a "Load more" button while idle, and a
+  page request that never answers times out after 30 s into the retry state.
+
 ## 0.4.17 — 2026-10-12
 
 - Fix the phone blotter layout. 0.4.14's desktop-only overflow rule also

@@ -392,6 +392,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 }
 .sentinel span::after { content: '▌'; animation: blink 1.05s steps(1) infinite; }
 .tail-retry { color: var(--warn); font-size: inherit; letter-spacing: inherit; text-transform: inherit; }
+.tail-more { width: 100%; min-height: 52px; font-size: inherit; letter-spacing: inherit; text-transform: inherit; }
 @media (prefers-reduced-motion: reduce) { .sentinel span::after { animation: none; } }
 
 /* Swipe to categorise ------------------------------------------------------
