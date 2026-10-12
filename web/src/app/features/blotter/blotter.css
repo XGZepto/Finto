@@ -369,8 +369,14 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
 @media (min-width: 881px) { td.desc .glyph { display: none; } }
 
 /* Horizontal overflow must not compute a vertical scroller — that eats wheel
-   events on desktop and leaves the page pane (and the sentinel) unmoved. */
-.ledger-card .table-wrap { overflow-x: auto; overflow-y: clip; }
+   events on desktop and leaves the page pane (and the sentinel) unmoved.
+   Desktop only: beside overflow-x: auto, clip computes to hidden, so the wrap
+   is still a scroll container. On a phone that captures the sticky day bands
+   (they pin inside the wrap and land on top of the rows) — there the list
+   rule's overflow: visible has to win. */
+@media (min-width: 881px) {
+  .ledger-card .table-wrap { overflow-x: auto; overflow-y: clip; }
+}
 
 /* Infinite-list loading and completion states share fixed geometry. */
 .sentinel, .list-end {
@@ -385,6 +391,7 @@ button.fact:hover { color: var(--info); border-bottom-color: var(--info); }
   text-transform: uppercase;
 }
 .sentinel span::after { content: '▌'; animation: blink 1.05s steps(1) infinite; }
+.tail-retry { color: var(--warn); font-size: inherit; letter-spacing: inherit; text-transform: inherit; }
 @media (prefers-reduced-motion: reduce) { .sentinel span::after { animation: none; } }
 
 /* Swipe to categorise ------------------------------------------------------
