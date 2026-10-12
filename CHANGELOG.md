@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.4.17 — 2026-10-12
+
+- Fix the phone blotter layout. 0.4.14's desktop-only overflow rule also
+  applied on phones and made the table wrap a scroll container, so day bands
+  pinned inside it and landed on top of the first rows, leaving a gap under
+  the totals. The rule is now desktop-only, and bands pin under the filter
+  bar again.
+- A page that fails to load no longer ends the blotter silently. The tail
+  shows "Couldn't load more · Retry" instead of an empty sentinel that never
+  fires again.
+
 ## 0.4.16 — 2026-09-25
 
 - Import an HSBC MPF print that lists the three account balances on Member

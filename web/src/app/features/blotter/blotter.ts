@@ -103,6 +103,9 @@ export class BlotterPage implements OnDestroy {
   limit = signal(50);
   offset = signal(0);
   loadingMore = signal(false);
+  /** The last append failed. The observer will not fire again while the
+      sentinel stays put, so the tail offers a retry instead of going quiet. */
+  tailFailed = signal(false);
   sort = signal('date');
   direction = signal<'asc' | 'desc'>('desc');
 
@@ -201,6 +204,7 @@ export class BlotterPage implements OnDestroy {
     this.offset.set(0);
     this.status.set('loading');
     this.loadingMore.set(false);
+    this.tailFailed.set(false);
     this.fetch(true, this.fetchSeq);
   }
 
@@ -209,6 +213,7 @@ export class BlotterPage implements OnDestroy {
     if (this.status() === 'loading' || this.loadingMore() || !this.hasMore()) return;
     this.offset.set(this.rows().length);
     this.loadingMore.set(true);
+    this.tailFailed.set(false);
     this.fetch(false, this.fetchSeq);
   }
 
@@ -240,6 +245,7 @@ export class BlotterPage implements OnDestroy {
           if (seq !== this.fetchSeq) return;
           this.loadingMore.set(false);
           if (reset) this.status.set('failed');
+          else this.tailFailed.set(true);
         },
       });
   }

@@ -169,9 +169,11 @@
          already arriving by the time the last row is reached. -->
     @if (hasMore()) {
       <div #sentinel class="sentinel" role="status"
-           [attr.aria-label]="loadingMore() ? 'Loading more transactions' : 'More transactions below'">
+           [attr.aria-label]="loadingMore() ? 'Loading more transactions' : tailFailed() ? 'Could not load more transactions' : 'More transactions below'">
         @if (loadingMore()) {
           <span class="mono">loading</span>
+        } @else if (tailFailed()) {
+          <button type="button" class="bare tail-retry mono" (click)="loadMore()">Couldn't load more · Retry</button>
         }
       </div>
     } @else if (total()) {
