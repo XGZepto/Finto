@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.20 — 2026-10-22
+
+- Leave transfers out of the home summary pie and ranking. Moving money
+  between your own accounts stays in the blotter.
+
 ## 0.4.19 — 2026-10-22
 
 - Add an account from the API, including its primary card, so a new card
