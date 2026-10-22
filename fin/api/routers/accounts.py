@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 
 from ... import db as dbm
-from ...models import Account
+from ...models import Account, Card
 from ..deps import get_conn
 
 router = APIRouter(tags=["accounts"])
@@ -37,6 +38,72 @@ def _serialize_account(a: Account) -> dict:
 def list_accounts(conn=Depends(get_conn)) -> dict:
     accounts = dbm.load_accounts(conn)
     return {"accounts": [_serialize_account(a) for a in accounts.values()]}
+
+
+class AccountCreate(BaseModel):
+    id: str
+    institution_id: str
+    display_name: str
+    account_type: str
+    primary_currency: str
+    masked_number: str | None = None
+    aliases: list[str] = Field(default_factory=list)
+    balance_group: str | None = None
+    watch_statements: bool = True
+    cardholder_name: str | None = None
+    last4: str | None = None
+
+
+@router.post("/accounts", status_code=201)
+def create_account(body: AccountCreate, request: Request) -> dict:
+    """Add an account for the signed-in user.
+
+    Row security cannot see an account until it has an access grant, so this
+    uses the maintenance connection and stamps the caller as owner.
+    """
+    if not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", body.id):
+        raise HTTPException(422, "account id must be a lowercase slug")
+    user_id = request.state.user_id
+    conn = dbm.connect()
+    try:
+        if conn.execute(
+            "SELECT 1 FROM institution WHERE id=%s", (body.institution_id,)
+        ).fetchone() is None:
+            raise HTTPException(422, "unknown institution")
+        if conn.execute("SELECT 1 FROM account WHERE id=%s", (body.id,)).fetchone():
+            raise HTTPException(409, "account already exists")
+        account = Account(
+            id=body.id,
+            institution_id=body.institution_id,
+            display_name=body.display_name,
+            account_type=body.account_type,
+            primary_currency=body.primary_currency,
+            masked_number=body.masked_number,
+            aliases=body.aliases,
+            balance_group=body.balance_group,
+            watch_statements=body.watch_statements,
+        )
+        dbm.upsert_account(conn, account, user_id=user_id)
+        if body.last4 or body.cardholder_name:
+            dbm.upsert_card(conn, Card(
+                id=f"{body.id}_primary",
+                account_id=body.id,
+                cardholder_name=body.cardholder_name or "",
+                last4=body.last4,
+            ))
+        conn.commit()
+        created = dbm.load_accounts(conn).get(body.id)
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    if created is None:
+        raise HTTPException(500, "account was not saved")
+    return _serialize_account(created)
 
 
 class AccountPatch(BaseModel):

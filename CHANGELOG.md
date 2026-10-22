@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.19 — 2026-10-22
+
+- Add an account from the API, including its primary card, so a new card
+  statement can be imported without a database session.
+
 ## 0.4.18 — 2026-10-12
 
 - Keep the blotter loading after the first page on a phone. The tail was
