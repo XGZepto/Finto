@@ -249,10 +249,10 @@ export class SummaryPage {
   });
 
   constructor() {
-    this.api.statementFreshness().subscribe({ next: (r) => this.freshness.set(r) });
     effect(() => {
       this.convertTo();
       this.refreshes.token();
+      this.api.statementFreshness().subscribe({ next: (r) => this.freshness.set(r) });
       this.load();
     });
   }

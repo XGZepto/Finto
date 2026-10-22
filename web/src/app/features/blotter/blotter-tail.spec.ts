@@ -11,6 +11,10 @@ describe('blotterTailDue', () => {
     scrollRemain: 900,
   };
 
+  it('stays quiet after a failed append until retry is asked for', () => {
+    assert.equal(blotterTailDue({ ...base, hold: true, scrollRemain: 0 }), false);
+  });
+
   it('does not load when the list is complete or a page is in flight', () => {
     assert.equal(blotterTailDue({ ...base, hasMore: false, scrollRemain: 0 }), false);
     assert.equal(blotterTailDue({ ...base, busy: true, scrollRemain: 0 }), false);

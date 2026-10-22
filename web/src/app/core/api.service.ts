@@ -208,8 +208,7 @@ addTag(id: string, tag: string): Observable<Txn> {
   }
 
   statementFreshness(): Observable<StatementFreshness> {
-    return this.cached<StatementFreshness>(
-      `${this.base}/statement-freshness`, this.computedTtl);
+    return this.http.get<StatementFreshness>(`${this.base}/statement-freshness`);
   }
 
   // --- Import -------------------------------------------------------------
