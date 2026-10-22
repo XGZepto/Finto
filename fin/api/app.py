@@ -50,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.4.20",
+    version="0.4.21",
 )
 
 
@@ -505,10 +505,14 @@ async def private_route_cache(request: Request, call_next):
         computed = path in {
             "/api/summary", "/api/positions", "/api/coverage", "/api/flows",
             "/api/integrity", "/api/installments", "/api/investments",
-            "/api/statement-freshness", "/api/composition",
+            "/api/composition",
         } or path.startswith(("/api/investments/", "/api/installments/", "/api/details/"))
+        # Freshness must not be reused after an import. A 30-minute max-age
+        # plus a day of stale-while-revalidate kept the overdue banner up
+        # after the statement was already in the ledger.
+        live = path == "/api/statement-freshness"
         response.headers["Cache-Control"] = (
-            "no-store" if path.startswith(("/api/auth/", "/api/agent/")) or volatile
+            "no-store" if path.startswith(("/api/auth/", "/api/agent/")) or volatile or live
             else "private, max-age=3600, stale-while-revalidate=86400" if stable
             else "private, max-age=1800, stale-while-revalidate=86400" if computed
             else "private, max-age=300, stale-while-revalidate=3600"

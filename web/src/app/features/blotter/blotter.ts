@@ -1,7 +1,7 @@
 import { Component, ElementRef, HostListener, Injector, OnDestroy, ViewChild, afterNextRender, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription, timeout } from 'rxjs';
+import { Subscription, finalize, timeout } from 'rxjs';
 import { Api } from '../../core/api.service';
 import { Refresh } from '../../core/refresh.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
@@ -233,7 +233,7 @@ export class BlotterPage implements OnDestroy {
   private fetch(reset: boolean, seq: number): void {
     if (reset) this.status.set('loading');
     this.inflight?.unsubscribe();
-    this.inflight = this.api
+    const sub = this.api
       .transactions(this.filters.filter(), {
         limit: this.limit(),
         offset: this.offset(),
@@ -241,28 +241,41 @@ export class BlotterPage implements OnDestroy {
         direction: this.direction(),
         convertTo: this.showNative() ? undefined : this.convertTo(),
       })
-      // A request that never answers would hold loadingMore forever.
-      .pipe(timeout({ first: 30_000 }))
+      // A request that never answers would hold loadingMore forever, and the
+      // retry button calls loadMore which then returns immediately.
+      .pipe(
+        timeout({ first: 30_000 }),
+        finalize(() => {
+          if (seq === this.fetchSeq && this.inflight === sub) this.loadingMore.set(false);
+        }),
+      )
       .subscribe({
         next: (page) => {
           if (seq !== this.fetchSeq) return;
-          this.rows.update((rows) => (reset ? page.items : [...rows, ...page.items]));
+          const seen = new Set(this.rows().map((row) => row.id));
+          const fresh = reset ? page.items : page.items.filter((row) => !seen.has(row.id));
+          if (!reset && page.items.length > 0 && fresh.length === 0) {
+            this.tailFailed.set(true);
+            return;
+          }
+          this.rows.update((rows) => (reset ? page.items : [...rows, ...fresh]));
           if (page.total != null) this.total.set(page.total);
           else if (!reset && !page.items.length) this.total.set(this.rows().length);
           if (page.totals) this.scopeTotals.set(page.totals);
           if (page.normalised !== undefined) this.normalised.set(page.normalised ?? null);
           this.status.set('ok');
-          this.loadingMore.set(false);
+          this.tailFailed.set(false);
           this.queueTailCheck();
           if (reset) this.openFromQuery();
         },
         error: () => {
           if (seq !== this.fetchSeq) return;
-          this.loadingMore.set(false);
           if (reset) this.status.set('failed');
           else this.tailFailed.set(true);
+          this.ensureScrollRoot();
         },
       });
+    this.inflight = sub;
   }
 
   private watchScroll(root: HTMLElement | null): void {
@@ -270,6 +283,25 @@ export class BlotterPage implements OnDestroy {
     this.scrollPaneEl?.removeEventListener('scroll', this.onPaneScroll);
     this.scrollPaneEl = root;
     root?.addEventListener('scroll', this.onPaneScroll, { passive: true });
+  }
+
+  /** The scroll pane can appear after the sentinel. Rebind when it does. */
+  private ensureScrollRoot(): void {
+    const root = this.scrollRoot();
+    const changed = root !== this.scrollPaneEl;
+    this.watchScroll(root);
+    const el = this.sentinelEl;
+    if (!changed || !el) return;
+    this.tailObserver?.disconnect();
+    this.tailObserver = new IntersectionObserver(
+      (entries) => { if (entries.some((e) => e.isIntersecting)) this.loadMore(); },
+      {
+        root: root instanceof HTMLElement ? root : null,
+        rootMargin: `${BLOTTER_PREFETCH_PX}px 0px`,
+        threshold: 0,
+      },
+    );
+    this.tailObserver.observe(el);
   }
 
   private scrollRoot(): HTMLElement | null {
@@ -297,6 +329,8 @@ export class BlotterPage implements OnDestroy {
   }
 
   private checkTail(): void {
+    this.ensureScrollRoot();
+    if (this.tailFailed()) return;
     const el = this.sentinelEl;
     const pane = this.scrollRoot();
     const root = pane instanceof HTMLElement ? pane.getBoundingClientRect() : {
@@ -310,6 +344,7 @@ export class BlotterPage implements OnDestroy {
       scrollRemain: pane instanceof HTMLElement
         ? pane.scrollHeight - pane.scrollTop - pane.clientHeight
         : null,
+      hold: this.tailFailed(),
     })) this.loadMore();
   }
 

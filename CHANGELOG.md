@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.21 — 2026-10-22
+
+- Stop caching the statement-freshness response. A stale copy kept the
+  overdue banner up for a day after the statement was already imported.
+- A blotter page that fails or comes back empty no longer leaves the tail
+  spinning. The retry control works without reloading the page.
+
 ## 0.4.20 — 2026-10-22
 
 - Leave transfers out of the home summary pie and ranking. Moving money

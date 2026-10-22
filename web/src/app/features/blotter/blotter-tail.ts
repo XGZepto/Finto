@@ -17,8 +17,10 @@ export function blotterTailDue(input: {
   rootBottom: number;
   scrollRemain: number | null;
   prefetchPx?: number;
+  /** A failed append stays failed until the retry control asks again. */
+  hold?: boolean;
 }): boolean {
-  if (!input.hasMore || input.busy) return false;
+  if (!input.hasMore || input.busy || input.hold) return false;
   const prefetch = input.prefetchPx ?? BLOTTER_PREFETCH_PX;
   if (input.scrollRemain != null && input.scrollRemain <= prefetch) return true;
   if (input.sentinelTop == null) return false;
