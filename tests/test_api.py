@@ -440,6 +440,37 @@ def test_closed_and_idle_accounts_are_not_statement_overdue(client, database_url
     }
 
 
+def test_create_account_with_card(client):
+    created = client.post("/api/accounts", json={
+        "id": "hsbc_hk_red",
+        "institution_id": "hsbc_hk",
+        "display_name": "HSBC Red",
+        "account_type": "credit_card",
+        "primary_currency": "hkd",
+        "masked_number": "****3757",
+        "aliases": ["HSBC RED"],
+        "cardholder_name": "ZHOU YIXIANG",
+        "last4": "3757",
+    })
+    assert created.status_code == 201
+    assert created.json()["id"] == "hsbc_hk_red"
+    assert created.json()["primary_currency"] == "HKD"
+    assert created.json()["watch_statements"] is True
+    cards = client.get("/api/cards").json()["cards"]
+    assert any(
+        card["account_id"] == "hsbc_hk_red" and card["last4"] == "3757"
+        for card in cards
+    )
+    again = client.post("/api/accounts", json={
+        "id": "hsbc_hk_red",
+        "institution_id": "hsbc_hk",
+        "display_name": "HSBC Red",
+        "account_type": "credit_card",
+        "primary_currency": "HKD",
+    })
+    assert again.status_code == 409
+
+
 def test_patch_account_marks_closed_and_stops_watching(client):
     listed = {a["id"]: a for a in client.get("/api/accounts").json()["accounts"]}
     assert listed["amex_us_main"]["watch_statements"] is True
