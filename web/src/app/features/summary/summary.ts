@@ -77,6 +77,9 @@ export class SummaryPage {
     if (!this.convertTo()) return [];
     const map = new Map<string, { spend: number; income: number; rows: number }>();
     for (const r of this.rows()) {
+      // Moving money between your own accounts is not spending. It stays in
+      // the blotter, but it should not take a slice of the pie or a rank.
+      if (this.trivialBucket(r.bucket)) continue;
       const spend = r.spend_converted?.ok ? r.spend_converted.amount : null;
       const income = r.income_converted?.ok ? r.income_converted.amount : null;
       if (spend === null) continue;   // unconvertible: excluded, and said so
@@ -326,6 +329,13 @@ export class SummaryPage {
 
   setConvertTo(currency: string): void {
     this.preferences.setBaseCurrency(currency);
+  }
+
+  /** Categories and kinds that only record money moving, not what it bought. */
+  private trivialBucket(bucket: string): boolean {
+    const key = bucket.trim().toLowerCase();
+    return key === 'transfers' || key === 'transfer' || key === 'cc_payment'
+      || key === 'fx_conversion' || key === 'fx';
   }
 
   private savedGroupBy(): string {
