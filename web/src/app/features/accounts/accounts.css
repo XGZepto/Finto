@@ -148,7 +148,14 @@
 .stat-row .n { width: 4ch; text-align: right; }
 .tag.reissued { border-color: var(--warn); color: var(--warn); }
 .recent .section-head { margin-bottom: 5px; }
-.txn-row { display: grid; grid-template-columns: 72px 1fr auto; }
+.txn-row { display: grid; grid-template-columns: max-content 1fr auto; column-gap: var(--s3); }
+.txn-row > .small { white-space: nowrap; }
+/* Rows that open the blotter look like rows, and say so on hover. */
+button.stat-row, button.month-row { width: 100%; min-height: 32px; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit; font-weight: 400; text-align: left; cursor: pointer; }
+button.month-row { border-bottom: 0; padding: 0; }
+button.stat-row { padding: 6px 0; }
+@media (hover: hover) { button.stat-row:hover, button.month-row:hover { background: var(--panel-2); } }
+.flow-row .peer { flex: 1; min-height: 0; padding: 0; color: var(--fg); text-align: left; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 button.txn-row {
   width: 100%;
   min-height: var(--control-h);

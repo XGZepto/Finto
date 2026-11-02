@@ -23,3 +23,21 @@ export function showRawDescription(txn: {
 function comparable(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9\u00c0-\uffff]+/g, '');
 }
+
+/**
+ * The readable title for a transaction, wherever it is listed.
+ *
+ * Statements shout: long all-capital words are brought down to title case,
+ * short ones (codes like HK, EPS, CBK) are left alone.
+ */
+export function transactionTitle(txn: { merchant?: string | null; description?: string | null }): string {
+  const source = (txn.merchant || txn.description || '').trim();
+  return source
+    .split(/\s+/)
+    .map((word) =>
+      /^[A-Z0-9]{5,}$/.test(word) && /[A-Z]/.test(word)
+        ? word.charAt(0) + word.slice(1).toLowerCase()
+        : word,
+    )
+    .join(' ');
+}

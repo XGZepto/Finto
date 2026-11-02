@@ -17,11 +17,12 @@
       <div class="group-hero-copy">
         <span class="label">Combined balance</span>
         <div class="group-balance-values">
-          @for (total of g.totals; track total.currency) {
+          <!-- Empty currency pockets are listed below, not printed at headline size. -->
+          @for (total of nonZero(g.totals); track total.currency) {
             <strong class="mono" [class.neg]="total.amount < 0" [class.pos]="total.amount > 0">{{ total | money }}</strong>
-          } @empty { <strong class="dim empty-balance">No balance snapshot</strong> }
+          } @empty { <strong class="dim empty-balance">{{ g.totals.length ? '0.00' : 'No balance snapshot' }}</strong> }
         </div>
-        <small>Native balances across this product</small>
+        <small>Native balances across this product@if (g.totals.length > nonZero(g.totals).length) { · {{ g.totals.length - nonZero(g.totals).length }} empty }</small>
       </div>
       <div class="group-meta">
         <span><label>Subaccounts</label><b class="mono">{{ g.children.length }}</b></span>
@@ -50,14 +51,14 @@
           <div class="section-head"><h2>Monthly outflow</h2><span class="muted small">All subaccounts</span></div>
           <div class="month-chart">
             @for (m of byMonth(); track m.bucket + m.currency) {
-              <div class="month-row"><span class="mono small">{{ m.bucket }}</span><span class="month-track"><i [style.width]="monthWidth(m)"></i></span><span class="mono">{{ m.spend | money }}</span></div>
+              <button type="button" class="month-row" (click)="drill('month', m.bucket)"><span class="mono small">{{ m.bucket }}</span><span class="month-track"><i [style.width]="monthWidth(m)"></i></span><span class="mono">{{ m.spend | money }}</span></button>
             } @empty { <div class="empty">No outflow history</div> }
           </div>
         </section>
         <section class="card">
           <div class="section-head"><h2>Top spending</h2><span class="muted small">By category</span></div>
-          @for (row of byCategory().slice(0, 7); track row.bucket + row.currency) {
-            <div class="stat-row"><span class="k">{{ humanize(row.bucket) }}</span><span class="v mono">{{ row.spend | money }}</span><span class="n muted">{{ row.txn_count }}</span></div>
+          @for (row of topCategories().slice(0, 7); track row.bucket + row.currency) {
+            <button type="button" class="stat-row" (click)="drill('category', row.bucket)"><span class="k">{{ humanize(row.bucket) }}</span><span class="v mono">{{ row.spend | money }}</span><span class="n muted">{{ row.txn_count }}</span></button>
           } @empty { <div class="empty">No spending yet</div> }
         </section>
       </div>
@@ -65,7 +66,7 @@
         <section class="card">
           <h2>Spend by cardholder</h2>
           @for (row of byHolder(); track row.bucket + row.currency) {
-            <div class="stat-row"><span class="k">{{ row.bucket }}</span><span class="v mono">{{ row.spend | money }}</span><span class="n muted">{{ row.txn_count }}</span></div>
+            <button type="button" class="stat-row" (click)="drill('cardholder', row.bucket)"><span class="k">{{ row.bucket }}</span><span class="v mono">{{ row.spend | money }}</span><span class="n muted">{{ row.txn_count }}</span></button>
           } @empty { <div class="empty">No cardholder split</div> }
         </section>
         <section class="card recent">
@@ -75,7 +76,7 @@
               <span class="mono small muted">{{ t.date | shortDate }}</span>
               <span class="txn-who">
                 <span class="glyph"><finto-icon kind="merchant" [name]="t.merchant || t.description" [fallbackCategory]="t.category || 'other'" /></span>
-                <span class="txn-desc">{{ t.merchant || t.description }}</span>
+                <span class="txn-desc">{{ title(t) }}</span>
               </span>
               <span class="mono" [class.pos]="t.booked.amount > 0">{{ t.booked | money }}</span>
             </button>
@@ -222,11 +223,11 @@
         <div class="section-head"><h2>Monthly outflow</h2></div>
         <div class="month-chart">
           @for (m of byMonth(); track m.bucket + m.currency) {
-            <div class="month-row">
+            <button type="button" class="month-row" (click)="drill('month', m.bucket)">
               <span class="mono small">{{ m.bucket }}</span>
               <span class="month-track"><i [style.width]="monthWidth(m)"></i></span>
               <span class="mono">{{ m.spend | money }}</span>
-            </div>
+            </button>
           } @empty { <div class="empty">No outflow history</div> }
         </div>
       </section>
@@ -247,7 +248,7 @@
         @if (byHolder().length) {
           <h3>Spend by cardholder</h3>
           @for (h of byHolder(); track h.bucket + h.currency) {
-            <div class="stat-row"><span class="k">{{ h.bucket }}</span><span class="v mono">{{ h.spend | money }}</span><span class="n muted">{{ h.txn_count }}</span></div>
+            <button type="button" class="stat-row" (click)="drill('cardholder', h.bucket)"><span class="k">{{ h.bucket }}</span><span class="v mono">{{ h.spend | money }}</span><span class="n muted">{{ h.txn_count }}</span></button>
           }
         }
         @if (accountFlows().length) {
@@ -255,7 +256,7 @@
           @for (f of accountFlows(); track f.from_account + f.to_account + f.amount.currency) {
             <div class="flow-row" [class.out]="f.from_account === c.account.id">
               <span class="arrow mono">{{ f.from_account === c.account.id ? '→' : '←' }}</span>
-              <span class="peer">{{ f.from_account === c.account.id ? f.to_account : f.from_account }}</span>
+              <button type="button" class="peer bare" (click)="openPeer(f.from_account === c.account.id ? f.to_account : f.from_account)">{{ accountName(f.from_account === c.account.id ? f.to_account : f.from_account) }}</button>
               <span class="v mono">{{ f.amount | money }}</span>
             </div>
           }
@@ -272,8 +273,8 @@
     <div class="detail-grid lower">
       <section class="card">
         <div class="section-head"><h2>Top spending</h2><span class="muted small">By category</span></div>
-        @for (row of byCategory().slice(0, 7); track row.bucket + row.currency) {
-          <div class="stat-row"><span class="k">{{ humanize(row.bucket) }}</span><span class="v mono">{{ row.spend | money }}</span><span class="n muted">{{ row.txn_count }}</span></div>
+        @for (row of topCategories().slice(0, 7); track row.bucket + row.currency) {
+          <button type="button" class="stat-row" (click)="drill('category', row.bucket)"><span class="k">{{ humanize(row.bucket) }}</span><span class="v mono">{{ row.spend | money }}</span><span class="n muted">{{ row.txn_count }}</span></button>
         } @empty { <div class="empty">No spending yet</div> }
       </section>
       <section class="card recent">
@@ -283,7 +284,7 @@
             <span class="mono small muted">{{ t.date | shortDate }}</span>
             <span class="txn-who">
               <span class="glyph"><finto-icon kind="merchant" [name]="t.merchant || t.description" [fallbackCategory]="t.category || 'other'" /></span>
-              <span class="txn-desc">{{ t.merchant || t.description }}</span>
+              <span class="txn-desc">{{ title(t) }}</span>
             </span>
             <span class="mono" [class.pos]="t.booked.amount > 0">{{ t.booked | money }}</span>
           </button>

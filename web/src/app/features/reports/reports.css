@@ -35,7 +35,7 @@
 .totals-card { display: flex; flex-direction: column; gap: var(--s4); margin-bottom: var(--s3); }
 .report-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s3);
   align-items: stretch;
   margin-bottom: var(--s3);
@@ -46,7 +46,9 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--s6);
-  align-items: end;
+  /* Top-aligned, so Out's comparison line hangs below its figure instead of
+     lifting it above the other three. */
+  align-items: start;
 }
 .totals-row > span { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
 .totals-row label {
@@ -124,3 +126,7 @@
 
 .focus-chip { color: var(--info); font-family: var(--mono); font-size: var(--t-meta); letter-spacing: .04em; }
 .focus-chip:hover { color: var(--fg); }
+
+.share-strip { display: flex; gap: 2px; height: 10px; margin: 0 0 var(--s3); }
+.share-strip button { min-width: 3px; min-height: 0; height: 100%; padding: 0; border: 0; }
+.share-strip button:hover { opacity: .8; }

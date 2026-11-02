@@ -14,7 +14,7 @@ import { FilterBar } from '../../shared/filter-bar';
 import { FintoIcon } from '../../shared/finto-icon';
 import { FintoSelect } from '../../shared/finto-select';
 import { BLOTTER_PREFETCH_PX, blotterTailDue } from './blotter-tail';
-import { showRawDescription as rawDescriptionVisible } from './blotter-title';
+import { showRawDescription as rawDescriptionVisible, transactionTitle } from './blotter-title';
 
 /**
  * The blotter.
@@ -789,15 +789,7 @@ export class BlotterPage implements OnDestroy {
    * Spotify) untouched.
    */
   displayTitle(txn: Txn): string {
-    const source = (txn.merchant || txn.description || '').trim();
-    return source
-      .split(/\s+/)
-      .map((word) =>
-        /^[A-Z0-9]{5,}$/.test(word) && /[A-Z]/.test(word)
-          ? word.charAt(0) + word.slice(1).toLowerCase()
-          : word,
-      )
-      .join(' ');
+    return transactionTitle(txn);
   }
 
   showRawDescription(txn: Txn): boolean {

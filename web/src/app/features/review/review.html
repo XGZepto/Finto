@@ -72,14 +72,14 @@
               <div class="pane">
                 <div class="pane-head">
                   <span class="tag">{{ side.role }}</span>
-                  <span class="mono small muted">{{ side.account }}</span>
+                  <span class="small muted">{{ accountName(side.account) }}</span>
                 </div>
                 <div class="pane-amount mono" [class.pos]="side.amount.amount > 0">
                   {{ side.amount | money }}
                 </div>
                 <div class="pane-date mono small">{{ side.date | shortDate }}</div>
                 <p class="pane-desc">{{ side.description }}</p>
-                <span class="pane-id mono">{{ side.id }}</span>
+                <button type="button" class="bare pane-open" (click)="openTxn(side.id, side.account)">Open in blotter →</button>
               </div>
             }
           </div>
@@ -89,7 +89,7 @@
             <div class="group-head">
               <span class="mono">{{ item.description }}</span>
               <span class="tag installment">{{ item.term_months }} months</span>
-              <span class="mono small muted">{{ item.account_id }}</span>
+              <span class="small muted">{{ accountName(item.account_id) }}</span>
             </div>
             <table>
               <thead>

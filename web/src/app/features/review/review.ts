@@ -1,3 +1,4 @@
+import { Router } from '@angular/router';
 import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { Api } from '../../core/api.service';
 import { Refresh } from '../../core/refresh.service';
@@ -18,6 +19,8 @@ type Queue = 'duplicates' | 'transfers' | 'installments';
 export class ReviewPage {
   private api = inject(Api);
   private refreshes = inject(Refresh);
+  private router = inject(Router);
+  private names = signal(new Map<string, string>());
 
   readonly queues: Array<{ id: Queue; label: string }> = [
     { id: 'duplicates', label: 'Duplicates' },
@@ -40,6 +43,21 @@ export class ReviewPage {
     effect(() => { if (this.refreshes.token()) this.load(); });
     this.loadCounts();
     this.load();
+    this.api.accounts().subscribe({
+      next: (r: any) => this.names.set(new Map(
+        ((r.accounts ?? r) as Array<{ id: string; display_name: string }>)
+          .map((a) => [a.id, a.display_name]))),
+    });
+  }
+
+  /** Storage ids are for the API; a decision is made on names. */
+  accountName(id: string | null | undefined): string {
+    return id ? this.names().get(id) ?? id : '';
+  }
+
+  /** The row itself, in the blotter, with its full statement record. */
+  openTxn(id: string, account: string): void {
+    this.router.navigate(['/blotter'], { queryParams: { accounts: account, txn: id, includeTransfers: true } });
   }
 
   /** Tab counts for the queues we aren't showing; `load` covers the current one. */
@@ -47,12 +65,28 @@ export class ReviewPage {
     for (const q of this.queues) {
       if (q.id === this.queue()) continue;
       this.api.reviewQueue(q.id).subscribe({
-        next: (r) => this.counts.update((c) => ({ ...c, [q.id]: r.total })),
+        next: (r) => {
+          this.counts.update((c) => ({ ...c, [q.id]: r.total }));
+          this.openFirstWithWork();
+        },
       });
     }
   }
 
+  /** Until a tab is picked, the page opens on work rather than on "Queue clear". */
+  private picked = false;
+  private openFirstWithWork(): void {
+    if (this.picked || this.status() !== 'ok' || this.items().length) return;
+    const next = this.queues.find((q) => (this.counts()[q.id] ?? 0) > 0);
+    if (next && next.id !== this.queue()) {
+      this.queue.set(next.id);
+      this.cursor.set(0);
+      this.load();
+    }
+  }
+
   select(queue: Queue): void {
+    this.picked = true;
     this.queue.set(queue);
     this.cursor.set(0);
     this.load();
@@ -68,6 +102,7 @@ export class ReviewPage {
         this.counts.update((c) => ({ ...c, [this.queue()]: r.total }));
         this.cursor.set(Math.min(this.cursor(), Math.max(0, r.items.length - 1)));
         this.status.set('ok');
+        this.openFirstWithWork();
       },
       error: () => { if (id === this.loadId) this.status.set('failed'); },
     });

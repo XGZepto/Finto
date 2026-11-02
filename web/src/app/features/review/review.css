@@ -75,7 +75,8 @@
 .pane-amount { font-size: var(--t-figure); font-variant-numeric: tabular-nums; }
 .pane-date { color: var(--fg-3); margin-top: 2px; }
 .pane-desc { margin: 10px 0 8px; font-size: var(--t-data); overflow-wrap: anywhere; }
-.pane-id { font-size: var(--t-micro); color: var(--fg-4); overflow-wrap: anywhere; }
+.pane-open { align-self: flex-start; min-height: 0; padding: 0; color: var(--fg-3); font-size: var(--t-meta); }
+.pane-open:hover { color: var(--fg); }
 
 .group { border: 1px solid var(--line); }
 .group-head {

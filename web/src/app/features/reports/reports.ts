@@ -10,7 +10,6 @@ import { PageStatus } from '../../core/page-status';
 import { FintoPills } from '../../shared/finto-pills';
 import { FintoSelect } from '../../shared/finto-select';
 import { FintoBars, Bar } from '../../shared/finto-bars';
-import { FintoFlow, FlowNode } from '../../shared/finto-flow';
 import { RevealOnView } from '../../shared/reveal-on-view';
 
 interface Band {
@@ -33,7 +32,7 @@ const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
  */
 @Component({
   selector: 'app-reports',
-  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoFlow, FintoBars, RevealOnView],
+  imports: [FormsModule, MoneyPipe, FintoSelect, FintoPills, FintoBars, RevealOnView],
   templateUrl: './reports.html',
   styleUrl: './reports.css',
 })
@@ -236,22 +235,6 @@ export class ReportsPage {
   });
 
   /** Destinations for the flow diagram: the top bands, each with its share. */
-  incomeTotal = computed(() => Math.abs(this.headline()?.income.amount ?? 0));
-  savedDisplay = computed(() => {
-    const h = this.headline();
-    if (!h) return '';
-    const saved = Math.abs(h.income.amount) - Math.abs(h.spend.amount);
-    return this.money.transform({ amount: saved, currency: h.income.currency }, 'bare');
-  });
-
-  flowNodes = computed<FlowNode[]>(() =>
-    this.topBands().slice(0, 8).map((b) => ({
-      label: b.label,
-      value: Math.abs(b.amount.amount),
-      display: this.money.transform(b.amount, 'bare'),
-      colour: b.colour,
-    })));
-
   monthlySpend = computed<Bar[]>(() => {
     const byMonth = new Map<string, number>();
     for (const r of this.monthRows()) {
@@ -263,11 +246,17 @@ export class ReportsPage {
       .map(([label, value]) => ({ label, value }));
   });
 
+  /**
+   * Average of complete months, in the same positive sense as Out above. The
+   * month in progress is left out: three days of it would drag the mean down.
+   */
   monthlyMean = computed(() => {
-    const rows = this.monthlySpend();
+    const now = new Date();
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const rows = this.monthlySpend().filter((r) => r.label !== current);
     if (!rows.length) return '';
     const mean = rows.reduce((s, r) => s + r.value, 0) / rows.length;
-    return this.money.transform({ amount: -mean, currency: this.convertTo() }, 'bare');
+    return this.money.transform({ amount: mean, currency: this.convertTo() }, 'bare');
   });
 
   focus(month: string): void {

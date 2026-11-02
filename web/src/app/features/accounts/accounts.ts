@@ -1,5 +1,7 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { FilterState } from '../../core/filter-state';
+import { transactionTitle } from '../blotter/blotter-title';
 import { FintoIcon } from '../../shared/finto-icon';
 import { Api } from '../../core/api.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
@@ -34,6 +36,7 @@ const EMPTY_FLOWS: Flows = {
 export class AccountsPage {
   private api = inject(Api);
   private router = inject(Router);
+  private filters = inject(FilterState);
   private route = inject(ActivatedRoute);
   preferences = inject(Preferences);
 
@@ -274,9 +277,38 @@ export class AccountsPage {
   });
 
   maxMonthSpend = computed(() => Math.max(1, ...this.byMonth().map((m) => Math.abs(m.spend.amount))));
-  topCategory = computed(() => this.byCategory()
+  /** Largest first: a "top" list in alphabetical order hid the actual top. */
+  topCategories = computed(() => this.byCategory()
     .filter((row) => row.spend.amount !== 0)
-    .sort((a, b) => Math.abs(b.spend.amount) - Math.abs(a.spend.amount))[0] ?? null);
+    .sort((a, b) => Math.abs(b.spend.amount) - Math.abs(a.spend.amount)));
+  topCategory = computed(() => this.topCategories()[0] ?? null);
+
+  /** Account ids for display: a storage key is not a name. */
+  accountName(id: string): string {
+    return this.accounts().find((a) => a.id === id)?.display_name ?? id;
+  }
+
+  /** The accounts this page is about: one account, or every subaccount of a product. */
+  private scopeIds(): string[] {
+    return this.selected() ? [this.selected()!] : this.groupIds();
+  }
+
+  /** Any figure here opens the blotter rows that make it up. */
+  drill(dimension: string, bucket: string): void {
+    this.filters.drillInto(dimension, bucket, { accounts: this.scopeIds() });
+  }
+
+  openPeer(id: string): void {
+    this.router.navigate(['/accounts', id]);
+  }
+
+  nonZero(totals: Money[]): Money[] {
+    return totals.filter((total) => total.amount !== 0);
+  }
+
+  title(txn: Txn): string {
+    return transactionTitle(txn);
+  }
   transactionCount = computed(() => this.byKind().reduce((sum, row) => sum + row.txn_count, 0));
   spenderCount = computed(() => this.byHolder().filter((row) => row.bucket && row.bucket !== '(none)').length);
   hasDetailFlow = computed(() => this.detailFlow().incoming.length + this.detailFlow().outgoing.length > 0);

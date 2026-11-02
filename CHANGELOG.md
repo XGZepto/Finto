@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.4.32 — 2026-11-02
+
+- An account's Top spending list is ordered by amount. It had been
+  alphabetical, so the account's actual top category could be missing from
+  its own "top" list.
+- Category, month and cardholder rows on an account page open the blotter on
+  the rows that make up the figure; internal transfers name the other
+  account and link to it; recent activity uses the blotter's cleaned-up
+  titles.
+- A product's combined balance leaves empty currency pockets out of the
+  headline and counts them underneath.
+- Reports shows one breakdown instead of the same categories twice, with a
+  share strip over the ranked rows. The monthly average is positive, like
+  Out, and leaves the month in progress out; the four headline figures line
+  up.
+- Matching suggestions opens on the first queue with work in it, and each
+  side names its account and opens in the blotter instead of printing ids.
+
 ## 0.4.31 — 2026-11-02
 
 - The ledger's trigram search index names pg_trgm's own schema, so a schema
