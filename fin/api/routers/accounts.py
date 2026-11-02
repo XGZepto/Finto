@@ -6,7 +6,7 @@ import re
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from ... import db as dbm
@@ -104,6 +104,54 @@ def create_account(body: AccountCreate, request: Request) -> dict:
     if created is None:
         raise HTTPException(500, "account was not saved")
     return _serialize_account(created)
+
+
+@router.delete("/accounts/{account_id}")
+def delete_account(
+    account_id: str, request: Request, move_to: str = Query(...),
+) -> dict:
+    """Remove an account after moving its rows onto one that already exists.
+
+    Used when a statement section was given its own account by mistake. The
+    transactions stay; the extra account does not.
+    """
+    if account_id == move_to:
+        raise HTTPException(422, "move_to must be a different account")
+    user_id = request.state.user_id
+    conn = dbm.connect()
+    try:
+        owned = {
+            r["account_id"] for r in conn.execute(
+                "SELECT account_id FROM account_acl WHERE user_id=%s AND access_role='owner'",
+                (user_id,),
+            )
+        }
+        if account_id not in owned or move_to not in owned:
+            raise HTTPException(404, "account not found")
+        for table in (
+            "txn", "statement_file", "card", "installment_plan",
+            "installment_candidate", "category_rule",
+        ):
+            conn.execute(
+                f"UPDATE {table} SET account_id=%s WHERE account_id=%s",
+                (move_to, account_id),
+            )
+        for table in (
+            "balance_assertion", "reconciliation_check",
+            "investment_subaccount_balance", "investment_activity",
+        ):
+            conn.execute(f"DELETE FROM {table} WHERE account_id=%s", (account_id,))
+        conn.execute("DELETE FROM account WHERE id=%s", (account_id,))
+        conn.commit()
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return {"deleted": account_id, "moved_to": move_to}
 
 
 class AccountPatch(BaseModel):

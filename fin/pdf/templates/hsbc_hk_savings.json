@@ -83,7 +83,7 @@
       "start": "^HKD Current$",
       "end": "Foreign Currency Savings|Total Relationship Balance|Important Notice",
       "currency": "HKD",
-      "account_hint": "HKD Current",
+      "account_hint": "HKD Savings",
       "columns": {
         "mode": "anchors",
         "header": "(?-i:Transaction Details)",
