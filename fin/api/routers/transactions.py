@@ -34,6 +34,7 @@ def filter_from_query(
     includeDuplicates: bool = Query(False),
     uncategorisedOnly: bool = Query(False),
     installmentsOnly: bool = Query(False),
+    spendingOnly: bool = Query(False),
 ) -> LedgerFilter:
     if months and any(
         len(month) != 7 or month[4] != "-" or not month.replace("-", "").isdigit()
@@ -48,6 +49,7 @@ def filter_from_query(
         detail=detail, tags=tags,
         includeTransfers=includeTransfers, includeDuplicates=includeDuplicates,
         uncategorisedOnly=uncategorisedOnly, installmentsOnly=installmentsOnly,
+        spendingOnly=spendingOnly,
     )
 
 

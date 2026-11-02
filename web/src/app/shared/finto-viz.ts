@@ -7,7 +7,7 @@ export interface Slice {
   display?: string;
 }
 
-const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
+export const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
                 'var(--c5)', 'var(--c6)', 'var(--c7)', 'var(--c8)'];
 
 /** Composition as one bar. Reads faster than a pie and stacks in a narrow column. */
@@ -77,15 +77,17 @@ export class FintoShareBar {
           </circle>
         }
       </svg>
-      <div class="legend">
-        @for (a of arcs(); track a.label) {
-          <div class="legend-row">
-            <span class="dot" [style.background]="a.colour"></span>
-            <span class="name">{{ a.label }}</span>
-            <span class="pct mono">{{ a.pct.toFixed(1) }}%</span>
-          </div>
-        }
-      </div>
+      @if (legend()) {
+        <div class="legend">
+          @for (a of arcs(); track a.label) {
+            <div class="legend-row">
+              <span class="dot" [style.background]="a.colour"></span>
+              <span class="name">{{ a.label }}</span>
+              <span class="pct mono">{{ a.pct.toFixed(1) }}%</span>
+            </div>
+          }
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -106,6 +108,8 @@ export class FintoShareBar {
       :host(.breakdown-donut) .donut-wrap { flex-direction: column; align-items: stretch; }
       :host(.breakdown-donut) .legend { max-width: none; flex: none; }
       :host(.breakdown-donut) svg { width: 132px; height: 132px; }
+      :host(.breakdown-donut.bare) .donut-wrap { align-items: center; }
+      :host(.breakdown-donut.bare) svg { width: 180px; height: 180px; }
     }
     @media (prefers-reduced-motion: reduce) { .arc { opacity: 1; animation: none; } }
   `],
@@ -115,6 +119,8 @@ export class FintoDonut {
   label = input('Breakdown');
   /** Beyond this, arcs are too thin to read; the rest collapses into one. */
   max = input(6);
+  /** Off when a ranked list beside the donut already names every slice. */
+  legend = input(true);
 
   arcs = computed(() => {
     const rows = this.slices().filter((s) => s.value > 0)

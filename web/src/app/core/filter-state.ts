@@ -16,7 +16,7 @@ const ARRAY_KEYS = [
   'detail', 'tags',
 ] as const;
 const BOOL_KEYS = [
-  'includeTransfers', 'uncategorisedOnly', 'installmentsOnly',
+  'includeTransfers', 'uncategorisedOnly', 'installmentsOnly', 'spendingOnly',
 ] as const;
 const NUM_KEYS = ['minAmount', 'maxAmount'] as const;
 
@@ -118,6 +118,7 @@ export function describeFilter(f: LedgerFilter): Array<{ key: string; label: str
   if (f.includeDuplicates) chips.push({ key: 'includeDuplicates', label: 'incl. duplicates' });
   if (f.uncategorisedOnly) chips.push({ key: 'uncategorisedOnly', label: 'uncategorised only' });
   if (f.installmentsOnly) chips.push({ key: 'installmentsOnly', label: 'instalments only' });
+  if (f.spendingOnly) chips.push({ key: 'spendingOnly', label: 'spending only' });
   return chips;
 }
 

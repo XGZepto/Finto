@@ -116,7 +116,11 @@ export class ReportsPage {
     const months = includeSelection ? this.selectedMonths() : [];
     const filter: LedgerFilter = months.length ? { months } : { ...range };
     const chosen = this.accounts().find((a) => a.display_name === this.accountId());
+    // Across all accounts, card payments and transfers are pockets, not
+    // spending — the same scope Summary uses, so the two pages agree. Scoped to
+    // one account, money crossing its edge is the point and stays in.
     if (chosen) filter.accounts = [chosen.id];
+    else filter.spendingOnly = true;
     return filter;
   }
 

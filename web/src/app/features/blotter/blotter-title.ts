@@ -9,11 +9,17 @@ export function showRawDescription(txn: {
 }): boolean {
   const merchant = (txn.merchant || '').trim();
   const description = (txn.description || '').trim();
-  if (!description || description === merchant) {
+  // Without a merchant the title already is the description; and a statement
+  // that shouts the same words in capitals is not a second line of information.
+  if (!description || !merchant || comparable(description) === comparable(merchant)) {
     return false;
   }
   if (merchant && ISSUER_NOISE.test(description)) {
     return false;
   }
   return true;
+}
+
+function comparable(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\u00c0-\uffff]+/g, '');
 }

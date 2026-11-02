@@ -31,7 +31,7 @@
     <span class="figure mono">{{ monthlyTotal() | money }}</span>
   </div>
   <div class="hero-meta">
-    <span>{{ visibleSubs().length }} subscription{{ visibleSubs().length === 1 ? '' : 's' }}</span>
+    <span>{{ activeSubs().length }} active subscription{{ activeSubs().length === 1 ? '' : 's' }}</span>
     <span>{{ visiblePlans().length }} instalment plan{{ visiblePlans().length === 1 ? '' : 's' }}</span>
     @if (irregularCount()) {
       <span class="note">{{ irregularCount() }} irregular, not counted</span>
@@ -47,40 +47,57 @@
 } @else if (status() === 'loading' && !commitments().length) {
   <div class="card"><finto-skeleton [rows]="6" label="Loading commitments" /></div>
 } @else {
-  @if (visibleSubs().length) {
+  <ng-template #subRow let-c>
+    <button type="button" class="row" (click)="open(c)">
+      <span class="glyph">
+        <finto-icon kind="merchant" [name]="c.merchant"
+                    [fallbackCategory]="c.category || 'services'" />
+      </span>
+      <span class="who">
+        <span class="name">{{ c.merchant }}</span>
+        <span class="meta">
+          <span class="tag">{{ c.cadence }}</span>
+          @if (c.nextDue && !c.inactive) {
+            <span class="mono">next {{ c.nextDue | shortDate }}</span>
+          } @else {
+            <span class="mono">last {{ c.lastCharge | shortDate }}</span>
+          }
+        </span>
+      </span>
+      <span class="cost">
+        <span class="each mono">{{ c.amount | money: 'bare' }}</span>
+        @if (c.monthly && !c.inactive) {
+          <span class="permo mono">{{ c.monthly | money: 'bare' }}/mo</span>
+        } @else {
+          <span class="permo dim">not counted</span>
+        }
+      </span>
+    </button>
+  </ng-template>
+
+  @if (activeSubs().length) {
     <section class="card list-card">
-      <div class="section-head"><h2>Subscriptions</h2></div>
+      <div class="section-head"><h2>Subscriptions</h2><span class="count mono">{{ activeSubs().length }}</span></div>
       <div class="rows">
-        @for (c of visibleSubs(); track c.key) {
-          <button type="button" class="row" (click)="open(c)">
-            <span class="glyph">
-              <finto-icon kind="merchant" [name]="c.merchant"
-                          [fallbackCategory]="c.category || 'services'" />
-            </span>
-            <span class="who">
-              <span class="name">{{ c.merchant }}</span>
-              <span class="meta">
-                <span class="tag">{{ c.cadence }}</span>
-                @if (c.inactive) { <span class="tag">inactive</span> }
-                @if (c.nextDue && !c.inactive) {
-                  <span class="mono">next {{ c.nextDue | shortDate }}</span>
-                } @else {
-                  <span class="mono">last {{ c.lastCharge | shortDate }}</span>
-                }
-              </span>
-            </span>
-            <span class="cost">
-              <span class="each mono">{{ c.amount | money: 'bare' }}</span>
-              @if (c.monthly && !c.inactive) {
-                <span class="permo mono">{{ c.monthly | money: 'bare' }}/mo</span>
-              } @else {
-                <span class="permo dim">not counted</span>
-              }
-            </span>
-          </button>
+        @for (c of activeSubs(); track c.key) {
+          <ng-container *ngTemplateOutlet="subRow; context: { $implicit: c }" />
         }
       </div>
     </section>
+  }
+
+  <!-- Lapsed charges stay findable but stop competing with what is billed now. -->
+  @if (inactiveSubs().length) {
+    <details class="card list-card lapsed">
+      <summary class="section-head">
+        <h2>Inactive</h2><span class="count mono">{{ inactiveSubs().length }}</span>
+      </summary>
+      <div class="rows">
+        @for (c of inactiveSubs(); track c.key) {
+          <ng-container *ngTemplateOutlet="subRow; context: { $implicit: c }" />
+        }
+      </div>
+    </details>
   }
 
   @if (visiblePlans().length) {

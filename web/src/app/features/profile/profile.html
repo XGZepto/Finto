@@ -26,6 +26,15 @@
                     [ngModel]="preferences.baseCurrency()"
                     (ngModelChange)="setBaseCurrency($event)" />
     </div>
+    @if (haptics.supported) {
+      <div class="preference-row">
+        <label for="haptics">{{ t('Haptics', '觸感回饋') }}</label>
+        <finto-select id="haptics" [options]="hapticOptions()" valueKey="value" labelKey="label"
+                      [ariaLabel]="t('Haptics', '觸感回饋')"
+                      [ngModel]="haptics.enabled() ? 'on' : 'off'"
+                      (ngModelChange)="haptics.setEnabled($event === 'on')" />
+      </div>
+    }
   </section>
   <details class="card api-access">
     <summary><strong>API access</strong><i aria-hidden="true">⌄</i></summary>

@@ -3,11 +3,11 @@
   <div class="head-controls">
     <finto-select ariaLabel="Dimension" [options]="dimensions" [ngModel]="dimension()"
                   (ngModelChange)="set(dimension, $event)" />
-    <finto-select ariaLabel="Currency" [options]="currencies" [ngModel]="convertTo()"
+    <finto-select ariaLabel="Currency" [options]="currencies()" [ngModel]="convertTo()"
                   (ngModelChange)="set(convertTo, $event)" />
     <div class="seg" role="group" aria-label="Scale">
-      <button [class.on]="mode() === 'share'" [attr.aria-pressed]="mode() === 'share'" (click)="mode.set('share')">share</button>
-      <button [class.on]="mode() === 'amount'" [attr.aria-pressed]="mode() === 'amount'" (click)="mode.set('amount')">amount</button>
+      <button [class.on]="mode() === 'share'" [attr.aria-pressed]="mode() === 'share'" (click)="mode.set('share')">Share</button>
+      <button [class.on]="mode() === 'amount'" [attr.aria-pressed]="mode() === 'amount'" (click)="mode.set('amount')">Amount</button>
     </div>
   </div>
 </div>
@@ -35,11 +35,11 @@
                       [style.background]="b.colour"
                       (click)="drill(col.month, b.bucket)"
                       (keydown.enter)="drill(col.month, b.bucket)"
-                      [attr.aria-label]="b.bucket + ' · ' + ({ amount: b.amount, currency: c.currency } | money)"
-                      [title]="b.bucket + ' · ' + ({ amount: b.amount, currency: c.currency } | money)"></span>
+                      [attr.aria-label]="humanize(b.bucket) + ' · ' + ({ amount: b.amount, currency: c.currency } | money)"
+                      [title]="humanize(b.bucket) + ' · ' + ({ amount: b.amount, currency: c.currency } | money)"></span>
               }
             </div>
-            <span class="tick mono" [class.on]="hovered() === $index">{{ col.label }}</span>
+            <span class="tick mono" [class.on]="hovered() === $index" [class.shown]="col.show"><span>{{ col.label }}</span></span>
           </div>
         }
       </div>
@@ -49,7 +49,7 @@
       @for (l of legend(); track l.bucket) {
         <span class="key">
           <span class="swatch" [style.background]="l.colour"></span>
-          {{ l.bucket }}
+          {{ l.name }}
           <span class="mono muted">{{ { amount: -l.total, currency: c.currency } | money: 'bare' }}</span>
         </span>
       }

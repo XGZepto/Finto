@@ -132,3 +132,12 @@
              calc(var(--s4) + env(safe-area-inset-bottom));
   }
 }
+
+.list-card .section-head { justify-content: flex-start; gap: var(--s2); }
+.list-card .count { color: var(--fg-4); font-size: var(--t-label); }
+.lapsed > summary { list-style: none; cursor: pointer; margin-bottom: 0; min-height: var(--touch-h); }
+.lapsed > summary::-webkit-details-marker { display: none; }
+.lapsed > summary::after { content: '⌄'; margin-left: auto; color: var(--fg-4); transition: transform var(--motion) var(--ease); }
+.lapsed[open] > summary::after { transform: rotate(180deg); }
+.lapsed[open] > summary { margin-bottom: var(--s3); }
+.lapsed .row { opacity: .72; }

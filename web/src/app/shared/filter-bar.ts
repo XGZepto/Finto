@@ -99,6 +99,11 @@ import { FintoDate } from './finto-date';
                  (ngModelChange)="patch({ installmentsOnly: $event || undefined })" />
           <span>Instalments only</span>
         </label>
+        <label class="check">
+          <input type="checkbox" [ngModel]="filters.filter().spendingOnly ?? false"
+                 (ngModelChange)="patch({ spendingOnly: $event || undefined })" />
+          <span>Spending only</span>
+        </label>
         </div>
 
         <!-- How the scope total is denominated. A preference set once, not a

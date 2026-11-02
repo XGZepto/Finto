@@ -31,13 +31,17 @@
   <div class="card hero-figure">
     <div class="hero-spend">
       @if (spendComparison(); as comparison) {
-        <span class="label">Spent this month</span>
+        <span class="label">{{ heroLabel() }}
+          @if (heroThrough(); as through) { <small class="through">through {{ through }}</small> }
+        </span>
         <strong class="hero-value mono">{{ comparison.spend | money }}</strong>
-        @if (comparison.percent !== null) {
+        @if (comparison.spend.amount === 0) {
+          <span class="hero-change muted">No spending recorded yet</span>
+        } @else if (comparison.percent !== null) {
           <span class="hero-change" [class.better]="comparison.percent < 0" [class.worse]="comparison.percent > 0">
             {{ comparison.percent > 0 ? '↑' : comparison.percent < 0 ? '↓' : '—' }}
             {{ comparison.percent === 0 ? 'No change' : (comparison.percent < 0 ? -comparison.percent : comparison.percent).toFixed(1) + '% ' + (comparison.percent < 0 ? 'less' : 'more') }}
-            <small>vs same time last month</small>
+            <small>vs same days the month before</small>
           </span>
         } @else { <span class="hero-change muted">No comparable activity last month</span> }
       }
@@ -99,6 +103,7 @@
       <div class="composition">
         @if (spendSlices().length > 1) {
           <finto-donut class="breakdown-donut" fintoReveal [slices]="spendSlices()"
+                       [class.bare]="rankedTop().length > 0" [legend]="!rankedTop().length"
                        [label]="'Spending by ' + groupBy()" />
         }
 
@@ -106,9 +111,9 @@
           <div class="rank-list">
             @for (b of rankedTop(); track b.bucket) {
               <button (click)="drill(b.bucket)">
-                <span class="rank mono">{{ ($index + 1).toString().padStart(2, '0') }}</span>
+                <span class="rank mono"><i class="swatch" [style.background]="rankColour($index)"></i>{{ ($index + 1).toString().padStart(2, '0') }}</span>
                 <span class="name">{{ humanize(b.bucket) }}</span>
-                <span class="bar-track"><span class="bar-fill" [style.width]="b.width"></span></span>
+                <span class="bar-track"><span class="bar-fill" [style.width]="b.width" [style.background]="rankColour($index)"></span></span>
                 <span class="amount mono">{{ b.spend | money: 'bare' }}</span>
                 <span class="share mono">{{ (b.share * 100).toFixed(1) }}%</span>
               </button>

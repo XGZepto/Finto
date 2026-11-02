@@ -29,4 +29,21 @@ describe('showRawDescription', () => {
       false,
     );
   });
+
+  it('treats a capitalised copy of the merchant as the same line', () => {
+    assert.equal(
+      showRawDescription({
+        merchant: 'Pacific Coffee - CBK Central',
+        description: 'PACIFIC COFFEE - CBK CENTRAL',
+      }),
+      false,
+    );
+  });
+
+  it('never repeats the description when it is already the title', () => {
+    assert.equal(
+      showRawDescription({ merchant: null, description: 'UBER TRIP HTTPS://HELP.UB' }),
+      false,
+    );
+  });
 });

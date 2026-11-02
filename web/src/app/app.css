@@ -17,6 +17,7 @@
   padding: 20px 0 14px;
   background: var(--panel);
   border-right: 1px solid var(--line);
+  view-transition-name: finto-sidebar;
 }
 
 .brand { padding: 0 18px 24px; }
@@ -134,6 +135,7 @@
     background: var(--panel);
     contain: layout paint;
     isolation: isolate;
+    view-transition-name: finto-tabbar;
     overscroll-behavior: contain;
   }
   .mobile-nav a, .mobile-nav button {

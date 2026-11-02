@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api } from '../../core/api.service';
 import { FintoSkeleton } from '../../shared/finto-skeleton';
@@ -7,9 +7,14 @@ import { MoneyPipe } from '../../core/money.pipe';
 import { Composition, Coverage } from '../../core/models';
 import { FilterState, bucketRange } from '../../core/filter-state';
 import { FintoSelect } from '../../shared/finto-select';
+import { Preferences } from '../../core/preferences.service';
 
-/** A band's colour, cycling through the categorical ramp. */
-const RAMP = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--info', '--warn'];
+/**
+ * A band's colour, cycling through the categorical ramp. Only the --c series:
+ * --info and --warn share values with --c1 and --c3, which drew two bands in
+ * one colour.
+ */
+const RAMP = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--c7', '--c8'];
 
 @Component({
   selector: 'app-timeline',
@@ -20,6 +25,7 @@ const RAMP = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--info', '--warn'
 export class TimelinePage {
   private api = inject(Api);
   private filters = inject(FilterState);
+  private preferences = inject(Preferences);
 
   status = signal<PageStatus>('loading');
   private loadId = 0;
@@ -27,25 +33,36 @@ export class TimelinePage {
   coverage = signal<Coverage | null>(null);
 
   dimension = signal('category');
-  convertTo = signal('USD');
+  /**
+   * Opens in the reporting currency the rest of the app already uses, and keeps
+   * following it (the saved preference can land after this page does) until
+   * the picker here is used.
+   */
+  convertTo = linkedSignal(() => this.preferences.baseCurrency() || 'HKD');
   mode = signal<'share' | 'amount'>('share');
   hovered = signal<number | null>(null);
 
   readonly dimensions = ['category', 'subcategory', 'merchant', 'account', 'kind', 'cardholder'];
-  readonly currencies = ['HKD', 'USD', 'CNY', 'EUR', 'GBP'];
+  currencies = computed(() => [...new Set([this.convertTo(), 'HKD', 'USD', 'CNY', 'EUR', 'GBP'])]);
 
   constructor() {
     this.api.coverage().subscribe({
       next: (c) => this.coverage.set(c),
       error: () => this.coverage.set(null),
     });
-    this.reload();
+    effect(() => {
+      this.convertTo();
+      this.dimension();
+      untracked(() => this.reload());
+    });
   }
 
   reload(): void {
     const id = ++this.loadId;
     this.status.set('loading');
-    this.api.composition(this.convertTo(), this.dimension()).subscribe({
+    // The same spending scope as Summary, so the two never disagree about
+    // what a category cost.
+    this.api.composition(this.convertTo(), this.dimension(), { spendingOnly: true }).subscribe({
       next: (c) => {
         if (id !== this.loadId) return;
         this.comp.set(c);
@@ -57,7 +74,6 @@ export class TimelinePage {
 
   set<T>(sig: { set: (v: T) => void }, v: T): void {
     sig.set(v);
-    this.reload();
   }
 
   colour(bucket: string, i: number): string {
@@ -95,18 +111,27 @@ export class TimelinePage {
         offset += h;
         return band;
       });
-      return { month, label: month.replace(/^\d{2}(\d{2})-/, '$1-'), total: totals[mi], bands };
+      const step = Math.max(1, Math.ceil(c.months.length / 6));
+      const last = c.months.length - 1;
+      // Every step-th month plus the last, never two labels close enough to overlap.
+      const show = mi === last || (mi % step === 0 && last - mi >= Math.ceil(step / 2));
+      return { month, label: month.replace(/^\d{2}(\d{2})-/, '$1-'), show, total: totals[mi], bands };
     });
   });
 
   legend = computed(() =>
     (this.comp()?.series ?? []).map((b, i) => ({
-      bucket: b.bucket, total: b.total, colour: this.colour(b.bucket, i),
+      bucket: b.bucket, name: this.humanize(b.bucket), total: b.total, colour: this.colour(b.bucket, i),
     })),
   );
 
+  humanize(value: string): string {
+    return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
   /** A cell is a dimension value inside one month, so the drill carries both. */
   drill(month: string, bucket: string): void {
-    this.filters.drillInto(this.dimension(), bucket, bucketRange('month', month) ?? {});
+    this.filters.drillInto(this.dimension(), bucket,
+      { ...(bucketRange('month', month) ?? {}), spendingOnly: true });
   }
 }

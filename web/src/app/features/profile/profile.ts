@@ -6,6 +6,7 @@ import {
   LanguagePreference, Preferences, ThemePreference,
 } from '../../core/preferences.service';
 import { FintoSelect } from '../../shared/finto-select';
+import { Haptics } from '../../core/haptics';
 
 @Component({
   selector: 'app-profile',
@@ -17,6 +18,7 @@ export class ProfilePage {
   private api = inject(Api);
   private router = inject(Router);
   preferences = inject(Preferences);
+  haptics = inject(Haptics);
   apiKeys = signal<ApiKeyMeta[]>([]);
   newApiKey = signal('');
   copied = signal(false);
@@ -38,6 +40,13 @@ export class ProfilePage {
 
   themeOptions() {
     return this.themes.map((item) => ({ value: item.value, label: this.t(item.en, item.zh) }));
+  }
+
+  hapticOptions() {
+    return [
+      { value: 'on', label: this.t('On', '開啟') },
+      { value: 'off', label: this.t('Off', '關閉') },
+    ];
   }
 
   t(en: string, zh: string): string { return this.preferences.text(en, zh); }

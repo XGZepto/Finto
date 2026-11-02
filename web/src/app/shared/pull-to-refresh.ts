@@ -1,4 +1,5 @@
 import { Component, ElementRef, OnDestroy, inject, signal } from '@angular/core';
+import { Haptics } from '../core/haptics';
 import { Refresh } from '../core/refresh.service';
 import { scrollPane } from '../core/scroll';
 
@@ -68,6 +69,7 @@ const MAX = 108;
 export class PullToRefresh implements OnDestroy {
   refresh = inject(Refresh);
   private host = inject(ElementRef<HTMLElement>);
+  private haptics = inject(Haptics);
 
   offset = signal(0);
   private startY = 0;
@@ -122,7 +124,11 @@ export class PullToRefresh implements OnDestroy {
     // Stop the pane treating the same drag as a scroll.
     event.preventDefault();
     this.indicator?.classList.add('dragging');
+    const wasArmed = this.armed();
     this.offset.set(MAX * (1 - Math.exp(-delta / MAX)));
+    // The arming point should be felt, not only seen: one tick crossing it in
+    // either direction, so backing out is as clear as committing.
+    if (wasArmed !== this.armed()) this.haptics.fire(wasArmed ? 'selection' : 'impact');
   };
 
   private onEnd = (): void => {
@@ -135,7 +141,10 @@ export class PullToRefresh implements OnDestroy {
     }
     // Hold at the threshold while the work happens, then retract.
     this.offset.set(THRESHOLD);
-    void this.refresh.run().then(() => this.offset.set(0));
+    void this.refresh.run().then(() => {
+      this.offset.set(0);
+      this.haptics.fire('success');
+    });
   };
 
   private get indicator(): HTMLElement | null {

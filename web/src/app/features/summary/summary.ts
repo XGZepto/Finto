@@ -4,15 +4,16 @@ import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
 import { Refresh } from '../../core/refresh.service';
 import { MoneyPipe } from '../../core/money.pipe';
-import { Money, StatementFreshness, SummaryRow, TotalRow } from '../../core/models';
+import { LedgerFilter, Money, StatementFreshness, SummaryRow, TotalRow } from '../../core/models';
 import { FintoSelect } from '../../shared/finto-select';
 import { FintoPills } from '../../shared/finto-pills';
-import { FintoDonut, Slice } from '../../shared/finto-viz';
+import { FintoDonut, SERIES, Slice } from '../../shared/finto-viz';
 import { Preferences } from '../../core/preferences.service';
 import { FilterState } from '../../core/filter-state';
 import { forkJoin } from 'rxjs';
 import { PageStatus } from '../../core/page-status';
 import { RevealOnView } from '../../shared/reveal-on-view';
+import { anchorDate, isoDate } from './hero-anchor';
 
 /**
  * Summary.
@@ -105,6 +106,12 @@ export class SummaryPage {
   });
   rankedTop = computed(() => this.ranked().slice(0, 10));
 
+  /** The donut's colour for a rank, so a row and its arc read as one thing. */
+  rankColour(index: number): string {
+    const max = 6; // FintoDonut's default; rank 7+ share its "N more" arc
+    return SERIES[Math.min(index, max) % SERIES.length];
+  }
+
   /** Rows a missing rate kept out of the ranking. */
   unranked = computed(() =>
     this.convertTo()
@@ -129,13 +136,18 @@ export class SummaryPage {
     this.load();
   }
 
-  /** Start of the window the pills select, as the ledger filter both use. */
-  private periodFilter(): { from: string } {
+  /**
+   * Start of the window the pills select, as the ledger filter both use.
+   *
+   * Spending only: a card payment or transfer the linker has not paired yet is
+   * still money changing pockets, and drilling carries the same flag so the
+   * blotter total matches the figure that was tapped.
+   */
+  private periodFilter(): { from: string; spendingOnly: true } {
     const start = new Date();
     start.setMonth(start.getMonth() - this.seriesMonths() + 1);
     start.setDate(1);
-    const pad = (value: number) => String(value).padStart(2, '0');
-    return { from: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-01` };
+    return { from: isoDate(start), spendingOnly: true };
   }
 
   /** Where the money went, on whichever dimension is selected. */
@@ -147,6 +159,30 @@ export class SummaryPage {
     const h = this.monthToDate();
     if (!h || h.income.amount <= 0) return null;
     return ((h.income.amount - Math.abs(h.spend.amount)) / h.income.amount) * 100;
+  });
+
+  /**
+   * The day the hero measures up to.
+   *
+   * Statements land weeks after the spending they record, so on the 2nd of a
+   * month "this month" is usually empty and a comparison against last month
+   * reads as a 100% drop. The hero follows the data instead of the wall clock.
+   */
+  anchor = signal<{ date: Date; lagging: boolean; exact: boolean } | null>(null);
+
+  heroLabel = computed(() => {
+    const anchor = this.anchor();
+    const today = new Date();
+    if (!anchor || (anchor.date.getFullYear() === today.getFullYear()
+        && anchor.date.getMonth() === today.getMonth())) return 'Spent this month';
+    return `Spent in ${anchor.date.toLocaleDateString('en', { month: 'long' })}`;
+  });
+
+  heroThrough = computed(() => {
+    const anchor = this.anchor();
+    // A month-end stand-in is a guess; say "through" only for a real date.
+    if (!anchor?.lagging || !anchor.exact) return null;
+    return anchor.date.toLocaleDateString('en', { month: 'short', day: 'numeric' });
   });
 
   spendComparison = computed(() => {
@@ -276,11 +312,24 @@ export class SummaryPage {
     // The trend is always per month: the dimension control picks what the
     // breakdown splits by, never how time is bucketed.
     this.api.summary('month', period, convert).subscribe({
-      next: (res) => { if (id === this.loadId) this.monthRows.set(res.rows); },
-      error: () => { if (id === this.loadId) this.monthRows.set([]); },
+      next: (res) => {
+        if (id !== this.loadId) return;
+        this.monthRows.set(res.rows);
+        this.loadComparison(id, convert, anchorDate(res.ledger_through, res.rows));
+      },
+      error: () => {
+        if (id !== this.loadId) return;
+        this.monthRows.set([]);
+        this.loadComparison(id, convert, { date: new Date(), lagging: false, exact: true });
+      },
     });
+  }
 
-    const comparison = this.comparisonFilters();
+  private loadComparison(
+    id: number, convert: string | undefined, anchor: { date: Date; lagging: boolean; exact: boolean },
+  ): void {
+    this.anchor.set(anchor);
+    const comparison = this.comparisonFilters(anchor.date);
     forkJoin({
       current: this.api.summary('month', comparison.current, convert),
       previous: this.api.summary('month', comparison.previous, convert),
@@ -298,22 +347,18 @@ export class SummaryPage {
     });
   }
 
-  private comparisonFilters(): {
-    current: { from: string; to: string };
-    previous: { from: string; to: string };
+  /** Month-to-anchor against the same span of the month before. */
+  private comparisonFilters(anchor: Date): {
+    current: LedgerFilter;
+    previous: LedgerFilter;
   } {
-    const today = new Date();
-    const currentStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    const previousStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const previousEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-    previousEnd.setDate(Math.min(today.getDate(), previousEnd.getDate()));
-    const iso = (date: Date) => {
-      const pad = (value: number) => String(value).padStart(2, '0');
-      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-    };
+    const currentStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    const previousStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
+    const previousEnd = new Date(anchor.getFullYear(), anchor.getMonth(), 0);
+    previousEnd.setDate(Math.min(anchor.getDate(), previousEnd.getDate()));
     return {
-      current: { from: iso(currentStart), to: iso(today) },
-      previous: { from: iso(previousStart), to: iso(previousEnd) },
+      current: { from: isoDate(currentStart), to: isoDate(anchor), spendingOnly: true },
+      previous: { from: isoDate(previousStart), to: isoDate(previousEnd), spendingOnly: true },
     };
   }
 
@@ -358,7 +403,7 @@ export class SummaryPage {
 
   /** A flow column is a month. The split-by control does not apply to it. */
   drillMonth(bucket: string): void {
-    this.filters.drillInto('month', bucket);
+    this.filters.drillInto('month', bucket, { spendingOnly: true });
   }
 
   /** Tooltip for a trend column. Goes through MoneyPipe like every other figure. */
@@ -368,3 +413,4 @@ export class SummaryPage {
     return `${bucket} · out ${out} · in ${inn} · ${row.txn_count} rows`;
   }
 }
+

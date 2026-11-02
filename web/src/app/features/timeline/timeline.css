@@ -16,13 +16,16 @@
 .band:hover { opacity: 0.8; }
 
 .tick {
+  display: flex;
+  justify-content: center;
   padding-top: 5px;
   font-size: var(--t-micro);
   color: var(--fg-4);
-  text-align: center;
-  overflow: hidden;
   white-space: nowrap;
+  visibility: hidden;
 }
+/* Labels spill across their neighbours; only every few months shows one. */
+.tick.shown, .tick.on { visibility: visible; }
 .tick.on { color: var(--fg); }
 
 .legend {
@@ -70,8 +73,6 @@
 
 @media (max-width: 880px) {
   .cols { gap: 1px; height: 230px; }
-  .tick { visibility: hidden; font-size: var(--t-micro); }
-  .col:first-child .tick, .col:last-child .tick, .col:nth-child(3n + 1) .tick { visibility: visible; }
   .head-controls { width: 100%; display: grid; grid-template-columns: 1fr 82px; }
   .head-controls .seg { grid-column: 1 / -1; }
   .cov-name { width: 84px; }

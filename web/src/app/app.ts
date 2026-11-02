@@ -1,6 +1,7 @@
-import { Component, inject, signal, viewChild } from '@angular/core';
+import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, NavigationError, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Haptics, hapticFor } from './core/haptics';
 import { OverlayHost } from './core/overlay-host';
 import { Preferences } from './core/preferences.service';
 import { isCollapsedContentPane, isDeadChunkError, recoverAction } from './core/pwa-lifecycle';
@@ -41,7 +42,7 @@ import { PullToRefresh } from './shared/pull-to-refresh';
 
         <div class="spacer"></div>
         <div class="nav nav-settings">
-          <a routerLink="/tools" routerLinkActive="active">
+          <a routerLink="/tools" [class.active]="moreActive().desktop">
             <span class="idx"><finto-nav-icon name="more" /></span><span class="label">{{ preferences.text('More', '更多') }}</span>
           </a>
         </div>
@@ -63,7 +64,7 @@ import { PullToRefresh } from './shared/pull-to-refresh';
             <span>{{ preferences.text(item.label, item.labelZh) }}</span>
           </a>
         }
-        <a routerLink="/tools" routerLinkActive="active">
+        <a routerLink="/tools" [class.active]="moreActive().compact">
           <span class="mobile-icon"><finto-nav-icon name="more" /></span>
           <span>{{ preferences.text('More', '更多') }}</span>
         </a>
@@ -96,6 +97,23 @@ export class App {
   /** Stable top-level destinations earn tabs; the rest stay in More on a phone. */
   readonly primaryNav = this.nav.slice(0, 4);
 
+  /**
+   * More stands for every page it leads to. Without this, Import or Settings
+   * showed a tab bar with nothing selected, which reads as "you are nowhere".
+   */
+  private path = signal(location.pathname);
+  moreActive = computed(() => {
+    const path = this.path();
+    const under = (items: { path: string }[]) =>
+      items.some((item) => path === item.path || path.startsWith(item.path + '/'));
+    const secondary = path !== '/login';
+    return {
+      compact: secondary && !under(this.primaryNav),
+      desktop: secondary && !under(this.nav),
+    };
+  });
+  private haptics = inject(Haptics);
+
   readonly desktopGroups = [
     { label: 'Money', labelZh: '財務', items: this.nav },
   ];
@@ -114,8 +132,16 @@ export class App {
     window.addEventListener('resize', this.syncViewport);
     window.addEventListener('orientationchange', this.syncViewport);
     document.addEventListener('visibilitychange', this.onVisibility);
+    // One delegated listener, in the capture phase so it sees the state a tap
+    // is leaving. Untrusted clicks are ours (the iOS switch), never a person's.
+    document.addEventListener('click', (event) => {
+      if (!event.isTrusted) return;
+      const kind = hapticFor(event.target instanceof Element ? event.target : null);
+      if (kind) this.haptics.fire(kind);
+    }, { capture: true });
     this.router.events.subscribe((event) => {
       if (event instanceof NavigationEnd) {
+        this.path.set(event.urlAfterRedirects.split(/[?#]/)[0]);
         sessionStorage.removeItem('finto.chunkReload');
         this.scrollOnPathChange(event.urlAfterRedirects);
       }

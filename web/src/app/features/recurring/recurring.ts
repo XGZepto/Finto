@@ -1,5 +1,6 @@
 import { catchError, forkJoin, map, of } from 'rxjs';
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
@@ -74,7 +75,7 @@ function daysBetween(a: string, b: string): number {
  */
 @Component({
   selector: 'app-recurring',
-  imports: [FintoSkeleton, FormsModule, MoneyPipe, ShortDatePipe, FintoIcon, FintoPills, FintoSelect],
+  imports: [FintoSkeleton, FormsModule, NgTemplateOutlet, MoneyPipe, ShortDatePipe, FintoIcon, FintoPills, FintoSelect],
   templateUrl: './recurring.html',
   styleUrl: './recurring.css',
 })
@@ -226,7 +227,9 @@ export class RecurringPage {
   irregularCount = computed(() =>
     this.visibleSubs().filter((c) => c.cadence === 'irregular').length);
 
-  inactiveCount = computed(() => this.visibleSubs().filter((c) => c.inactive).length);
+  inactiveCount = computed(() => this.inactiveSubs().length);
+  activeSubs = computed(() => this.visibleSubs().filter((c) => !c.inactive));
+  inactiveSubs = computed(() => this.visibleSubs().filter((c) => c.inactive));
 
   open(commitment: Commitment): void {
     this.selected.set(commitment);

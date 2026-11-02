@@ -32,11 +32,14 @@ import { Component, input, output } from '@angular/core';
       border-right: 1px solid var(--line-strong);
       background: none;
       color: var(--fg-3);
-      font-family: var(--mono);
+      font-family: var(--sans);
       font-size: var(--t-meta);
-      letter-spacing: .08em;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
     }
     .pill:last-child { border-right: 0; }
+    .pill { transition: background var(--motion-fast) linear, color var(--motion-fast) linear; }
     .pill.on { background: var(--fg); color: var(--bg); }
   `],
 })

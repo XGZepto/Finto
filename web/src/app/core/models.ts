@@ -50,6 +50,8 @@ export interface LedgerFilter {
   includeDuplicates?: boolean;
   uncategorisedOnly?: boolean;
   installmentsOnly?: boolean;
+  /** Drop card payments, FX conversions and transfer-categorised rows, linked or not. */
+  spendingOnly?: boolean;
 }
 
 export interface Txn {

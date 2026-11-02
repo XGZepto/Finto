@@ -974,3 +974,69 @@ def test_reading_integrity_does_not_write(client, conn):
     for _ in range(3):
         assert client.get("/api/integrity").status_code == 200
     assert audit_rows() == before
+
+
+# ---------------------------------------------------------------------------
+# Spending semantics
+# ---------------------------------------------------------------------------
+
+def test_spending_only_drops_unlinked_money_movement(client, database_url):
+    """A card payment the linker has not paired is still not spending."""
+    conn = dbm.connect(database_url)
+    target = conn.execute(
+        "SELECT id FROM txn WHERE amount_booked < 0 AND transfer_group_id IS NULL "
+        "AND kind = 'purchase' ORDER BY amount_booked LIMIT 1").fetchone()["id"]
+    conn.execute("UPDATE txn SET kind='cc_payment', category='fees' WHERE id=%s", (target,))
+    conn.commit()
+    conn.close()
+
+    every = client.get("/api/transactions").json()["items"]
+    spending = client.get("/api/transactions?spendingOnly=true").json()["items"]
+    assert target in {row["id"] for row in every}
+    assert target not in {row["id"] for row in spending}
+    assert all(row["kind"] not in ("cc_payment", "fx_conversion") for row in spending)
+    assert all(row.get("category") != "transfers" for row in spending)
+
+    fees = client.get("/api/summary?group_by=category&spendingOnly=true").json()["rows"]
+    assert all(row["bucket"] != "transfers" for row in fees)
+
+
+def test_spending_only_keeps_a_categorised_bank_transfer(client, database_url):
+    """Paying a contractor by bank transfer is spending; its category says so."""
+    conn = dbm.connect(database_url)
+    target = conn.execute(
+        "SELECT id FROM txn WHERE amount_booked < 0 AND transfer_group_id IS NULL "
+        "AND kind = 'purchase' ORDER BY amount_booked LIMIT 1").fetchone()["id"]
+    conn.execute("UPDATE txn SET kind='transfer', category='services' WHERE id=%s", (target,))
+    conn.commit()
+    conn.close()
+    spending = client.get("/api/transactions?spendingOnly=true&limit=1000").json()["items"]
+    assert target in {row["id"] for row in spending}
+
+
+def test_summary_reports_how_far_the_ledger_runs(client):
+    """Views anchor "latest period" on data, not on the wall clock."""
+    body = client.get("/api/summary?from=2999-01-01").json()
+    assert body["rows"] == []
+    every = client.get("/api/transactions?limit=1000").json()["items"]
+    assert body["ledger_through"] == max(row["date"] for row in every)
+
+    # The rest of the scope still applies: a spending view anchors on spending.
+    spending = client.get("/api/transactions?spendingOnly=true&limit=1000").json()["items"]
+    scoped = client.get("/api/summary?from=2999-01-01&spendingOnly=true").json()
+    assert scoped["ledger_through"] == max(row["date"] for row in spending)
+
+
+def test_composition_never_lists_other_twice(client, database_url):
+    from fin import reporting
+
+    conn = dbm.connect(database_url)
+    keep = conn.execute(
+        "SELECT category FROM txn WHERE category IS NOT NULL AND amount_booked < 0 "
+        "GROUP BY category ORDER BY SUM(amount_booked) DESC LIMIT 1").fetchone()["category"]
+    conn.execute("UPDATE txn SET category='other' WHERE category IS DISTINCT FROM %s", (keep,))
+    conn.commit()
+    body = reporting.composition(conn, dimension="category", to_currency="HKD", limit=1)
+    conn.close()
+    buckets = [series["bucket"] for series in body["series"]]
+    assert buckets.count("other") == 1

@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## 0.4.29 — 2026-11-02
+
+- Summary, Reports and Timeline count spending only. Card payments, FX
+  conversions and transfer-categorised rows stay out even before the linker
+  pairs their legs; they had put a 290k "Fees" bucket at the top of the
+  ranking. The API takes this as `spendingOnly=true`, and drilling into the
+  blotter carries the same flag so its total matches the figure tapped.
+- `/api/summary` returns `ledger_through`, the latest transaction date in
+  scope. The Summary hero follows it: when statements have not arrived for
+  the new month it shows the last month with data ("Spent in October,
+  through Oct 23") instead of "0.00, 100% less".
+- Timeline opens in the reporting currency, uses readable labels and eight
+  distinct series colours, no longer lists "other" twice, and labels every
+  few months in full instead of truncating each one.
+- The Summary ranking takes the donut's colours, so the donut no longer
+  repeats it as a legend.
+- Controls (buttons, inputs, selects, segmented controls) are set in the
+  proportional face; mono stays with figures, codes and table headers.
+- Haptic feedback in the installed app for tab and period changes, toggles,
+  and pull-to-refresh arming and completion. It uses vibration on Android and
+  the system switch tick on iOS, and can be turned off in Settings.
+- Page changes cross-fade with a short rise. Filter changes within a page do
+  not animate, and reduced motion turns the effect off.
+- The More tab stays selected on every page it leads to.
+- Recurring lists active subscriptions first. Lapsed ones move to a
+  collapsed Inactive group.
+- The blotter no longer repeats a description that only differs from the
+  title in case, and phone Accounts read as one divided list.
+
 ## 0.4.28 — 2026-11-02
 
 - A statement's balance counts through the statement date, so an idle

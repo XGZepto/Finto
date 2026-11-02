@@ -355,9 +355,13 @@ button, .btn {
   border-radius: 0;
   background: var(--panel-2);
   color: var(--fg-2);
-  font-family: var(--mono);
+  /* Controls speak in the proportional face: a label is read, not aligned.
+     Tabular figures keep any number inside a control from jittering. */
+  font-family: var(--sans);
   font-size: var(--t-data);
-  letter-spacing: 0.06em;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
   cursor: pointer;
   transition: color var(--motion-fast) linear, border-color var(--motion-fast) linear, background var(--motion-fast) linear;
 }
@@ -385,9 +389,12 @@ input, select, textarea {
   border-radius: 0;
   background: var(--panel-2);
   color: var(--fg);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: var(--t-data);
+  font-variant-numeric: tabular-nums;
 }
+/* Typed figures still align. */
+input[type='number'], input[inputmode='decimal'], input[inputmode='numeric'] { font-family: var(--mono); }
 input::placeholder, textarea::placeholder { color: var(--fg-4); }
 input:focus, select:focus, textarea:focus {
   outline: none;
@@ -698,4 +705,22 @@ router-outlet + *:has(.select-root.open, .date-root.open, .filter-bar.sheet-open
   .section-head > .row { width: 100%; }
   .table-wrap { margin-inline: calc(-1 * var(--s3)); border: 0; }
   th, td { padding-inline: var(--s2); }
+}
+
+/* --- Page transitions ----------------------------------------------------
+   A change of page cross-fades with a short rise; the navigation chrome is
+   captured on its own and swaps in place, so only content appears to move.
+   Same-page navigations (filters in the query string) skip this entirely. */
+::view-transition-old(root) { animation: page-out var(--motion-fast) var(--ease) both; }
+::view-transition-new(root) { animation: page-in var(--motion) var(--ease-out) both; }
+::view-transition-group(finto-sidebar),
+::view-transition-group(finto-tabbar),
+::view-transition-new(finto-sidebar),
+::view-transition-new(finto-tabbar) { animation: none; }
+::view-transition-old(finto-sidebar),
+::view-transition-old(finto-tabbar) { display: none; }
+@keyframes page-out { to { opacity: 0; } }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }

@@ -40,6 +40,7 @@ export function filterToParams(f: LedgerFilter): HttpParams {
   if (f.includeDuplicates) put('includeDuplicates', true);
   if (f.uncategorisedOnly) put('uncategorisedOnly', true);
   if (f.installmentsOnly) put('installmentsOnly', true);
+  if (f.spendingOnly) put('spendingOnly', true);
   return p;
 }
 
@@ -153,6 +154,8 @@ addTag(id: string, tag: string): Observable<Txn> {
   ): Observable<{
     group_by: string; rows: SummaryRow[]; totals: TotalRow[]; conversion?: any;
     normalised?: { total: { net: Money; spend: Money; income: Money } };
+    /** Latest visible transaction date; absent from older API builds. */
+    ledger_through?: string | null;
   }> {
     let p = filterToParams(f).set('group_by', groupBy);
     if (convertTo) p = p.set('convert_to', convertTo);

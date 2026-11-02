@@ -45,6 +45,11 @@ class LedgerFilter(BaseModel):
     includeDuplicates: bool = False
     uncategorisedOnly: bool = False
     installmentsOnly: bool = False
+    # Keep only consumption: card payments, FX conversions and anything
+    # categorised as a transfer move money between pockets whether or not
+    # linking has paired their legs yet, so a spending figure must not wait on
+    # the linker to be right.
+    spendingOnly: bool = False
 
     @field_validator("months")
     @classmethod

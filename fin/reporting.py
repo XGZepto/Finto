@@ -25,6 +25,12 @@ from zoneinfo import ZoneInfo
 
 # Aggregation dimensions the summary endpoint understands. Mapping to SQL here
 # rather than accepting caller-supplied column names keeps this injection-proof.
+#: Kinds that only ever move money between your own pockets. An unlinked leg
+#: of one is still not spending; `spendingOnly` drops them. A plain `transfer`
+#: is not on this list: paying a contractor or receiving a refund by bank
+#: transfer is real spending or income, and its category says which.
+MOVEMENT_KINDS: tuple[str, ...] = ("cc_payment", "fx_conversion")
+
 GROUP_BY_SQL: dict[str, str] = {
     "month": "substr(t.txn_date, 1, 7)",
     "quarter": "substr(t.txn_date, 1, 4) || '-Q' || "
@@ -161,6 +167,11 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
         clauses.append("t.category IS NULL")
     if f.get("installmentsOnly"):
         clauses.append("t.installment_plan_id IS NOT NULL")
+    if f.get("spendingOnly"):
+        kinds = ",".join(["%s"] * len(MOVEMENT_KINDS))
+        clauses.append(
+            f"t.kind NOT IN ({kinds}) AND COALESCE(t.category, '') <> 'transfers'")
+        params.extend(MOVEMENT_KINDS)
     if not f.get("includeTransfers"):
         scoped_accounts = list(f.get("accounts") or [])
         if f.get("boundaryTransfers") and scoped_accounts:
@@ -271,7 +282,10 @@ def composition(conn, *, dimension: str = "category", to_currency: str,
     for (bucket, month), amount in grid.items():
         series[bucket if bucket in keep else "other"][month] += amount
 
-    buckets = [*top] + (["other"] if any(series["other"].values()) else [])
+    # A real "other" bucket in the top set already absorbed the residual above;
+    # listing it twice would draw two legends for one band.
+    residual = "other" not in keep and any(series["other"].values())
+    buckets = [*top] + (["other"] if residual else [])
     return {
         "dimension": dimension,
         "currency": to_currency.upper(),
@@ -818,6 +832,24 @@ def summary(conn, *, group_by: str = "month", filters: dict | None = None) -> li
         "spend": money(r["spend_minor"], r["currency"]),
         "income": money(r["income_minor"], r["currency"]),
     } for r in conn.execute(sql, params)]
+
+
+def ledger_through(conn, *, filters: dict | None = None) -> str | None:
+    """Latest transaction date in scope, ignoring the scope's own date bounds.
+
+    Statements arrive weeks after the fact, so "this month" is often empty for
+    reasons that say nothing about spending. Views anchor on this date instead
+    of the wall clock when they need the most recent period with data. The rest
+    of the filter applies, so a spending view anchors on the last purchase and
+    not on an interest credit that posted yesterday.
+    """
+    scope = {k: v for k, v in (filters or {}).items() if k not in ("from", "to", "months")}
+    where, params = build_where({**scope, "boundaryTransfers": True})
+    row = conn.execute(
+        f"SELECT MAX(t.txn_date) AS latest FROM txn t "
+        f"JOIN account a ON a.id = t.account_id WHERE {where}", params,
+    ).fetchone()
+    return row["latest"] if row else None
 
 
 def totals(conn, *, filters: dict | None = None) -> list[dict]:

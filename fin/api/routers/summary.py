@@ -41,6 +41,7 @@ def get_summary(
         "rows": rows,
         "totals": headline,
         "dimensions": sorted([*reporting.GROUP_BY_SQL, "tag"]),
+        "ledger_through": reporting.ledger_through(conn, filters=f.to_query()),
     }
 
     if convert_to:
