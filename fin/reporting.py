@@ -587,13 +587,19 @@ def balance_known_through(conn) -> dict[str, str]:
     """The latest day each account has a balance the issuer printed.
 
     A CSV export without balances says what moved, not where the account
-    stands, so it does not move this day forward.
+    stands, so it does not move this day forward. A statement's last balance
+    holds until its statement date: a section with no activity prints only
+    its opening, dated a month before the statement it is on.
     """
     return {
         r["account_id"]: str(r["as_of"])[:10]
         for r in conn.execute(
-            "SELECT account_id, MAX(as_of_date) AS as_of FROM balance_assertion "
-            "GROUP BY account_id")
+            "SELECT ba.account_id, MAX(GREATEST(ba.as_of_date, "
+            "COALESCE(substr(sf.statement_date, 1, 10), substr(sf.period_end, 1, 10), "
+            "ba.as_of_date))) AS as_of "
+            "FROM balance_assertion ba "
+            "LEFT JOIN statement_file sf ON sf.id = ba.statement_file_id "
+            "GROUP BY ba.account_id")
     }
 
 
