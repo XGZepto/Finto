@@ -120,8 +120,9 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
     fields = patch.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(400, "nothing to update")
-    if fields.get("category", ...) is None or fields.get("review_state", ...) is None:
-        raise HTTPException(422, "category and review_state cannot be cleared")
+    if (fields.get("category", ...) is None or fields.get("review_state", ...) is None
+            or fields.get("status", ...) is None):
+        raise HTTPException(422, "category, review_state and status cannot be cleared")
     if "description" in fields:
         raw = (fields["description"] or "").strip()
         if not raw:
@@ -150,10 +151,13 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
 
     allowed = {
         "category", "subcategory", "notes", "review_state", "merchant",
-        "description_raw", "description_norm",
+        "description_raw", "description_norm", "status",
     }
     sets = [f"{k}=%s" for k in fields if k in allowed]
     params = [v for k, v in fields.items() if k in allowed]
+    if fields.get("status") == "void":
+        sets.extend(["transfer_group_id=%s", "refund_of_id=%s"])
+        params.extend([None, None])
     if "native" in fields:
         native = fields["native"]
         if native is None:

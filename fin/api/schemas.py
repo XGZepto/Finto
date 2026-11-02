@@ -90,6 +90,8 @@ class TransactionPatch(BaseModel):
     description: str | None = None
     # The foreign figure the statement printed, when the import did not keep it.
     native: NativeAmount | None = None
+    # "void" takes a row that never happened out of every total and match.
+    status: Literal["posted", "void"] | None = None
 
 
 class ResolveRequest(BaseModel):

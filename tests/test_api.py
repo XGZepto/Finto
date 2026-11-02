@@ -599,6 +599,14 @@ def test_patch_can_record_the_foreign_amount(client):
     assert bad.status_code == 422
 
 
+def test_patch_can_void_a_row_that_never_happened(client):
+    page = client.get("/api/transactions").json()
+    txn_id = page["items"][0]["id"]
+    assert client.patch(f"/api/transactions/{txn_id}", json={"status": "void"}).status_code == 200
+    ids = [t["id"] for t in client.get("/api/transactions").json()["items"]]
+    assert txn_id not in ids
+
+
 def test_patch_can_rewrite_a_bad_statement_description(client):
     txn_id = client.get("/api/transactions").json()["items"][0]["id"]
     r = client.patch(

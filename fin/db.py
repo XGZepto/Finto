@@ -593,7 +593,8 @@ def load_txns(conn, *, include_duplicates: bool = False,
               from_date: date | None = None,
               to_date: date | None = None) -> list[Txn]:
     sql = "SELECT * FROM txn"
-    clauses: list[str] = []
+    # A voided row was never real money, so nothing may match or link to it.
+    clauses: list[str] = ["status <> 'void'"]
     params: list[str] = []
     if not include_duplicates:
         clauses.append("duplicate_of_id IS NULL")
