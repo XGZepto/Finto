@@ -9,6 +9,8 @@
   the opening balance and the import was refused.
 - Keep the currency named on an AMEX credit line. A mainland Alipay charge
   with no currency printed is renminbi, and no longer raises a warning.
+  A transaction can also be given the foreign amount the statement printed
+  when an earlier import dropped it.
 
 ## 0.4.21 — 2026-10-22
 

@@ -76,6 +76,11 @@ class TagBody(BaseModel):
     tag: str
 
 
+class NativeAmount(BaseModel):
+    amount: int
+    currency: str
+
+
 class TransactionPatch(BaseModel):
     category: str | None = None
     subcategory: str | None = None
@@ -83,6 +88,8 @@ class TransactionPatch(BaseModel):
     review_state: Literal["unreviewed", "confirmed", "flagged"] | None = None
     merchant: str | None = None
     description: str | None = None
+    # The foreign figure the statement printed, when the import did not keep it.
+    native: NativeAmount | None = None
 
 
 class ResolveRequest(BaseModel):
