@@ -19,7 +19,7 @@
     {
       "name": "hkd_savings",
       "start": "Account Transaction History",
-      "end": "Foreign Currency Savings|Total Relationship Balance|Important Notice",
+      "end": "^HKD Current$|Foreign Currency Savings|Total Relationship Balance|Important Notice",
       "currency": "HKD",
       "account_hint": "HKD Savings",
       "columns": {
@@ -70,6 +70,56 @@
             "issuer.transaction_code"
           ]
         },
+        {
+          "match": "\\b(HC\\d{10,})\\b",
+          "keys": [
+            "issuer.reference"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "hkd_current",
+      "start": "^HKD Current$",
+      "end": "Foreign Currency Savings|Total Relationship Balance|Important Notice",
+      "currency": "HKD",
+      "account_hint": "HKD Current",
+      "columns": {
+        "mode": "anchors",
+        "header": "(?-i:Transaction Details)",
+        "anchors": {
+          "date": "(?-i:^Date$)",
+          "description": "(?-i:Transaction)",
+          "deposit": "(?-i:Deposit)",
+          "withdrawal": "(?-i:Withdrawal)",
+          "balance": "(?-i:Balance)"
+        }
+      },
+      "amount": {
+        "mode": "debit_credit",
+        "credit_column": "deposit",
+        "debit_column": "withdrawal",
+        "balance_column": "balance"
+      },
+      "description_column": "description",
+      "exclude": [
+        "^HKD Current$",
+        "^Page \\d+ of \\d+$"
+      ],
+      "balances": [
+        {
+          "pattern": "B/F BALANCE",
+          "kind": "opening",
+          "column": "balance"
+        },
+        {
+          "pattern": "C/F BALANCE",
+          "kind": "closing",
+          "column": "balance"
+        }
+      ],
+      "wraps": true,
+      "detail": [
         {
           "match": "\\b(HC\\d{10,})\\b",
           "keys": [

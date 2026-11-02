@@ -457,6 +457,10 @@ def _apply_section(
     current_currency = currency
     pending_desc: list[tuple[int, str, bool]] = []
     last_row: ExtractedRow | None = None
+    # A CR marker applies once. The next line is often the reference or the
+    # currency name, so the row stays open for that detail; a second CR
+    # (a section total) must not flip the amount back.
+    cr_spent = False
     skip_until = -1
     #: Facts a marker has declared true of the rows still to come, and where the
     #: current block started, for markers that speak for the rows above them.
@@ -520,20 +524,22 @@ def _apply_section(
 
         found_date, date_remainder = _split_date(cells.get("date", ""), tpl, anchor)
 
-        # A CR marker on a continuation line — AMEX HK sets "UNITED STATES
-        # DOLLAR CR" two rows beneath the charge it credits — negates the
-        # transaction just emitted. Checked only when the line is not itself
-        # a transaction row, so a dated row ending in CR is never consumed.
+        # A CR marker on a continuation line — AMEX HK sets "CHINA YUAN
+        # RENMINBI CR" or "UNITED STATES DOLLAR CR" beneath the charge it
+        # credits — negates the transaction just emitted. Checked only when
+        # the line is not itself a transaction row, so a dated row ending in
+        # CR is never consumed. The currency name is on this same line, and
+        # the reference is the line after it, so the row stays open.
         if (spec.amount.cr_on_following_line and last_row is not None
+                and not cr_spent
                 and amount is None and found_date is None
                 and _CR_LINE.search(raw)):
+            if "fx.currency_name" not in last_row.details and currency_from_name(raw):
+                last_row.details["fx.currency_name"] = raw
             last_row.amount = Money(
                 amount=-last_row.amount.amount, currency=last_row.amount.currency
             )
-            # A marker applies once. Section totals are credits too and
-            # carry their own CR, which would otherwise reach back and
-            # flip the last real transaction a second time.
-            last_row = None
+            cr_spent = True
             continue
 
         if found_date is not None:
@@ -593,6 +599,7 @@ def _apply_section(
         last_row.details.update(
             _match_detail(raw, detail_rules, cells, "row") or {})
         result.rows.append(last_row)
+        cr_spent = False
 
     for row in result.rows[section_start:]:
         _resolve_foreign(row, result.warnings)
@@ -863,6 +870,10 @@ def _foreign_text(cells: dict[str, str]) -> dict[str, str]:
     line or two below, so the pair assembles after the detail lines are read.
     """
     token = cells.get("fx", "").strip()
+    # AMEX sometimes prints a sub-unit foreign figure as ".18" with no leading
+    # zero. That is still the amount; leaving it as prose drops the renminbi.
+    if re.fullmatch(r"\.\d{1,2}", token):
+        token = "0" + token
     if NUMERIC_TOKEN.match(token):
         return {"fx.amount": token}
     # HSBC states the currency and the figure together, in ISO: "DKK 99.57".
@@ -889,6 +900,10 @@ def _resolve_foreign(row: ExtractedRow, warnings: list[str]) -> None:
     if not text:
         return
     code = name if _CCY_RE.match(name) else currency_from_name(name)
+    if code is None and re.search(r"\bAlipay\*", row.description):
+        # Mainland Alipay settles in renminbi. AlipayHK is a different
+        # product and does not use this prefix, so it is left alone.
+        code = "CNY"
     if code is None:
         warnings.append(
             f"page {row.page_no + 1}: foreign amount {text!r} on "

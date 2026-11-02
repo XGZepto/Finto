@@ -583,6 +583,22 @@ def test_patch_records_a_manual_annotation(client):
     assert again["notes"] == "team lunch"
 
 
+def test_patch_can_record_the_foreign_amount(client):
+    txn_id = client.get("/api/transactions").json()["items"][0]["id"]
+    r = client.patch(
+        f"/api/transactions/{txn_id}",
+        json={"native": {"amount": 3490, "currency": "cny"}},
+    )
+    assert r.status_code == 200
+    assert r.json()["native"] == {"amount": 3490, "currency": "CNY"}
+
+    bad = client.patch(
+        f"/api/transactions/{txn_id}",
+        json={"native": {"amount": 1, "currency": "renminbi"}},
+    )
+    assert bad.status_code == 422
+
+
 def test_patch_can_rewrite_a_bad_statement_description(client):
     txn_id = client.get("/api/transactions").json()["items"][0]["id"]
     r = client.patch(

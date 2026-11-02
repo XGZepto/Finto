@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -153,6 +154,17 @@ def patch_transaction(txn_id: str, patch: TransactionPatch,
     }
     sets = [f"{k}=%s" for k in fields if k in allowed]
     params = [v for k, v in fields.items() if k in allowed]
+    if "native" in fields:
+        native = fields["native"]
+        if native is None:
+            sets.extend(["amount_native=%s", "currency_native=%s"])
+            params.extend([None, None])
+        else:
+            currency = str(native["currency"]).strip().upper()
+            if not re.fullmatch(r"[A-Z]{3}", currency):
+                raise HTTPException(422, "native currency must be a 3-letter code")
+            sets.extend(["amount_native=%s", "currency_native=%s"])
+            params.extend([int(native["amount"]), currency])
     if sets:
         conn.execute(
             f"UPDATE txn SET {', '.join(sets)}, updated_at=%s WHERE id=%s",

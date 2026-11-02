@@ -135,6 +135,43 @@ def test_hsbc_savings_dated_name_stays_with_the_next_amount():
     assert report.status == "verified"
 
 
+def test_hsbc_one_current_account_is_its_own_section():
+    """HSBC One now prints an HKD Current ledger between savings and FX.
+
+    Its B/F of zero used to overwrite the savings opening, so a statement
+    that ended at zero was reported off by the whole savings opening balance
+    and the import was refused.
+    """
+    doc = "\n".join([
+        row((0, "MR A CUSTOMER"), (40, "Portfolio Summary")),
+        row((0, "14 October 2026")),
+        row((0, "HKD Savings"), (20, "563-630565-833"), (40, "HKD"), right(85, "0.00")),
+        row((0, "HKD Current"), (40, "HKD"), right(85, "0.00")),
+        row((0, "HSBC One Account Transaction History")),
+        row((0, "HKD Savings")),
+        row((0, "Date"), (10, "Transaction Details"),
+            right(55, "Deposit"), right(70, "Withdrawal"), right(85, "Balance")),
+        row((0, "14 Sep"), (10, "B/F BALANCE"), right(85, "100.00")),
+        row((0, "20 Sep"), (10, "SALARY"), right(55, "50.00"), right(85, "150.00")),
+        row((0, "21 Sep"), (10, "TRANSFER"), right(70, "150.00"), right(85, "0.00")),
+        row((0, "HKD Current")),
+        row((0, "Date"), (10, "Transaction Details"),
+            right(55, "Deposit"), right(70, "Withdrawal"), right(85, "Balance")),
+        row((0, "14 Sep"), (10, "B/F BALANCE"), right(85, "0.00")),
+        row((0, "12 Oct"), (10, "GOLD/EXCHANGE CREDIT"), right(55, "30.00")),
+        row((10, "MOBILE WITHDRAWAL"), right(70, "30.00"), right(85, "0.00")),
+        row((0, "Foreign Currency Savings")),
+        row((0, "Total Relationship Balance")),
+    ])
+    result, report = run(make_document(doc), "hsbc_hk_savings")
+    assert by_section(result) == {
+        "hkd_savings": [5000, -15000],
+        "hkd_current": [3000, -3000],
+    }
+    assert result.rows[2].account_hint == "HKD Current"
+    assert report.status == "verified"
+
+
 # ---------------------------------------------------------------------------
 # Chase — running balance, and invisible markers colliding with real rows
 # ---------------------------------------------------------------------------
