@@ -46,6 +46,8 @@ export class AccountsPage {
   cards = signal<Card[]>([]);
   positions = signal<Position[]>([]);
   netWorth = signal<Money | null>(null);
+  /** Net worth on the last day every watched account has a statement for. */
+  settled = signal<{ asOf: string; worth: Money; limitedBy: string[] } | null>(null);
   series = signal<SeriesPoint[]>([]);
   positionTypes = signal<Array<{ account_type: string; balance: Money }>>([]);
   unconvertible = signal<string[]>([]);
@@ -99,7 +101,10 @@ export class AccountsPage {
         if (id !== this.loadId) return;
         this.positions.set(r.positions);
         this.netWorth.set(r.normalised?.net_worth ?? null);
-        this.positionTypes.set(r.normalised?.by_type ?? []);
+        this.settled.set(r.complete
+          ? { asOf: r.complete.as_of, worth: r.complete.net_worth, limitedBy: r.complete.limited_by }
+          : null);
+        this.positionTypes.set(r.complete?.by_type ?? r.normalised?.by_type ?? []);
         this.unconvertible.set(r.normalised?.unconvertible_currencies ?? []);
         this.status.set('ok');
       },
@@ -112,21 +117,23 @@ export class AccountsPage {
     this.api.netWorthSeries(currency).subscribe({
       next: (r) => {
         if (id !== this.loadId) return;
-        this.series.set(r.points.map((p) => ({ label: p.bucket, value: p.balance.amount })));
+        this.series.set(r.points.map((p) => ({
+          label: p.bucket, value: p.balance.amount, incomplete: p.complete === false,
+        })));
       },
       error: () => { if (id === this.loadId) this.series.set([]); },
     });
   }
 
   assets = computed<Money | null>(() => {
-    const worth = this.netWorth();
+    const worth = this.settled()?.worth ?? this.netWorth();
     if (!worth) return null;
     return { amount: this.positionTypes().filter((row) => row.balance.amount > 0)
       .reduce((sum, row) => sum + row.balance.amount, 0), currency: worth.currency };
   });
 
   liabilities = computed<Money | null>(() => {
-    const worth = this.netWorth();
+    const worth = this.settled()?.worth ?? this.netWorth();
     if (!worth) return null;
     return { amount: this.positionTypes().filter((row) => row.balance.amount < 0)
       .reduce((sum, row) => sum + row.balance.amount, 0), currency: worth.currency };

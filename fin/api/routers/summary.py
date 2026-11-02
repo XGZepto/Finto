@@ -127,10 +127,27 @@ def get_positions(convert_to: str | None = Query(None),
     holds two positions, and adding them together does not produce a third.
     """
     rows = reporting.positions(conn, as_of=as_of)
+    complete = reporting.complete_through(conn)
     payload = {
         "positions": rows,
         "declared_currencies": reporting.declared_currencies(conn),
+        "complete_through": complete,
     }
+    if convert_to and complete and (as_of is None or as_of > complete["date"]):
+        day = complete["date"]
+        settled = reporting.positions(conn, as_of=day)
+        rolled = reporting.rollup(
+            conn, settled, fields=("balance",), to_currency=convert_to, on=day)
+        by_type = reporting.rollup(
+            conn, settled, fields=("balance",), to_currency=convert_to,
+            key="account_type", on=day)
+        payload["complete"] = {
+            "as_of": day,
+            "limited_by": complete["limited_by"],
+            "net_worth": rolled["balance"],
+            "by_type": [{"account_type": r["account_type"], "balance": r["balance"]}
+                        for r in sorted(by_type["rows"], key=lambda r: r["account_type"])],
+        }
     if convert_to:
         converted_rows = fxm.convert_rows(
             conn, rows, fields=("balance", "inflow", "outflow"),
@@ -179,6 +196,8 @@ def get_networth_series(convert_to: str = Query(...),
     from datetime import date
 
     today = date.today()
+    complete = reporting.complete_through(conn)
+    settled_day = complete["date"] if complete else None
     points = []
     for back in range(months - 1, -1, -1):
         year, month = today.year, today.month - back
@@ -192,8 +211,9 @@ def get_networth_series(convert_to: str = Query(...),
         rolled = reporting.rollup(
             conn, rows, fields=("balance",), to_currency=convert_to, on=as_of)
         points.append({"bucket": as_of[:7], "as_of": as_of,
-                       "balance": rolled["balance"]})
-    return {"to": convert_to.upper(), "points": points}
+                       "balance": rolled["balance"],
+                       "complete": bool(settled_day and as_of <= settled_day)})
+    return {"to": convert_to.upper(), "points": points, "complete_through": complete}
 
 
 @router.get("/stats")

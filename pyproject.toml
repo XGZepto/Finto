@@ -1,6 +1,6 @@
 [project]
 name = "finto"
-version = "0.4.24"
+version = "0.4.25"
 description = "Self-hosted multi-user finance ledger with statement ingestion and account ACLs"
 requires-python = ">=3.10"
 dependencies = [

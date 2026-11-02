@@ -19,7 +19,9 @@ and a label saying so — and belongs in the client, not here.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 # Aggregation dimensions the summary endpoint understands. Mapping to SQL here
 # rather than accepting caller-supplied column names keeps this injection-proof.
@@ -548,15 +550,87 @@ def flows(conn, *, filters: dict | None = None, to_currency: str = "USD") -> dic
 # Positions
 # ---------------------------------------------------------------------------
 
+#: The day each imported file brings an account up to. A statement says so
+#: itself; a CSV export only shows its last row.
+STATEMENT_COVERAGE_SQL = r"""
+    WITH statement_coverage AS (
+        SELECT sf.account_id, sf.id AS statement_id, sf.row_count,
+               COALESCE(sf.statement_date, sf.period_end,
+                        substring(sf.source_path from 'to_(20[0-9]{2}-[0-9]{2}-[0-9]{2})'),
+                        substring(sf.source_path from
+                                  '_(20[0-9]{2}-[0-9]{2}-[0-9]{2})\.[^.]+$'),
+                        (SELECT MAX(t.txn_date)::text FROM txn t
+                          WHERE t.statement_file_id=sf.id),
+                        CASE WHEN sf.row_count=0
+                             THEN substr(sf.imported_at, 1, 10) END) AS covered_on
+          FROM statement_file sf
+         WHERE sf.account_id IS NOT NULL
+        UNION ALL
+        SELECT ba.account_id, sf.id AS statement_id, sf.row_count,
+               COALESCE(sf.statement_date, sf.period_end,
+                        substring(sf.source_path from 'to_(20[0-9]{2}-[0-9]{2}-[0-9]{2})'),
+                        substring(sf.source_path from
+                                  '_(20[0-9]{2}-[0-9]{2}-[0-9]{2})\.[^.]+$'),
+                        ba.as_of_date) AS covered_on
+          FROM balance_assertion ba
+          JOIN statement_file sf ON sf.id=ba.statement_file_id
+    )
+"""
+
+
+def _today() -> str:
+    # Statement days are Hong Kong days, as in the freshness check.
+    return datetime.now(ZoneInfo("Asia/Hong_Kong")).date().isoformat()
+
+
+def covered_through(conn) -> dict[str, str]:
+    """The latest day each account's imported statements reach."""
+    return {
+        r["account_id"]: str(r["covered_on"])[:10]
+        for r in conn.execute(
+            STATEMENT_COVERAGE_SQL
+            + "SELECT account_id, MAX(covered_on) AS covered_on FROM statement_coverage "
+              "WHERE covered_on IS NOT NULL GROUP BY account_id")
+    }
+
+
+def complete_through(conn, covered: dict[str, str] | None = None) -> dict | None:
+    """The last day on which every watched account is backed by a statement.
+
+    Accounts close their cycles on different days. A total taken today mixes a
+    card closed yesterday with a bank account closed three weeks ago, so it
+    holds activity no statement has confirmed. Only the position at the
+    earliest of those closing days is complete.
+    """
+    covered = covered_through(conn) if covered is None else covered
+    today = _today()
+    reach = []
+    for a in conn.execute(
+            "SELECT id, display_name, account_type, closed_on, "
+            "COALESCE(watch_statements, 1) AS watch FROM account"):
+        if not a["watch"] or a["account_type"] == "investment":
+            continue
+        if a["closed_on"] and str(a["closed_on"])[:10] <= today:
+            continue
+        if a["id"] in covered:
+            reach.append((covered[a["id"]], a["display_name"]))
+    if not reach:
+        return None
+    day = min(d for d, _ in reach)
+    return {"date": day, "limited_by": sorted(n for d, n in reach if d == day)}
+
 def positions(conn, *, as_of: str | None = None) -> list[dict]:
     """Balance per (account, currency).
 
-    Prefers the statement's own closing balance when one is available for that
-    currency — that figure comes from the bank and is authoritative. Falls back
-    to summed movements, and says which basis was used, because the two answer
-    different questions: a movement sum has no opening balance in it.
+    Starts from the statement's own closing balance when one is available for
+    that currency — that figure comes from the bank and is authoritative — and
+    adds what moved after it, so every account is taken to the same day rather
+    than to its own closing date. Falls back to summed movements, and says
+    which basis was used, because a movement sum has no opening balance in it.
     """
     rows = []
+    covered = covered_through(conn)
+    day = as_of or _today()
     sql = """
         SELECT t.account_id, a.display_name AS account_name, a.institution_id,
                a.account_type, t.currency_booked AS currency,
@@ -588,9 +662,19 @@ def positions(conn, *, as_of: str | None = None) -> list[dict]:
         ).fetchone()
 
         if assertion is not None:
-            balance, basis, basis_date = assertion["balance"], "statement", assertion["as_of_date"]
+            after = conn.execute(
+                "SELECT COALESCE(SUM(amount_booked), 0) AS moved FROM txn "
+                "WHERE account_id=%s AND currency_booked=%s "
+                "AND duplicate_of_id IS NULL AND status <> 'void' AND txn_date > %s " +
+                ("AND txn_date <= %s" if as_of else ""),
+                (r["account_id"], r["currency"], assertion["as_of_date"])
+                + ((as_of,) if as_of else ()),
+            ).fetchone()["moved"]
+            balance = assertion["balance"] + int(after or 0)
+            basis, basis_date = "statement", assertion["as_of_date"]
         else:
             balance, basis, basis_date = r["net_minor"], "movements", r["last_date"]
+        reached = covered.get(r["account_id"])
 
         rows.append({
             "account_id": r["account_id"],
@@ -605,6 +689,8 @@ def positions(conn, *, as_of: str | None = None) -> list[dict]:
             "outflow": money(r["out_minor"], r["currency"]),
             "basis": basis,
             "basis_date": basis_date,
+            "covered_through": reached,
+            "complete": bool(reached and day <= reached),
             "first_date": r["first_date"],
             "last_date": r["last_date"],
         })
@@ -647,6 +733,10 @@ def positions(conn, *, as_of: str | None = None) -> list[dict]:
             "outflow": movement["outflow"] if movement else zero,
             "basis": "investment_snapshot",
             "basis_date": valuation["as_of_date"],
+            # A valuation is complete as of its own date and never waits on a
+            # statement, so it does not hold the ledger's complete day back.
+            "covered_through": valuation["as_of_date"],
+            "complete": True,
             "first_date": movement["first_date"] if movement else None,
             "last_date": movement["last_date"] if movement else None,
         }

@@ -3,6 +3,8 @@
 .portfolio-hero > div:first-child { display: flex; flex-direction: column; gap: var(--s2); }
 .portfolio-hero > div:first-child strong { font-size: clamp(2.3rem, 6vw, 4.5rem); font-weight: 500; letter-spacing: -.055em; line-height: .95; }
 .portfolio-hero > div:first-child small { color: var(--fg-4); }
+.portfolio-hero .latest-incomplete { margin: var(--s2) 0 0; color: var(--fg-3); font-size: var(--t-small); }
+.portfolio-hero .latest-incomplete .tag { border-color: var(--warn); background: var(--warn-wash); color: var(--warn); margin-right: var(--s2); }
 .portfolio-split { display: flex; gap: var(--s5); }
 .portfolio-split span { display: flex; flex-direction: column; gap: var(--s1); }
 .portfolio-split label { color: var(--fg-4); font-size: var(--t-label); }

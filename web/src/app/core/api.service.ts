@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import {
-  Account, Card, CategorySuggestion, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
+  Account, Card, CategorySuggestion, CompleteThrough, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
   ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentActivity, InvestmentDetail,
   InvestmentHistory, InvestmentSnapshot, Job, MpfBundlePreview, MpfImportResult,
   LedgerFilter, Money, Page, Position, QueryResult, ReviewCandidate, StagePreview, StatementFreshness, SummaryRow,
@@ -162,6 +162,13 @@ addTag(id: string, tag: string): Observable<Txn> {
   positions(convertTo?: string, asOf?: string): Observable<{
     positions: Position[];
     declared_currencies: Record<string, string[]>;
+    complete_through?: CompleteThrough | null;
+    complete?: {
+      as_of: string;
+      limited_by: string[];
+      net_worth: Money;
+      by_type: Array<{ account_type: string; balance: Money }>;
+    };
     conversion?: { to: string; unconvertible_currencies: string[] };
     normalised?: {
       to: string;
@@ -179,7 +186,8 @@ addTag(id: string, tag: string): Observable<Txn> {
 
   netWorthSeries(convertTo: string, months = 12): Observable<{
     to: string;
-    points: Array<{ bucket: string; as_of: string; balance: Money }>;
+    points: Array<{ bucket: string; as_of: string; balance: Money; complete?: boolean }>;
+    complete_through?: CompleteThrough | null;
   }> {
     const p = new HttpParams().set('convert_to', convertTo).set('months', months);
     return this.cached<any>(`${this.base}/networth-series?${p.toString()}`, this.computedTtl);
