@@ -90,7 +90,8 @@
                 @if (sort() !== 'date') { <span [attr.title]="t.date">{{ t.date | shortDate }}</span> }
               </td>
               <td class="account">
-                {{ t.account_name }}
+                <button class="bare account-link" title="Show only this account"
+                        (click)="$event.stopPropagation(); filterByAccount(t.account_id)">{{ t.account_name }}</button>
                 @if (t.cardholder_name) {
                   <button class="bare holder small block"
                           (click)="$event.stopPropagation(); filterByCardholder(t.cardholder_name)">
@@ -257,12 +258,15 @@
         <finto-icon kind="merchant" [name]="txn.merchant || txn.description"
                     [fallbackCategory]="txn.category || 'other'" />
       </span>
-      <h2 id="transaction-title">{{ txn.merchant || txn.description }}</h2>
+      <h2 id="transaction-title">{{ displayTitle(txn) }}</h2>
       @if (showRawDescription(txn)) { <p class="transaction-description">{{ txn.description }}</p> }
       <div class="amount-hero" [class.pos]="txn.booked.amount > 0">
         {{ txn.booked | money }}
       </div>
-      <p class="hero-context"><span [attr.title]="txn.date">{{ txn.date | shortDate }}</span> · {{ txn.account_name }}</p>
+      <p class="hero-context">
+        <span [attr.title]="txn.date">{{ txn.date | shortDate }}</span> ·
+        <button type="button" class="inline-link" (click)="openAccount(txn.account_id)">{{ txn.account_name }}</button>
+      </p>
     </section>
 
     @if (txn.native) {
@@ -277,6 +281,26 @@
       <div><dt>Status</dt><dd>{{ friendlyTaxonomy(txn.status) }} · {{ friendlyTaxonomy(txn.kind) }}</dd></div>
       @if (txn.cardholder_name) { <div><dt>Cardholder</dt><dd>{{ txn.cardholder_name }}@if (txn.card_last4) { <span class="mono muted"> ·{{ txn.card_last4 }}</span> }</dd></div> }
     </dl>
+
+    <!-- Every fact on this sheet is also a way into the rest of the ledger. -->
+    <nav class="drawer-explore" aria-label="Related views">
+      @if (!merchantHidden(txn)) {
+        <button type="button" (click)="filterByMerchant(txn.merchant || txn.description)">
+          <span>Everything at <b>{{ displayTitle(txn) }}</b></span><i aria-hidden="true">›</i>
+        </button>
+      }
+      @if (txn.category) {
+        <button type="button" (click)="filterByCategory(txn.category!)">
+          <span>All <b>{{ friendlyTaxonomy(txn.category) }}</b></span><i aria-hidden="true">›</i>
+        </button>
+      }
+      <button type="button" (click)="filterByAccount(txn.account_id)">
+        <span>Activity on <b>{{ txn.account_name }}</b></span><i aria-hidden="true">›</i>
+      </button>
+      <button type="button" (click)="openAccount(txn.account_id)">
+        <span>Open <b>{{ txn.account_name }}</b> account</span><i aria-hidden="true">›</i>
+      </button>
+    </nav>
 
     @if (gateway(txn); as g) {
       <section class="gateway-note">
@@ -346,7 +370,7 @@
           <button class="leg" (click)="openById(leg.id)">
             <span class="tag">{{ leg.role }}</span>
             <span class="leg-desc">{{ leg.description_raw }}</span>
-            <span class="mono small muted">{{ leg.account_id }} · {{ leg.txn_date }}</span>
+            <span class="small muted">{{ accountName(leg.account_id) }} · <span class="mono">{{ leg.txn_date | shortDate }}</span></span>
             <span class="mono leg-amt" [class.pos]="leg.amount_booked > 0">
               {{ { amount: leg.amount_booked, currency: leg.currency_booked } | money: 'bare' }}
             </span>
@@ -362,7 +386,7 @@
           <button class="leg" (click)="openById(linked.id)">
             <span class="tag">{{ linked.relation }}</span>
             <span class="leg-desc">{{ linked.description_raw }}</span>
-            <span class="mono small muted">{{ linked.account_id }} · {{ linked.txn_date }}</span>
+            <span class="small muted">{{ accountName(linked.account_id) }} · <span class="mono">{{ linked.txn_date | shortDate }}</span></span>
             <span class="mono leg-amt" [class.pos]="linked.amount_booked > 0">
               {{ { amount: linked.amount_booked, currency: linked.currency_booked } | money: 'bare' }}
             </span>

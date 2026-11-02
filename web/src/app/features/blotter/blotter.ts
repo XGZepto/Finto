@@ -198,6 +198,7 @@ export class BlotterPage implements OnDestroy {
       next: (facets) => {
         this.currencies.set([...new Set(['USD', ...facets.currencies])]);
         this.categories.set(facets.categories ?? []);
+        this.accountNames.set(new Map(facets.accounts.map((a) => [a.id, a.display_name])));
       },
       error: () => {
         this.currencies.set(['USD']);
@@ -586,7 +587,9 @@ export class BlotterPage implements OnDestroy {
     this.inspectorHistoryActive = false;
     const action = this.afterClose;
     this.afterClose = null;
-    action?.();
+    // The router answers this same popstate with its own navigation back to
+    // the list; run the follow-up after it, or the router cancels ours.
+    if (action) setTimeout(action);
   }
 
   @HostListener('document:keydown.escape')
@@ -726,6 +729,39 @@ export class BlotterPage implements OnDestroy {
   filterByDetail(key: string, value: string): void {
     this.close(() => {
       this.filters.patch({ detail: [`${key}=${value}`] });
+      this.offset.set(0);
+    });
+  }
+
+  /** Account ids are storage keys; people read the account's own name. */
+  accountNames = signal(new Map<string, string>());
+  accountName(id: string): string {
+    return this.accountNames().get(id) ?? id;
+  }
+
+  /** The account page: balance, statements and everything else on it. */
+  openAccount(id: string): void {
+    this.close(() => this.router.navigate(['/accounts', id]));
+  }
+
+  filterByAccount(id: string): void {
+    this.close(() => {
+      this.filters.patch({ accounts: [id] });
+      this.offset.set(0);
+    });
+  }
+
+  filterByCategory(category: string): void {
+    this.close(() => {
+      this.filters.patch({ categories: [category] });
+      this.offset.set(0);
+    });
+  }
+
+  /** Merchant has no filter field of its own; it is searchable text. */
+  filterByMerchant(name: string): void {
+    this.close(() => {
+      this.filters.patch({ q: name });
       this.offset.set(0);
     });
   }

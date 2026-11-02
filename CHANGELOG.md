@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.4.30 — 2026-11-02
+
+- A transaction's sheet links onward: the account name opens the account,
+  and rows below jump to everything at the same merchant, the same category,
+  or the same account. Transfer and linked legs name their account instead
+  of its storage id, and the sheet title matches the row's cleaned-up title.
+- An account name in a blotter row filters the blotter to that account.
+- Leaving the sheet for another page (an account, instalment plans) now
+  lands there; the back-step that closes the sheet had been cancelling it.
+
 ## 0.4.29 — 2026-11-02
 
 - Summary, Reports and Timeline count spending only. Card payments, FX

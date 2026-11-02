@@ -50,6 +50,15 @@ tr.clickable:focus-visible { outline: 1px solid var(--info); outline-offset: -2p
 .transaction-description { max-width: 100%; margin: 4px 0 0; overflow-wrap: anywhere; color: var(--fg-4); font-size: var(--t-meta); }
 .transaction-hero .amount-hero { margin-top: 12px; }
 .hero-context { margin: 6px 0 0; color: var(--fg-4); font-size: var(--t-meta); }
+.inline-link { min-height: 0; padding: 0; border: 0; background: none; color: var(--fg-2); font: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.inline-link:hover { color: var(--fg); text-decoration-color: currentColor; }
+.drawer-explore { display: flex; flex-direction: column; }
+.drawer-overview + .drawer-explore { margin-top: -1px; }
+.drawer-explore button { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: var(--touch-h); padding: 0 2px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--fg-3); font-weight: 400; text-align: left; }
+.drawer-explore button b { color: var(--fg); font-weight: 500; }
+.drawer-explore i { color: var(--fg-4); font-style: normal; font-size: var(--t-lede); }
+.account-link { color: inherit; font: inherit; text-align: left; min-height: 0; }
+.account-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .fx-summary { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin-bottom: 14px; padding: 12px; border: 1px solid var(--line); background: var(--panel-2); font-size: var(--t-meta); }
 .fx-summary span { color: var(--fg-3); }
 .fx-summary strong { color: var(--fg); font-weight: 500; }
