@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.27 — 2026-11-02
+
+- A transaction can be voided when it never happened, such as a payment's
+  funding leg booked to a Wise balance it did not pass through. Voided rows
+  leave every total, match and link.
+
 ## 0.4.26 — 2026-11-02
 
 - A balance only moves forward with rows from statements that print their
