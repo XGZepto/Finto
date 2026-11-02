@@ -247,8 +247,20 @@ CREATE INDEX IF NOT EXISTS idx_txn_live_date
     ON txn(txn_date DESC, id)
     WHERE duplicate_of_id IS NULL AND status <> 'void';
 ALTER TABLE txn ADD COLUMN IF NOT EXISTS search_text TEXT NOT NULL DEFAULT '';
-CREATE INDEX IF NOT EXISTS idx_txn_search_text_trgm
-    ON txn USING gin (search_text gin_trgm_ops);
+-- The operator class is qualified with the extension's own schema. On a
+-- managed server pg_trgm already lives elsewhere (public or extensions), so
+-- CREATE EXTENSION above is a no-op and a ledger schema whose search_path is
+-- only itself, such as the demo's, would not see gin_trgm_ops at all.
+DO $$
+DECLARE trgm_schema TEXT;
+BEGIN
+    SELECT n.nspname INTO trgm_schema
+    FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
+    WHERE e.extname = 'pg_trgm';
+    EXECUTE format(
+        'CREATE INDEX IF NOT EXISTS idx_txn_search_text_trgm '
+        'ON txn USING gin (search_text %I.gin_trgm_ops)', trgm_schema);
+END $$;
 DROP INDEX IF EXISTS idx_txn_description_raw_trgm;
 DROP INDEX IF EXISTS idx_txn_description_norm_trgm;
 DROP INDEX IF EXISTS idx_txn_merchant_trgm;

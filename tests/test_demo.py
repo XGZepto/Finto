@@ -36,3 +36,27 @@ def test_demo_user_write_gate(monkeypatch):
     assert not demo_write_blocked("GET", "/api/accounts", "demo")
     assert not demo_write_blocked("POST", "/api/summary", "demo")
     assert not demo_write_blocked("PATCH", "/api/auth/preferences", "owner")
+
+
+def test_schema_builds_when_pg_trgm_lives_outside_the_search_path(
+    postgres_base_url, database_url,
+):
+    """The demo schema's search_path is only itself; the extension is elsewhere."""
+    admin = dbm.connect(postgres_base_url)
+    admin.execute("DROP EXTENSION IF EXISTS pg_trgm CASCADE")
+    admin.execute("CREATE SCHEMA IF NOT EXISTS trgm_home")
+    admin.execute("CREATE EXTENSION pg_trgm SCHEMA trgm_home")
+    admin.commit()
+    try:
+        conn = dbm.connect(database_url)
+        dbm.init_db(conn)
+        conn.commit()
+        assert conn.execute(
+            "SELECT to_regclass('idx_txn_search_text_trgm') IS NOT NULL AS ok"
+        ).fetchone()["ok"]
+        conn.close()
+    finally:
+        admin.execute("DROP EXTENSION IF EXISTS pg_trgm CASCADE")
+        admin.execute("DROP SCHEMA IF EXISTS trgm_home CASCADE")
+        admin.commit()
+        admin.close()

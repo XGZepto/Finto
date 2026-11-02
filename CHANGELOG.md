@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.31 — 2026-11-02
+
+- The ledger's trigram search index names pg_trgm's own schema, so a schema
+  whose search_path is only itself builds where the extension lives
+  elsewhere. The demo had been failing to seed on every deploy with
+  `operator class "gin_trgm_ops" does not exist`.
+
 ## 0.4.30 — 2026-11-02
 
 - A transaction's sheet links onward: the account name opens the account,
