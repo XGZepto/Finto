@@ -583,26 +583,29 @@ def _today() -> str:
     return datetime.now(ZoneInfo("Asia/Hong_Kong")).date().isoformat()
 
 
-def covered_through(conn) -> dict[str, str]:
-    """The latest day each account's imported statements reach."""
+def balance_known_through(conn) -> dict[str, str]:
+    """The latest day each account has a balance the issuer printed.
+
+    A CSV export without balances says what moved, not where the account
+    stands, so it does not move this day forward.
+    """
     return {
-        r["account_id"]: str(r["covered_on"])[:10]
+        r["account_id"]: str(r["as_of"])[:10]
         for r in conn.execute(
-            STATEMENT_COVERAGE_SQL
-            + "SELECT account_id, MAX(covered_on) AS covered_on FROM statement_coverage "
-              "WHERE covered_on IS NOT NULL GROUP BY account_id")
+            "SELECT account_id, MAX(as_of_date) AS as_of FROM balance_assertion "
+            "GROUP BY account_id")
     }
 
 
 def complete_through(conn, covered: dict[str, str] | None = None) -> dict | None:
-    """The last day on which every watched account is backed by a statement.
+    """The last day on which every watched account has a printed balance.
 
     Accounts close their cycles on different days. A total taken today mixes a
     card closed yesterday with a bank account closed three weeks ago, so it
     holds activity no statement has confirmed. Only the position at the
     earliest of those closing days is complete.
     """
-    covered = covered_through(conn) if covered is None else covered
+    covered = balance_known_through(conn) if covered is None else covered
     today = _today()
     reach = []
     for a in conn.execute(
@@ -629,7 +632,7 @@ def positions(conn, *, as_of: str | None = None) -> list[dict]:
     which basis was used, because a movement sum has no opening balance in it.
     """
     rows = []
-    covered = covered_through(conn)
+    covered = balance_known_through(conn)
     day = as_of or _today()
     sql = """
         SELECT t.account_id, a.display_name AS account_name, a.institution_id,
@@ -662,10 +665,15 @@ def positions(conn, *, as_of: str | None = None) -> list[dict]:
         ).fetchone()
 
         if assertion is not None:
+            # Only rows from statements that print balances: the next cycle's
+            # statement takes an older closing up to the requested day. A
+            # balance-less export can be missing the money coming in.
             after = conn.execute(
                 "SELECT COALESCE(SUM(amount_booked), 0) AS moved FROM txn "
                 "WHERE account_id=%s AND currency_booked=%s "
-                "AND duplicate_of_id IS NULL AND status <> 'void' AND txn_date > %s " +
+                "AND duplicate_of_id IS NULL AND status <> 'void' AND txn_date > %s "
+                "AND statement_file_id IN (SELECT statement_file_id FROM balance_assertion "
+                "WHERE statement_file_id IS NOT NULL) " +
                 ("AND txn_date <= %s" if as_of else ""),
                 (r["account_id"], r["currency"], assertion["as_of_date"])
                 + ((as_of,) if as_of else ()),

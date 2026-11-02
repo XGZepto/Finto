@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.26 — 2026-11-02
+
+- A balance only moves forward with rows from statements that print their
+  own balances, and an account counts as covered up to its last printed
+  balance. Balance-less exports had pushed Wise far negative because they
+  hold the money going out but not the top-ups.
+
 ## 0.4.25 — 2026-11-02
 
 - Net worth is stated as of the last day every watched account has a
