@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.28 — 2026-11-02
+
+- A statement's balance counts through the statement date, so an idle
+  section that prints only its opening balance no longer holds net worth's
+  complete day back by a month.
+
 ## 0.4.27 — 2026-11-02
 
 - A transaction can be voided when it never happened, such as a payment's
