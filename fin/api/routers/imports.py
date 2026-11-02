@@ -208,14 +208,20 @@ def _confirm(
     if result["status"] == "imported":
         start = result.get("period_start")
         end = result.get("period_end")
+        if not start or not end:
+            # Bank statements often print no period. Their own rows bound the
+            # window; a whole-ledger rebuild here runs past the request limit.
+            span = conn.execute(
+                "SELECT MIN(txn_date) AS lo, MAX(txn_date) AS hi FROM txn "
+                "WHERE statement_file_id=%s", (result["statement_file_id"],),
+            ).fetchone()
+            start, end = start or span["lo"], end or span["hi"]
         if start and end:
             summary = reconcile(
                 conn,
-                from_date=date.fromisoformat(start) - timedelta(days=45),
-                to_date=date.fromisoformat(end) + timedelta(days=45),
+                from_date=date.fromisoformat(str(start)[:10]) - timedelta(days=45),
+                to_date=date.fromisoformat(str(end)[:10]) + timedelta(days=45),
             )
-        else:
-            summary = reconcile(conn)
     return {"import": result, "reconcile": summary}
 
 
