@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.24 — 2026-11-02
+
+- Confirming a statement that prints no period re-links only the weeks its
+  rows cover. It used to rebuild the whole ledger, ran past the 300 s limit
+  and blocked other requests while it ran.
+- Clearing automatic links is saved together with the rebuild, so an
+  interrupted run keeps the old links instead of leaving none.
+
 ## 0.4.23 — 2026-11-02
 
 - HSBC One's current-account lines stay on the existing HKD savings account.

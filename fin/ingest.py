@@ -638,7 +638,6 @@ def reset_automatic_reconciliation(conn) -> None:
     )
     conn.execute("DELETE FROM installment_plan WHERE is_confirmed=0")
     conn.execute("DELETE FROM installment_candidate WHERE resolution='open'")
-    conn.commit()
 
 
 def reset_focused_reconciliation(conn, from_date: date, to_date: date) -> None:
@@ -675,7 +674,6 @@ def reset_focused_reconciliation(conn, from_date: date, to_date: date) -> None:
     conn.execute(
         f"UPDATE txn SET refund_of_id=NULL WHERE id IN ({scope}) "
         f"OR refund_of_id IN ({scope})", (*bounds, *bounds))
-    conn.commit()
 
 
 def reconcile(
@@ -689,6 +687,8 @@ def reconcile(
     over, and only adjusts scores — the merge decision stays with the
     deterministic threshold.
     """
+    # The reset is not committed on its own. A run cut short by the request
+    # limit must roll back to the old links, not leave the ledger unlinked.
     if from_date and to_date:
         reset_focused_reconciliation(conn, from_date, to_date)
     else:
