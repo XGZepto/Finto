@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.33 — 2026-11-02
+
+- The Summary hero anchors on the last day anything was spent. An interest
+  credit posted on the 1st had made an empty month look current.
+
 ## 0.4.32 — 2026-11-02
 
 - An account's Top spending list is ordered by amount. It had been

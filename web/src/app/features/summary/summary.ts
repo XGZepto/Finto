@@ -312,15 +312,23 @@ export class SummaryPage {
     // The trend is always per month: the dimension control picks what the
     // breakdown splits by, never how time is bucketed.
     this.api.summary('month', period, convert).subscribe({
+      next: (res) => { if (id === this.loadId) this.monthRows.set(res.rows); },
+      error: () => { if (id === this.loadId) this.monthRows.set([]); },
+    });
+
+    // Where the hero measures to: the last day anything was spent. Income
+    // posts on its own schedule (an interest credit on the 1st) and must not
+    // make an empty month look current. `from` today returns no rows; the
+    // API reports ledger_through regardless of the date bounds.
+    const today = isoDate(new Date());
+    this.api.summary('kind', { from: today, to: today, spendingOnly: true, maxAmount: -1 }).subscribe({
       next: (res) => {
         if (id !== this.loadId) return;
-        this.monthRows.set(res.rows);
-        this.loadComparison(id, convert, anchorDate(res.ledger_through, res.rows));
+        this.loadComparison(id, convert, anchorDate(res.ledger_through, this.monthRows()));
       },
       error: () => {
         if (id !== this.loadId) return;
-        this.monthRows.set([]);
-        this.loadComparison(id, convert, { date: new Date(), lagging: false, exact: true });
+        this.loadComparison(id, convert, anchorDate(undefined, this.monthRows()));
       },
     });
   }
