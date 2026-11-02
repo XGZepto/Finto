@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.22 — 2026-11-02
+
+- Read an HSBC One HKD Current ledger as its own account. It was being
+  folded into HKD Savings, which made a balanced statement look short by
+  the opening balance and the import was refused.
+- Keep the currency named on an AMEX credit line. A mainland Alipay charge
+  with no currency printed is renminbi, and no longer raises a warning.
+
 ## 0.4.21 — 2026-10-22
 
 - Stop caching the statement-freshness response. A stale copy kept the

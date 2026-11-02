@@ -254,6 +254,47 @@ def test_cr_beneath_a_fx_continuation_flips_the_row():
     assert "UNITED STATES DOLLAR" not in result.rows[0].description
 
 
+def test_currency_on_the_cr_line_is_the_foreign_currency():
+    """AMEX HK puts 'CHINA YUAN RENMINBI CR' on its own line, under the figure.
+
+    The currency used to be thrown away with the marker, so the foreign amount
+    was left unnamed. Mainland Alipay is renminbi even when that line is missing.
+    """
+    header = row((0, "DATE"), (12, "DETAILS"), (40, "FOREIGN"), right(70, "AMOUNT"))
+    doc = make_document("\n".join([
+        PREAMBLE,
+        header,
+        row((0, "24 Sep"), (12, "Alipay* Shanghai"), right(70, "40.87")),
+        row((40, "34.90")),
+        row((40, "CHINA YUAN RENMINBI CR")),
+        row((12, "Reference AT262680003000010066838")),
+        row((0, "25 Sep"), (12, "Alipay* Cafe"), right(70, "10.00")),
+        row((40, ".18")),
+        row((0, "26 Sep"), (12, "AlipayHK*Shop"), right(70, "20.00")),
+        row((40, "20.00")),
+        row((0, "END OF SECTION")),
+    ]))
+    tpl = build(
+        {"mode": "cr_marker", "column": "amount", "cr_on_following_line": True},
+        detail=[{
+            "match": r"^Reference\s+(\S+)",
+            "keys": ["issuer.reference"],
+        }],
+    )
+    tpl.sections[0].columns.anchors["fx"] = "(?-i:^FOREIGN$)"
+    result = apply_template(doc, tpl)
+    credited, bare, hk = result.rows
+    assert credited.amount.amount == 4087
+    assert credited.foreign is not None and credited.foreign.currency == "CNY"
+    assert credited.foreign.amount == 3490
+    assert credited.details.get("issuer.reference") == "AT262680003000010066838"
+    assert bare.foreign is not None and bare.foreign.currency == "CNY"
+    assert bare.foreign.amount == -18
+    assert hk.foreign is None
+    assert any("AlipayHK" in w for w in result.warnings)
+    assert not any("Alipay*" in w or "Alipay* Cafe" in w for w in result.warnings)
+
+
 def test_cr_suffix_on_a_negated_balance_stays_a_credit():
     """HSBC prints a card in credit as 1,803.34CR on the STATEMENT BALANCE row.
 
