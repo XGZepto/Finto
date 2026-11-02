@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.23 — 2026-11-02
+
+- HSBC One's current-account lines stay on the existing HKD savings account.
+  An account created by mistake can be removed once its rows have moved.
+
 ## 0.4.22 — 2026-11-02
 
 - Read an HSBC One HKD Current ledger as its own account. It was being

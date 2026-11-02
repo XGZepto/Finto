@@ -168,7 +168,7 @@ def test_hsbc_one_current_account_is_its_own_section():
         "hkd_savings": [5000, -15000],
         "hkd_current": [3000, -3000],
     }
-    assert result.rows[2].account_hint == "HKD Current"
+    assert result.rows[2].account_hint == "HKD Savings"
     assert report.status == "verified"
 
 
