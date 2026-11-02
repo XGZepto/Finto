@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.4.25 — 2026-11-02
+
+- Net worth is stated as of the last day every watched account has a
+  statement for, and names the account it is waiting on. Today's figure is
+  shown beside it, marked incomplete, and the series is dashed past that day.
+- An account's balance is its last statement balance plus what moved after
+  it, so accounts with different closing days are taken to the same day.
+  Wise balances no longer stop at the last PDF statement.
+
 ## 0.4.24 — 2026-11-02
 
 - Confirming a statement that prints no period re-links only the weeks its

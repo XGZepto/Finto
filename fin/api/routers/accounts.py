@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from ... import db as dbm
+from ... import reporting
 from ...models import Account, Card
 from ..deps import get_conn
 
@@ -211,28 +212,7 @@ def statement_freshness(conn=Depends(get_conn)) -> dict:
     """Newest imported statement and whether another cycle is now expected."""
     today = datetime.now(ZoneInfo("Asia/Hong_Kong")).date()
     rows = conn.execute(
-        r"""WITH statement_coverage AS (
-               SELECT sf.account_id, sf.id AS statement_id, sf.row_count,
-                      COALESCE(sf.statement_date, sf.period_end,
-                               substring(sf.source_path from 'to_(20[0-9]{2}-[0-9]{2}-[0-9]{2})'),
-                               substring(sf.source_path from
-                                         '_(20[0-9]{2}-[0-9]{2}-[0-9]{2})\.[^.]+$'),
-                               (SELECT MAX(t.txn_date)::text FROM txn t
-                                 WHERE t.statement_file_id=sf.id),
-                               CASE WHEN sf.row_count=0
-                                    THEN substr(sf.imported_at, 1, 10) END) AS covered_on
-                 FROM statement_file sf
-                WHERE sf.account_id IS NOT NULL
-               UNION ALL
-               SELECT ba.account_id, sf.id AS statement_id, sf.row_count,
-                      COALESCE(sf.statement_date, sf.period_end,
-                               substring(sf.source_path from 'to_(20[0-9]{2}-[0-9]{2}-[0-9]{2})'),
-                               substring(sf.source_path from
-                                         '_(20[0-9]{2}-[0-9]{2}-[0-9]{2})\.[^.]+$'),
-                               ba.as_of_date) AS covered_on
-                 FROM balance_assertion ba
-                 JOIN statement_file sf ON sf.id=ba.statement_file_id
-           )
+        reporting.STATEMENT_COVERAGE_SQL + r"""
            SELECT a.id AS account_id, a.display_name, a.closed_on, a.account_type,
                   COALESCE(a.watch_statements, 1) AS watch_statements,
                   latest.covered_on AS statement_date,

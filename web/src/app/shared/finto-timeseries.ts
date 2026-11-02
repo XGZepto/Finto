@@ -3,6 +3,8 @@ import { Component, computed, input } from '@angular/core';
 export interface SeriesPoint {
   label: string;
   value: number;
+  /** Includes activity no statement has confirmed yet; drawn dashed. */
+  incomplete?: boolean;
 }
 
 /**
@@ -30,6 +32,10 @@ export interface SeriesPoint {
         <polygon class="series-area" [attr.points]="g.area" [attr.fill]="'url(#' + gradientId + ')'" />
         <polyline class="series-line" pathLength="1" [attr.points]="g.line" fill="none" [attr.stroke]="stroke()" stroke-width="2"
                   vector-effect="non-scaling-stroke" />
+        @if (g.pending) {
+          <polyline class="series-pending" [attr.points]="g.pending" fill="none" [attr.stroke]="stroke()" stroke-width="2"
+                    vector-effect="non-scaling-stroke" />
+        }
       }
     </svg>
     <div class="axis">
@@ -43,6 +49,7 @@ export interface SeriesPoint {
     .grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
     .series-line { stroke-dasharray: 1000; animation: line-reveal var(--motion-slow) var(--ease-out) both; }
     .series-area { animation: area-reveal var(--motion-slow) var(--ease-out) both; }
+    .series-pending { stroke-dasharray: 3 3; opacity: .7; }
     @keyframes line-reveal { from { stroke-dashoffset: 1000; } }
     @keyframes area-reveal { from { opacity: 0; } }
     .axis {
@@ -81,8 +88,12 @@ export class FintoTimeseries {
       const y = pad + usable - ((p.value - min) / span) * usable;
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     });
+    // Solid up to the last point every statement confirms, dashed after it.
+    const settled = pts.findIndex((p) => p.incomplete);
+    const split = settled === -1 ? coords.length - 1 : Math.max(settled - 1, 0);
     return {
-      line: coords.join(' '),
+      line: coords.slice(0, split + 1).join(' '),
+      pending: split < coords.length - 1 ? coords.slice(split).join(' ') : null,
       area: `0,${this.h} ${coords.join(' ')} ${this.w},${this.h}`,
     };
   });

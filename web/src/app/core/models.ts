@@ -155,6 +155,13 @@ export interface TotalRow {
   net_converted?: ConvertedMoney;
 }
 
+/** The last day every watched account is backed by a statement. */
+export interface CompleteThrough {
+  date: string;
+  /** Accounts whose statements stop on that day. */
+  limited_by: string[];
+}
+
 export interface Position {
   account_id: string;
   account_name: string;
@@ -172,6 +179,10 @@ export interface Position {
   /** Source of the displayed point-in-time balance. */
   basis: 'statement' | 'movements' | 'investment_snapshot';
   basis_date: string | null;
+  /** Last day this account's imported statements reach. */
+  covered_through?: string | null;
+  /** False when the balance includes activity no statement has confirmed. */
+  complete?: boolean;
   first_date: string | null;
   last_date: string | null;
 }

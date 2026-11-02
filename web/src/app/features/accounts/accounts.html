@@ -312,11 +312,24 @@
   } @else {
     @if (netWorth(); as worth) {
       <section class="card portfolio-hero">
-        <div>
-          <span class="label">Net worth</span>
-          <strong class="mono" [class.neg]="worth.amount < 0">{{ worth | money }}</strong>
-          <small>Balances converted at the latest rates</small>
-        </div>
+        @if (settled(); as s) {
+          <div>
+            <span class="label">Net worth · end of {{ s.asOf | shortDate }}</span>
+            <strong class="mono" [class.neg]="s.worth.amount < 0">{{ s.worth | money }}</strong>
+            <small>Every account is covered by a statement through this day</small>
+            <p class="latest-incomplete">
+              <span class="tag">Incomplete</span>
+              <span class="mono">{{ worth | money }}</span> today — includes activity no statement has confirmed.
+              Waiting on {{ s.limitedBy.join(', ') }}.
+            </p>
+          </div>
+        } @else {
+          <div>
+            <span class="label">Net worth</span>
+            <strong class="mono" [class.neg]="worth.amount < 0">{{ worth | money }}</strong>
+            <small>Balances converted at the latest rates</small>
+          </div>
+        }
         <div class="portfolio-split">
           @if (assets(); as value) { <span><label>Assets</label><b class="mono pos">{{ value | money: 'bare' }}</b></span> }
           @if (liabilities(); as value) { <span><label>Liabilities</label><b class="mono">{{ value | money: 'bare' }}</b></span> }
