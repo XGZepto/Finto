@@ -42,4 +42,22 @@ describe('parseAnswerMarkdown', () => {
       },
     ]);
   });
+
+  it('renders a Markdown table as a table with figure columns aligned', () => {
+    const blocks = parseAnswerMarkdown(
+      'By month:\n\n| Month | HKD | USD |\n|---|---|---|\n| Jan | — | 47.00 |\n| Feb | 195.74 | 14.32 |',
+    );
+    assert.equal(blocks.length, 2);
+    const table = blocks[1];
+    assert.equal(table.kind, 'table');
+    if (table.kind !== 'table') return;
+    assert.deepEqual(table.header.map((cell) => cell[0].text), ['Month', 'HKD', 'USD']);
+    assert.equal(table.rows.length, 2);
+    assert.deepEqual(table.numeric, [false, true, true]);
+  });
+
+  it('keeps a table that is still streaming in from swallowing the text after it', () => {
+    const blocks = parseAnswerMarkdown('| Month | HKD |\n|---|---|\n| Jan | 1.00 |\nThat was all.');
+    assert.deepEqual(blocks.map((b) => b.kind), ['table', 'paragraph']);
+  });
 });

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 from .. import fx as fxm
@@ -11,7 +12,7 @@ from . import cache
 from .provider import LLMProvider, LLMUnavailable
 from .query import VALID_GROUP_BY, build_context, sanitise
 
-PROMPT_VERSION = "agent-v3"
+PROMPT_VERSION = "agent-v4"
 MAX_TOOL_CALLS = 8
 
 SYSTEM = """You answer questions about the user's Finto ledger.
@@ -23,11 +24,20 @@ reporting currency when supplied, and state when a currency could not be
 converted. Internal transfers are excluded from spending and income unless the
 question explicitly asks about transfers.
 
-Answer the question directly in one to four sentences. Add a short list only
-when it materially improves the answer. Use major-unit amounts with currency
-codes. Do not describe your reasoning process, the tool protocol, or generic
-financial advice. If the available data cannot answer the question, state the
-missing data precisely."""
+When an answer needs several figures, call the tools for them together in one
+turn rather than one after another.
+
+The app shows every tool result under your answer as figures, a table or a
+chart. So lead with the direct answer in one or two sentences, then at most
+two short points that matter (a peak, a change, an outlier). Do not reprint a
+breakdown the tools returned; when a small comparison helps, use a Markdown
+table of at most six rows. Use major-unit amounts with currency codes. Do not
+describe your reasoning, the tools, or give generic financial advice. If the
+data cannot answer the question, say precisely what is missing.
+
+Earlier turns of the conversation may be given for context. Resolve follow-ups
+such as "and in September?" against them, but always recompute figures with
+the tools."""
 
 
 #: The ledger filter every tool takes. Spelled out so the model uses the real
@@ -129,13 +139,24 @@ def answer_question(
     question: str,
     *,
     reporting_currency: str | None = None,
+    history: list[dict[str, str]] | None = None,
+    emit: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
-    """Run a bounded read-only analysis and return its answer and audit trace."""
+    """Run a bounded read-only analysis and return its answer and audit trace.
+
+    With ``emit``, progress is reported as it happens: each tool call with a
+    readable label, the figures it produced, and the answer as it is written.
+    """
     context = build_context(conn)
     target = (reporting_currency or "").strip().upper() or None
+    turns = [
+        {"question": str(t.get("question", ""))[:300], "answer": str(t.get("answer", ""))[:800]}
+        for t in (history or [])[-3:] if t.get("question")
+    ]
     question_prompt = question.strip()
     cache_payload = {
         "question": question_prompt,
+        "history": turns,
         "context": context,
         "reporting_currency": target,
         "ledger_revision": _ledger_revision(conn),
@@ -151,6 +172,9 @@ def answer_question(
         f"{SYSTEM}\n\nLedger vocabulary and coverage:\n"
         f"{json.dumps(context, default=str, separators=(',', ':'))}"
     )
+    if turns:
+        earlier = "\n\n".join(f"Q: {t['question']}\nA: {t['answer']}" for t in turns)
+        question_prompt = f"Earlier in this conversation:\n{earlier}\n\nNow: {question_prompt}"
     if target:
         question_prompt += f"\nPreferred reporting currency: {target}"
 
@@ -164,13 +188,29 @@ def answer_question(
             default_currency=target,
         )
         calls.append({"name": name, "input": arguments, "result": result})
+        if emit:
+            partial: dict[str, Any] = {}
+            _attach_primary_result(partial, calls[-1:], context)
+            if partial:
+                emit("data", partial)
         return result
 
+    def relay(kind: str, payload: dict[str, Any]) -> None:
+        if kind == "tool":
+            payload = {**payload, "label": tool_label(payload["name"], payload.get("input") or {})}
+        emit(kind, payload)
+
     try:
-        response = provider.complete_with_tools(
-            system, question_prompt, TOOLS, execute,
-            max_turns=3, max_tokens=16000,
-        )
+        if emit:
+            response = provider.stream_with_tools(
+                system, question_prompt, TOOLS, execute, relay,
+                max_turns=3, max_tokens=16000,
+            )
+        else:
+            response = provider.complete_with_tools(
+                system, question_prompt, TOOLS, execute,
+                max_turns=3, max_tokens=16000,
+            )
     except LLMUnavailable as exc:
         return {"ok": False, "error": str(exc), "question": question}
 
@@ -202,6 +242,31 @@ def answer_question(
     )
     conn.commit()
     return result
+
+
+def tool_label(name: str, arguments: dict[str, Any]) -> str:
+    """What a tool call is doing, in words a person reads while waiting."""
+    f = arguments.get("filter") if isinstance(arguments.get("filter"), dict) else {}
+    scope = []
+    if f.get("categories"):
+        scope.append(", ".join(str(c).replace("_", " ") for c in f["categories"][:3]))
+    if f.get("q"):
+        scope.append(f"“{f['q']}”")
+    if f.get("from") or f.get("to"):
+        scope.append(f"{f.get('from') or '…'} → {f.get('to') or 'now'}")
+    suffix = f" · {' · '.join(scope)}" if scope else ""
+    if name == "ledger_totals":
+        return f"Totalling{suffix}"
+    if name == "ledger_summary":
+        by = str(arguments.get("group_by") or "").replace("_", " ")
+        return f"Breaking down by {by}{suffix}" if by else f"Breaking down{suffix}"
+    if name == "search_transactions":
+        return f"Finding rows{suffix}"
+    if name == "account_positions":
+        return "Reading balances"
+    if name == "money_flows":
+        return f"Tracing money between accounts{suffix}"
+    return name.replace("_", " ").capitalize()
 
 
 def _ledger_revision(conn) -> dict[str, Any]:

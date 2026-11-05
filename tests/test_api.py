@@ -1152,3 +1152,84 @@ def test_review_puts_a_card_payment_back_under_transfers(
 
 def test_review_of_an_unknown_statement_is_404(client):
     assert client.post("/api/imports/nope/review").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Ask streaming
+# ---------------------------------------------------------------------------
+
+class _ScriptedAsk:
+    """Calls one real tool, then answers, emitting what a streaming model would."""
+
+    name = "scripted"
+    model = "scripted"
+
+    def __init__(self):
+        self.prompts = []
+
+    def _run(self, user, execute, emit):
+        from fin.llm.provider import LLMResponse
+        self.prompts.append(user)
+        call = {"filter": {"categories": ["dining"]}}
+        if emit:
+            emit("tool", {"id": "t1", "name": "ledger_totals", "input": call, "state": "running"})
+        execute("ledger_totals", call)
+        if emit:
+            emit("tool", {"id": "t1", "name": "ledger_totals", "input": call, "state": "done"})
+            emit("text", {"delta": "Dining was "})
+            emit("text", {"delta": "modest."})
+        return LLMResponse(data={"answer": "Dining was modest."}, model="scripted",
+                           raw="Dining was modest.", metadata={"usage": {}})
+
+    def complete_with_tools(self, system, user, tools, execute, **_):
+        return self._run(user, execute, None)
+
+    def stream_with_tools(self, system, user, tools, execute, emit, **_):
+        return self._run(user, execute, emit)
+
+
+def _sse(body: str) -> list[tuple[str, dict]]:
+    import json as _json
+    out = []
+    for block in body.split("\n\n"):
+        kind = data = None
+        for line in block.splitlines():
+            if line.startswith("event: "):
+                kind = line[7:]
+            elif line.startswith("data: "):
+                data = _json.loads(line[6:])
+        if kind:
+            out.append((kind, data))
+    return out
+
+
+def test_ask_streams_steps_figures_text_then_the_result(client, monkeypatch):
+    from fin.api.routers import query as query_router
+
+    scripted = _ScriptedAsk()
+    monkeypatch.setattr(query_router, "build_provider", lambda *a, **k: scripted)
+    response = client.post("/api/query/stream", json={"question": "dining?"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = _sse(response.text)
+    kinds = [k for k, _ in events]
+    assert kinds[0] == "tool" and kinds[-1] == "done"
+    assert events[0][1]["label"].startswith("Totalling") and "dining" in events[0][1]["label"]
+    data = next(d for k, d in events if k == "data")
+    assert data["filter"] == {"categories": ["dining"]} and "totals" in data
+    assert "".join(d["delta"] for k, d in events if k == "text") == "Dining was modest."
+    done = events[-1][1]
+    assert done["ok"] and done["answer"] == "Dining was modest."
+
+
+def test_ask_follow_up_carries_the_earlier_turn(client, monkeypatch):
+    from fin.api.routers import query as query_router
+
+    scripted = _ScriptedAsk()
+    monkeypatch.setattr(query_router, "build_provider", lambda *a, **k: scripted)
+    client.post("/api/query", json={
+        "question": "and in September?",
+        "history": [{"question": "dining in October?", "answer": "HKD 4,239.77."}],
+    })
+    assert "dining in October?" in scripted.prompts[-1]
+    assert scripted.prompts[-1].rstrip().endswith("and in September?")

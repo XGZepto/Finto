@@ -1,231 +1,166 @@
 <div class="page-head">
   <h1>Ask</h1>
+  @if (turns().length) {
+    <button class="bare new-thread" (click)="clear()">New conversation</button>
+  }
+</div>
+
+@if (!turns().length) {
+  <section class="intro">
+    <p>Ask about spending, income, accounts or balances. Answers are worked out from your ledger, and every figure links to its rows.</p>
+    <div class="suggestions">
+      @for (e of examples; track e) {
+        <button type="button" (click)="ask(e)">{{ e }}</button>
+      }
+    </div>
+  </section>
+}
+
+<div class="thread" aria-live="polite">
+  @for (t of turns(); track t.id) {
+    <article class="turn" [id]="'turn-' + t.id" [attr.data-state]="t.state">
+      <p class="question">{{ t.question }}</p>
+
+      @if (t.steps.length || t.state === 'asking') {
+        <ol class="steps" [class.settled]="t.state !== 'asking'">
+          @for (s of t.steps; track s.id) {
+            <li [attr.data-state]="s.state"><i aria-hidden="true">{{ stepIcon(s) }}</i>{{ s.label }}</li>
+          }
+          @if (t.state === 'asking' && !t.text) {
+            <li data-state="running"><i aria-hidden="true"></i>{{ t.steps.length ? 'Writing the answer' : 'Reading the question' }}</li>
+          }
+        </ol>
+      }
+
+      @if (t.text) {
+        <div class="answer-copy" [class.streaming]="t.state === 'asking'">
+          @for (block of blocks(t); track $index) {
+            @switch (block.kind) {
+              @case ('heading') {
+                <h3>@for (part of block.parts; track $index) { @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} } }</h3>
+              }
+              @case ('paragraph') {
+                <p>@for (part of block.parts; track $index) { @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} } }</p>
+              }
+              @case ('list') {
+                @if (block.ordered) {
+                  <ol>@for (item of block.items; track $index) { <li>@for (part of item; track $index) { @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} } }</li> }</ol>
+                } @else {
+                  <ul>@for (item of block.items; track $index) { <li>@for (part of item; track $index) { @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} } }</li> }</ul>
+                }
+              }
+              @case ('table') {
+                <div class="md-table">
+                  <table>
+                    <thead><tr>@for (cell of block.header; track $index) { <th [class.num]="block.numeric[$index]">@for (part of cell; track $index) { {{ part.text }} }</th> }</tr></thead>
+                    <tbody>
+                      @for (row of block.rows; track $index) {
+                        <tr>@for (cell of row; track $index) { <td [class.num]="block.numeric[$index]">@for (part of cell; track $index) { @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} } }</td> }</tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            }
+          }
+        </div>
+      }
+
+      @if (t.state === 'error') {
+        <div class="banner error small">
+          {{ t.error }}
+          <button class="bare" (click)="ask(t.question)" [disabled]="asking()">Ask again</button>
+        </div>
+      }
+
+      <!-- Figures, as soon as a step returns them: they never wait for the prose. -->
+      @if (t.data.totals?.length) {
+        <div class="figures">
+          @for (total of t.data.totals; track total.currency) {
+            <div class="figure-tile">
+              <span class="ccy">{{ total.currency }}</span>
+              <b class="mono">{{ total.spend | money: 'bare' }}</b>
+              <small>out · {{ total.txn_count }} row{{ total.txn_count === 1 ? '' : 's' }}
+                @if (total.income.amount) { · <span class="pos">{{ total.income | money: 'bare' }} in</span> }
+              </small>
+            </div>
+          }
+        </div>
+      }
+
+      @if (isSeries(t)) {
+        @for (s of series(t); track s.currency) {
+          <div class="chart">
+            <span class="chart-label">{{ s.currency }} · out per month</span>
+            <finto-bars [data]="s.bars" [label]="s.currency + ' spending per month'"
+                        (pick)="openMonth(t, $event)" />
+          </div>
+        }
+      }
+
+      @if (t.data.rows?.length && !isSeries(t)) {
+        <div class="rows">
+          @for (row of rankedRows(t); track row.bucket + row.currency) {
+            <div class="row-line">
+              <span class="name">{{ row.bucket }}</span>
+              <span class="mono">{{ row.spend | money: 'bare' }} <small>{{ row.currency }}</small></span>
+            </div>
+          }
+          @if ((t.data.rows?.length ?? 0) > rowCap) {
+            <button class="bare more" (click)="toggleRows(t)">
+              {{ expanded().has(t.id) ? 'Show fewer' : 'Show all ' + t.data.rows!.length }}
+            </button>
+          }
+        </div>
+      }
+
+      @if (t.data.transactions?.items?.length) {
+        <div class="rows">
+          @for (x of t.data.transactions!.items.slice(0, rowCap); track x.id) {
+            <div class="row-line">
+              <span class="name">
+                <small class="mono">{{ x.date | shortDate }}</small>
+                {{ x.merchant || x.description }}
+              </span>
+              <span class="mono" [class.pos]="x.booked.amount > 0">{{ x.booked | money }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      @if (t.state === 'done' && (t.data.filter || t.data.group_by)) {
+        <footer class="turn-foot">
+          <span class="scope">
+            @for (c of chips(t.data.filter); track c.key) { <span>{{ c.label }}</span> }
+            @empty { <span>whole ledger</span> }
+            @if (t.data.group_by) { <span>by {{ t.data.group_by }}</span> }
+          </span>
+          @if (t.data.filter) {
+            <button class="bare" (click)="openInBlotter(t.data.filter)">View rows →</button>
+          }
+        </footer>
+      }
+      @if (t.state === 'done' && t.seconds) {
+        <span class="timing mono">{{ t.data.cached ? 'from earlier' : t.seconds.toFixed(1) + 's' }}</span>
+      }
+    </article>
+  }
 </div>
 
 <form class="prompt" (ngSubmit)="ask()">
-  <span class="caret mono">&gt;</span>
   <input
+    #questionInput
     type="text"
     autocomplete="off"
-    placeholder="how much did I spend on dining last quarter"
+    enterkeyhint="send"
+    [placeholder]="turns().length ? 'Ask a follow-up' : 'Ask about your money'"
     [ngModel]="question()"
     (ngModelChange)="question.set($event)"
     name="question"
   />
-  <button class="primary" type="submit" [disabled]="asking() || !question().trim()">
-    {{ asking() ? 'Asking…' : 'Ask' }}
-  </button>
-</form>
-
-@if (!result() && !asking()) {
-  <div class="suggestions">
-    @for (e of examples; track e) {
-      <button class="ghost" (click)="use(e)">{{ e }}</button>
-    }
-  </div>
-}
-
-@if (history().length) {
-  <div class="history">
-    <label>Earlier</label>
-    @for (h of history(); track h) {
-      <button class="bare" (click)="use(h)">{{ h }}</button>
-    }
-  </div>
-}
-
-@if (asking()) {
-  <div class="card ask-progress" role="status" aria-live="polite">
-    <span class="progress-mark" aria-hidden="true"></span>
-    <span><strong>Analysing ledger</strong><small>Finding matching rows and calculating totals</small></span>
-  </div>
-}
-
-@if (result(); as r) {
-  @if (!r.ok) {
-    <div class="banner error">{{ r.error }}</div>
+  @if (asking()) {
+    <button type="button" class="stop" (click)="stop()" aria-label="Stop">Stop</button>
   } @else {
-    <div class="result-overview">
-      @if (r.answer) {
-        <section class="card generated-answer" aria-live="polite">
-          <span class="eyebrow">Answer</span>
-          <div class="answer-copy">
-            @for (block of answerBlocks(); track $index) {
-              @if (block.kind === 'heading') {
-                <h3>
-                  @for (part of block.parts; track $index) {
-                    @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} }
-                  }
-                </h3>
-              } @else if (block.kind === 'paragraph') {
-                <p>
-                  @for (part of block.parts; track $index) {
-                    @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} }
-                  }
-                </p>
-              } @else if (block.kind === 'list') {
-                @if (block.ordered) {
-                  <ol>
-                    @for (item of block.items; track $index) {
-                      <li>
-                        @for (part of item; track $index) {
-                          @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} }
-                        }
-                      </li>
-                    }
-                  </ol>
-                } @else {
-                  <ul>
-                    @for (item of block.items; track $index) {
-                      <li>
-                        @for (part of item; track $index) {
-                          @if (part.strong) { <strong>{{ part.text }}</strong> } @else { {{ part.text }} }
-                        }
-                      </li>
-                    }
-                  </ul>
-                }
-              }
-            }
-          </div>
-        </section>
-      }
-
-      @if (r.filter || r.group_by) {
-        <section class="card scope">
-          <div class="section-head">
-            <div>
-              <span class="eyebrow">Analysis scope</span>
-              <h2>What was included</h2>
-            </div>
-            @if (r.filter) {
-              <button class="ghost" (click)="openInBlotter()">View rows →</button>
-            }
-          </div>
-
-          <div class="scope-list">
-            @for (c of chips(); track c.key) {
-              <span>{{ c.label }}</span>
-            } @empty {
-              <span>Whole ledger</span>
-            }
-            @if (r.group_by) { <span>Grouped by {{ r.group_by }}</span> }
-          </div>
-          <p class="scope-note">Figures are calculated from matching ledger rows.</p>
-        </section>
-      }
-    </div>
-
-    <section class="answer">
-      @for (t of r.totals ?? []; track t.currency) {
-        <div class="card total">
-          <div class="total-head"><h3>{{ t.currency }}</h3><span>Net</span></div>
-          <div class="figure" [class.neg]="t.net.amount < 0" [class.pos]="t.net.amount > 0">
-            {{ t.net | money: 'bare' }}
-          </div>
-          <div class="split">
-            <span><label>Out</label><span class="mono">{{ t.spend | money: 'bare' }}</span></span>
-            <span><label>In</label><span class="mono pos">{{ t.income | money: 'bare' }}</span></span>
-            <span><label>Rows</label><span class="mono">{{ t.txn_count }}</span></span>
-          </div>
-        </div>
-      } @empty {
-        <div class="card"><div class="empty">Nothing matched that filter</div></div>
-      }
-    </section>
-
-    @if (r.rows?.length) {
-      <section class="card result-table groups-table">
-        <div class="section-head">
-          <h2>By {{ r.group_by }}</h2>
-          @if (r.rows!.length > rowCap) {
-            <span class="small muted mono">
-              @if (showAllRows()) { {{ r.rows!.length }} groups }
-              @else { top {{ rowCap }} of {{ r.rows!.length }} by spend }
-            </span>
-          }
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>{{ r.group_by }}</th>
-                <th>Currency</th>
-                <th class="num">Out</th>
-                <th class="num">In</th>
-                <th class="num">Net</th>
-                <th class="num">Rows</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of rankedRows(); track row.bucket + row.currency) {
-                <tr>
-                  <td [attr.data-label]="r.group_by" class="mono">{{ row.bucket }}</td>
-                  <td data-label="Currency"><span class="tag">{{ row.currency }}</span></td>
-                  <td data-label="Out" class="num">{{ row.spend | money: 'bare' }}</td>
-                  <td data-label="In" class="num pos">{{ row.income | money: 'bare' }}</td>
-                  <td data-label="Net" class="num" [class.neg]="row.net.amount < 0" [class.pos]="row.net.amount > 0">
-                    {{ row.net | money: 'bare' }}
-                  </td>
-                  <td data-label="Rows" class="num">{{ row.txn_count }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-        @if (r.rows!.length > rowCap) {
-          <p class="small muted note">
-            <button class="bare" (click)="showAllRows.set(!showAllRows())">
-              @if (showAllRows()) { Show top {{ rowCap }} } @else { Show all {{ r.rows!.length }} groups }
-            </button>
-            @if (r.filter) {
-              · <button class="bare" (click)="openInBlotter()">open in blotter →</button>
-            }
-          </p>
-        }
-      </section>
-    }
-
-    @if (r.transactions?.items?.length) {
-      <section class="card result-table transactions-table">
-        <div class="section-head">
-          <h2>Matching rows</h2>
-          <span class="small muted mono">
-            showing {{ r.transactions!.items.length }} of {{ r.transactions!.total ?? r.transactions!.items.length }}
-          </span>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Account</th>
-                <th>Description</th>
-                <th>Category</th>
-                <th class="num">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (t of r.transactions!.items; track t.id) {
-                <tr>
-                  <td data-label="Date" class="mono">{{ t.date | shortDate }}</td>
-                  <td data-label="Account">{{ t.account_name }}</td>
-                  <td data-label="Description">{{ t.merchant || t.description }}</td>
-                  <td data-label="Category" class="muted">{{ t.category || '—' }}</td>
-                  <td data-label="Amount" class="num" [class.pos]="t.booked.amount > 0">
-                    {{ t.booked | money }}
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-        @if ((r.transactions!.total ?? 0) > r.transactions!.items.length) {
-          <p class="small muted note">
-            <button class="bare" (click)="openInBlotter()">Open all {{ r.transactions!.total }} in the blotter →</button>
-          </p>
-        }
-      </section>
-    }
+    <button class="primary" type="submit" [disabled]="!question().trim()" aria-label="Ask">Ask</button>
   }
-}
+</form>

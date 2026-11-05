@@ -111,6 +111,13 @@ class ImportRequest(BaseModel):
     currency: str | None = None
 
 
+class QueryTurn(BaseModel):
+    question: str
+    answer: str = ""
+
+
 class QueryRequest(BaseModel):
     question: str
     convert_to: str | None = None
+    #: Earlier turns of this conversation, oldest first, for follow-ups.
+    history: list[QueryTurn] = Field(default_factory=list, max_length=6)

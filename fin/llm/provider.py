@@ -59,6 +59,28 @@ class LLMProvider(ABC):
         """Run a bounded client-tool loop."""
         raise LLMUnavailable(f"{self.name} does not support tool use")
 
+    def stream_with_tools(
+        self,
+        system: str,
+        user: str,
+        tools: Sequence[dict[str, Any]],
+        execute_tool: Callable[[str, dict[str, Any]], Any],
+        emit: Callable[[str, dict[str, Any]], None],
+        *,
+        max_turns: int = 4,
+        max_tokens: int = 16000,
+    ) -> LLMResponse:
+        """The tool loop, reporting progress through ``emit`` as it happens.
+
+        Events: ``text`` (an answer fragment), ``discard`` (drop text streamed
+        in a turn that went on to call tools), ``tool`` (a call starting or
+        finished). Providers without streaming answer in one piece.
+        """
+        response = self.complete_with_tools(
+            system, user, tools, execute_tool, max_turns=max_turns, max_tokens=max_tokens)
+        emit("text", {"delta": response.raw})
+        return response
+
 
 def _extract_json(text: str) -> Any:
     """Pull JSON out of a response that may be wrapped in prose or fences."""
@@ -92,8 +114,12 @@ _FALLBACK_BETA = "server-side-fallback-2026-07-01"
 #: Defaults per purpose. Classification is many small merchant batches where
 #: judgement about abbreviated statement strings matters; analysis (Ask, the
 #: import review) is a few longer, tool-using requests.
-DEFAULT_MODELS = {"classification": "claude-sonnet-5-5", "analysis": "claude-opus-5-5"}
-DEFAULT_EFFORT = {"classification": "low", "analysis": "medium"}
+DEFAULT_MODELS = {"classification": "claude-sonnet-5-5", "analysis": "claude-opus-5-5",
+                  "ask": "claude-opus-5-5"}
+#: Ask is bounded tool selection that a person waits on: low effort keeps
+#: thinking short. The import review summary reads more facts at once.
+DEFAULT_EFFORT = {"classification": "low", "analysis": "medium", "ask": "low"}
+_ANALYSIS_PURPOSES = ("analysis", "ask")
 
 
 class AnthropicProvider(LLMProvider):
@@ -122,14 +148,10 @@ class AnthropicProvider(LLMProvider):
         self.model = model
         self.effort = effort
 
-    def _create_message(self, **kwargs):
-        """Call Anthropic without leaking vendor exceptions through the HTTP API."""
+    def _call(self, fn):
+        """Run an API call, mapping vendor exceptions to LLMUnavailable."""
         try:
-            if _FALLBACK_MODELS.match(self.model):
-                msg = self._client.beta.messages.create(
-                    betas=[_FALLBACK_BETA], fallbacks="default", **kwargs)
-            else:
-                msg = self._client.messages.create(**kwargs)
+            msg = fn()
         except self._anthropic.AuthenticationError as exc:
             raise LLMUnavailable("Analysis credentials were rejected.") from exc
         except self._anthropic.RateLimitError as exc:
@@ -144,6 +166,28 @@ class AnthropicProvider(LLMProvider):
         if getattr(msg, "stop_reason", None) == "refusal":
             raise LLMUnavailable("The model declined this request.")
         return msg
+
+    def _create_message(self, **kwargs):
+        """Call Anthropic without leaking vendor exceptions through the HTTP API."""
+        if _FALLBACK_MODELS.match(self.model):
+            return self._call(lambda: self._client.beta.messages.create(
+                betas=[_FALLBACK_BETA], fallbacks="default", **kwargs))
+        return self._call(lambda: self._client.messages.create(**kwargs))
+
+    def _stream_message(self, emit: Callable[[str, dict[str, Any]], None], **kwargs):
+        """Stream one turn: text fragments go to ``emit`` as they arrive."""
+        def run():
+            if _FALLBACK_MODELS.match(self.model):
+                manager = self._client.beta.messages.stream(
+                    betas=[_FALLBACK_BETA], fallbacks="default", **kwargs)
+            else:
+                manager = self._client.messages.stream(**kwargs)
+            with manager as stream:
+                for event in stream:
+                    if getattr(event, "type", "") == "text" and event.text:
+                        emit("text", {"delta": event.text})
+                return stream.get_final_message()
+        return self._call(run)
 
     def _output_config(self, schema: dict[str, Any] | None = None) -> dict[str, Any]:
         config: dict[str, Any] = {}
@@ -196,6 +240,36 @@ class AnthropicProvider(LLMProvider):
         max_turns: int = 4,
         max_tokens: int = 16000,
     ) -> LLMResponse:
+        return self._tool_loop(
+            system, user, tools, execute_tool, None,
+            max_turns=max_turns, max_tokens=max_tokens)
+
+    def stream_with_tools(
+        self,
+        system: str,
+        user: str,
+        tools: Sequence[dict[str, Any]],
+        execute_tool: Callable[[str, dict[str, Any]], Any],
+        emit: Callable[[str, dict[str, Any]], None],
+        *,
+        max_turns: int = 4,
+        max_tokens: int = 16000,
+    ) -> LLMResponse:
+        return self._tool_loop(
+            system, user, tools, execute_tool, emit,
+            max_turns=max_turns, max_tokens=max_tokens)
+
+    def _tool_loop(
+        self,
+        system: str,
+        user: str,
+        tools: Sequence[dict[str, Any]],
+        execute_tool: Callable[[str, dict[str, Any]], Any],
+        emit: Callable[[str, dict[str, Any]], None] | None,
+        *,
+        max_turns: int,
+        max_tokens: int,
+    ) -> LLMResponse:
         if not tools:
             raise ValueError("at least one tool is required")
 
@@ -207,7 +281,7 @@ class AnthropicProvider(LLMProvider):
 
         for turn in range(max_turns + 1):
             final_turn = turn == max_turns
-            msg = self._create_message(
+            request = dict(
                 model=self.model,
                 max_tokens=max_tokens,
                 system=cached_system,
@@ -216,6 +290,8 @@ class AnthropicProvider(LLMProvider):
                 tools=cached_tools,
                 **({"tool_choice": {"type": "none"}} if final_turn else {}),
             )
+            msg = (self._stream_message(emit, **request) if emit
+                   else self._create_message(**request))
             _merge_usage(usage, _usage(msg))
             tool_blocks = [
                 block for block in msg.content
@@ -233,16 +309,28 @@ class AnthropicProvider(LLMProvider):
                     metadata={"usage": usage, "turns": turn + 1},
                 )
 
+            if emit:
+                # Text before a tool call is preamble, not the answer.
+                emit("discard", {})
+            # Appended unchanged, thinking blocks included: the history is
+            # append-only so earlier turns keep their reasoning.
             messages.append({"role": "assistant", "content": msg.content})
             results = []
             for block in tool_blocks:
+                arguments = dict(block.input or {})
+                if emit:
+                    emit("tool", {"id": block.id, "name": block.name,
+                                  "input": arguments, "state": "running"})
                 try:
-                    value = execute_tool(block.name, dict(block.input or {}))
+                    value = execute_tool(block.name, arguments)
                     content = json.dumps(value, default=str, separators=(",", ":"))
                     is_error = False
                 except (KeyError, TypeError, ValueError) as exc:
                     content = json.dumps({"error": str(exc)})
                     is_error = True
+                if emit:
+                    emit("tool", {"id": block.id, "name": block.name, "input": arguments,
+                                  "state": "error" if is_error else "done"})
                 results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
@@ -316,13 +404,13 @@ def build_provider(
             "SELECT key, value FROM setting WHERE key IN "
             "('llm_enabled','llm_model','llm_agent_model')")}
         enabled = rows.get("llm_enabled", "0") == "1"
-        setting = "llm_agent_model" if purpose == "analysis" else "llm_model"
+        setting = "llm_agent_model" if purpose in _ANALYSIS_PURPOSES else "llm_model"
         configured_model = model or rows.get(setting)
     env_enabled = os.environ.get("FINTO_LLM_ENABLED")
     if env_enabled is not None:
         enabled = env_enabled.strip().lower() in {"1", "true", "yes", "on"}
     env_model = os.environ.get(
-        "FINTO_LLM_AGENT_MODEL" if purpose == "analysis" else "FINTO_LLM_MODEL"
+        "FINTO_LLM_AGENT_MODEL" if purpose in _ANALYSIS_PURPOSES else "FINTO_LLM_MODEL"
     )
     configured_model = model or env_model or configured_model
     if not enabled:

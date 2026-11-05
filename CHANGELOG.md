@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.4.39 — 2026-11-05
+
+- Ask streams. Each step shows as it runs ("Breaking down by month ·
+  groceries"), its figures appear the moment they are computed, and the
+  answer is written in as it arrives. `POST /api/query/stream` sends
+  server-sent events; `/api/query` is unchanged and remains the fallback.
+- Ask runs at low effort, calls independent tools together, and keeps prose
+  to the answer and its highlights, leaving breakdowns to the figures, the
+  monthly chart and the rows the app draws under it.
+- Ask is a conversation: questions stack with their answers, follow-ups
+  such as "and September?" carry the last turns, the thread survives
+  navigating away, and the prompt is docked above the tab bar with a Stop.
+- Markdown tables in answers render as tables with figure columns aligned,
+  and month-by-month answers draw one chart per currency whose columns open
+  that month's rows.
+
 ## 0.4.38 — 2026-11-05
 
 - A wrapped PDF description goes to the row it is printed nearest, measured
