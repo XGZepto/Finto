@@ -52,6 +52,8 @@ export interface LedgerFilter {
   installmentsOnly?: boolean;
   /** Drop card payments, FX conversions and transfer-categorised rows, linked or not. */
   spendingOnly?: boolean;
+  /** Rows imported from these statement files. */
+  statements?: string[];
 }
 
 export interface Txn {
@@ -303,6 +305,48 @@ export interface StagePreview {
     details: Record<string, string>;
   }>;
   error?: string;
+  /** In and out per currency, in minor units. */
+  totals?: Record<string, { in: number; out: number; rows: number }>;
+  quality?: ImportQuality;
+  /** The analysis model's read of the preview, when it was asked and available. */
+  agent?: { verdict: 'import' | 'review' | 'hold'; headline: string; notes: string[]; model: string } | null;
+}
+
+export type CheckLevel = 'ok' | 'info' | 'warn' | 'bad';
+
+export interface ImportQuality {
+  grade: CheckLevel;
+  checks: Array<{ id: string; level: CheckLevel; title: string; detail: string }>;
+}
+
+/** What the post-import pass found and did for one statement. */
+export interface ImportReview {
+  statement: { id: string; file: string; accounts: string[]; period: [string | null, string | null]; rows: number };
+  categories: {
+    by_source: Partial<Record<'rules' | 'model' | 'manual' | 'uncategorised', number>>;
+    movement_fixed: number;
+    model_applied: number;
+    low_confidence: number;
+    merchants_named: number;
+    tagged_rows: number;
+    tags: number;
+    top_uncategorised: Array<{ description: string; rows: number }>;
+  };
+  links: {
+    movements: number;
+    linked: number;
+    unlinked: Array<{ id: string; date: string; account: string; description: string; amount: string; kind: string }>;
+    unlinked_count: number;
+    open_transfer_candidates: number;
+    open_duplicate_candidates: number;
+    merged_duplicates: number;
+    refunds_linked: number;
+    instalment_rows: number;
+  };
+  balances: Array<{ account_id: string; account_name: string; period_start: string; period_end: string; discrepancy: Money }>;
+  model: { available: boolean; classification: string | null };
+  summary: { status: 'clean' | 'attention'; headline: string; notes: string[]; model: string | null };
+  reviewed_at: string;
 }
 
 export interface ImportFormat {

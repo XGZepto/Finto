@@ -193,7 +193,7 @@ def _run_adjudication(conn, provider, system, items, meta, *,
     if uncached_items:
         try:
             resp = provider.complete_json(
-                system, json.dumps(uncached_items, default=str), max_tokens=4000)
+                system, json.dumps(uncached_items, default=str), max_tokens=16000)
             for row in (resp.data if isinstance(resp.data, list) else []):
                 try:
                     local_i = int(row["i"])

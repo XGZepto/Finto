@@ -13,7 +13,7 @@ import { LedgerFilter } from './models';
 
 const ARRAY_KEYS = [
   'months', 'accounts', 'cards', 'cardholders', 'institutions', 'categories', 'kinds',
-  'detail', 'tags',
+  'detail', 'tags', 'statements',
 ] as const;
 const BOOL_KEYS = [
   'includeTransfers', 'uncategorisedOnly', 'installmentsOnly', 'spendingOnly',
@@ -107,7 +107,9 @@ export function describeFilter(f: LedgerFilter): Array<{ key: string; label: str
     if (!v?.length) continue;
     chips.push({
       key,
-      label: key === 'detail' ? v.join(', ') : `${key}: ${v.join(', ')}`,
+      label: key === 'detail' ? v.join(', ')
+        : key === 'statements' ? (v.length === 1 ? 'one import' : `${v.length} imports`)
+        : `${key}: ${v.join(', ')}`,
     });
   }
   if (f.currency) chips.push({ key: 'currency', label: f.currency });

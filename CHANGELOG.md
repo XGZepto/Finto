@@ -2,13 +2,42 @@
 
 ## Unreleased
 
-## 0.4.34 — 2026-11-05
+## 0.4.35 — 2026-11-05
 
 - A wrapped PDF description goes to the row it is printed nearest, measured
   on the page rather than by counting text lines. Mox Credit centres the
   amount between a payment's two description lines, so every payment after
   the first lost "Mox Credit Payment Mox" to the charge above it and was
   booked as an unlinked "(no description)" refund.
+
+## 0.4.34 — 2026-11-05
+
+- Import checks a statement against the ledger before anything is written:
+  already-imported files or content, which account the rows land in, rows
+  already present, gaps or overlaps with the account's earlier statements,
+  dates outside the period or in the future, currencies the account does not
+  settle in, one-sided signs and parser warnings. Claude reads the checks and
+  a sample of rows and says go ahead, review first or hold.
+- After an import, Claude categorises, names and tags the new rows, card
+  payments filed as spending go back under transfers, in-band transfer and
+  duplicate candidates are adjudicated, and a summary lists what is left:
+  payments without their other leg, rows still uncategorised, suggestions to
+  decide, balance checks that disagree. Each figure opens the matching rows.
+  Reviews are stored; Imported files shows each one's status and can re-run it.
+- `POST /api/imports/{id}/review` (and the API-key `/api/agent/...` form),
+  `GET /api/imports/{id}/review`, `review=true` on preview, and a
+  `statements` ledger filter for the rows one import produced.
+- Statements can be shared to the installed app from another app's share
+  sheet (Android); they open on Import for the same preview.
+- Claude categorisation works again. The deployment installs anthropic 2.x,
+  which no longer accepts `temperature`, and every classification call had
+  failed. No sampling parameters are sent now.
+- Classification defaults to Claude Sonnet 5.5 and analysis (Ask, import
+  review) to Claude Opus 5.5, with effort set explicitly, structured outputs
+  for verdicts and summaries, refusals handled, and the server-side refusal
+  fallback on. Installations still on an earlier default model move to these.
+- A merchant rule can no longer file a card payment or currency swap under a
+  spending category.
 
 ## 0.4.33 — 2026-11-02
 

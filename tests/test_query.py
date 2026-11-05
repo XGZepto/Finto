@@ -315,10 +315,12 @@ def _message(content, *, stop_reason="end_turn", read=0, created=0):
     )
 
 
-def _anthropic_with(responses):
+def _anthropic_with(responses, *, model="claude-test", effort=None):
     provider = AnthropicProvider.__new__(AnthropicProvider)
-    provider.model = "claude-test"
-    provider._client = SimpleNamespace(messages=_FakeMessages(responses))
+    provider.model = model
+    provider.effort = effort
+    shared = _FakeMessages(responses)
+    provider._client = SimpleNamespace(messages=shared, beta=SimpleNamespace(messages=shared))
     return provider
 
 
@@ -332,13 +334,59 @@ def test_json_calls_cache_the_system_prefix():
     assert response.metadata["usage"]["cache_creation_input_tokens"] == 600
 
 
-def test_claude_5_calls_omit_deprecated_temperature():
+@pytest.mark.parametrize("model", [
+    "claude-sonnet-5", "claude-haiku-4-5-20251001", "claude-opus-5-5", "claude-test",
+])
+def test_no_call_sends_sampling_parameters(model):
+    """anthropic 2.x rejects them; current models accept only the defaults."""
     provider = _anthropic_with([
         _message([SimpleNamespace(type="text", text='{"ok":true}')]),
-    ])
-    provider.model = "claude-sonnet-5"
+    ], model=model)
     provider.complete_json("stable system", "question")
-    assert "temperature" not in provider._client.messages.requests[0]
+    request = provider._client.messages.requests[0]
+    assert not {"temperature", "top_p", "top_k"} & set(request)
+
+
+def test_current_models_set_effort_and_opt_into_fallback():
+    provider = _anthropic_with([
+        _message([SimpleNamespace(type="text", text='{"ok":true}')]),
+    ], model="claude-opus-5-5", effort="medium")
+    provider.complete_json("stable system", "question")
+    request = provider._client.messages.requests[0]
+    assert request["output_config"] == {"effort": "medium"}
+    assert request["fallbacks"] == "default"
+    assert request["betas"] == ["server-side-fallback-2026-07-01"]
+
+
+def test_older_models_get_neither_effort_nor_fallback():
+    provider = _anthropic_with([
+        _message([SimpleNamespace(type="text", text='{"ok":true}')]),
+    ], model="claude-haiku-4-5-20251001", effort="low")
+    provider.complete_json("stable system", "question")
+    request = provider._client.messages.requests[0]
+    assert "output_config" not in request and "fallbacks" not in request
+
+
+def test_structured_output_constrains_the_schema():
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}},
+              "required": ["ok"], "additionalProperties": False}
+    provider = _anthropic_with([
+        _message([SimpleNamespace(type="thinking", thinking=""),
+                  SimpleNamespace(type="text", text='{"ok": true}')]),
+    ], model="claude-opus-5-5", effort="medium")
+    response = provider.complete_structured("system", "question", schema)
+    request = provider._client.messages.requests[0]
+    assert request["output_config"]["format"] == {"type": "json_schema", "schema": schema}
+    assert response.data == {"ok": True}
+
+
+def test_a_refusal_is_unavailable_not_an_answer():
+    from fin.llm.provider import LLMUnavailable
+    provider = _anthropic_with([
+        _message([SimpleNamespace(type="text", text="")], stop_reason="refusal"),
+    ], model="claude-sonnet-5-5")
+    with pytest.raises(LLMUnavailable):
+        provider.complete_json("system", "question")
 
 
 def test_tool_loop_caches_tools_and_system_and_reports_hits():

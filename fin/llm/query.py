@@ -115,7 +115,7 @@ def translate(conn, provider: LLMProvider, question: str) -> dict[str, Any]:
             f"Question: {question}")
 
     def call() -> dict:
-        response = provider.complete_json(SYSTEM, user, max_tokens=900)
+        response = provider.complete_json(SYSTEM, user, max_tokens=16000)
         return response.data if isinstance(response.data, dict) else {}
 
     try:

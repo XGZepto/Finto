@@ -14,6 +14,10 @@ class FakeResponse {
     this.status = init.status ?? 200;
     this.ok = this.status >= 200 && this.status < 300;
     this.type = init.type ?? 'basic';
+    this.headers = init.headers ?? {};
+  }
+  static redirect(url, status) {
+    return new FakeResponse(null, { status, headers: { Location: url } });
   }
   clone() { return new FakeResponse(this.body, { status: this.status, type: this.type }); }
 }
@@ -50,6 +54,8 @@ function loadWorker({ network, cacheSeed = new Map() } = {}) {
   const context = {
     CACHE: undefined,
     caches,
+    Request: class { constructor(url) { this.url = url; } },
+    Response: FakeResponse,
     fetch: async (request) => {
       fetches.push(typeof request === 'string' ? request : request.url);
       if (typeof network === 'function') return network(request);
@@ -122,5 +128,24 @@ describe('service worker', () => {
       url: 'https://finto.app/summary',
     });
     assert.equal(response.body, '<!doctype html>');
+  });
+
+  it('parks shared statements and opens the import page', async () => {
+    const worker = loadWorker();
+    const shared = { name: 'October statement.pdf', type: 'application/pdf' };
+    const response = await dispatchFetch(worker, {
+      method: 'POST',
+      mode: 'navigate',
+      destination: 'document',
+      url: 'https://finto.app/share-target',
+      async formData() { return { getAll: (key) => key === 'statements' ? [shared] : [] }; },
+    });
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.Location, '/import?shared=1');
+    const parked = [...worker.buckets.get('finto-share-v1').values()];
+    assert.equal(parked.length, 1);
+    assert.equal(parked[0].body, shared);
+    assert.equal(decodeURIComponent(parked[0].headers['X-Finto-Filename']), shared.name);
+    assert.deepEqual(worker.fetches, [], 'a share never reaches the network');
   });
 });

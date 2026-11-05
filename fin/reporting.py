@@ -129,6 +129,8 @@ def build_where(f: dict[str, Any] | None) -> tuple[str, list[Any]]:
         in_clause("substr(t.txn_date, 1, 7)", months)
     if f.get("accounts"):
         in_clause("t.account_id", f["accounts"])
+    if f.get("statements"):
+        in_clause("t.statement_file_id", f["statements"])
     if f.get("cards"):
         in_clause("t.card_id", f["cards"])
     if f.get("cardholders"):

@@ -145,7 +145,7 @@ def answer_question(
     try:
         response = provider.complete_with_tools(
             system, question_prompt, TOOLS, execute,
-            max_turns=3, max_tokens=900,
+            max_turns=3, max_tokens=16000,
         )
     except LLMUnavailable as exc:
         return {"ok": False, "error": str(exc), "question": question}

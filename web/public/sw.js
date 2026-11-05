@@ -20,8 +20,35 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+/* Statements shared from another app (the manifest's share_target). The
+   files are parked in a cache the Import page drains on load, then the app
+   opens there; nothing is uploaded until that page previews them. */
+const SHARE = 'finto-share-v1';
+
+async function receiveShare(request) {
+  try {
+    const form = await request.formData();
+    const cache = await caches.open(SHARE);
+    const files = form.getAll('statements').filter((item) => typeof item !== 'string');
+    await Promise.all(files.map((file, index) => cache.put(
+      new Request(`/__shared/${Date.now()}-${index}`),
+      new Response(file, { headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-Finto-Filename': encodeURIComponent(file.name || 'statement'),
+      } }),
+    )));
+  } catch (error) {
+    /* A failed share still lands on Import, where the picker works. */
+  }
+  return Response.redirect('/import?shared=1', 303);
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
+  if (request.method === 'POST' && new URL(request.url).pathname === '/share-target') {
+    event.respondWith(receiveShare(request));
+    return;
+  }
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
 

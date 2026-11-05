@@ -123,6 +123,7 @@ def _request_file(name: str, data: bytes) -> Iterator[Path]:
 def _preview(
     conn, path: Path, *, name: str, size: int, digest: str,
     institution_id: str | None, account_id: str | None, currency: str | None,
+    review: bool = False,
 ) -> dict:
     ctx = ParseContext(path=path, institution_id=institution_id,
                        account_id=account_id, default_currency=currency,
@@ -167,10 +168,27 @@ def _preview(
             "details": t.details,
         } for t in result.txns[:10]],
     })
+    totals: dict[str, dict[str, int]] = {}
+    for t in result.txns:
+        bucket = totals.setdefault(t.booked.currency, {"in": 0, "out": 0, "rows": 0})
+        bucket["in" if t.booked.amount > 0 else "out"] += t.booked.amount
+        bucket["rows"] += 1
+    preview["totals"] = totals
     if not result.txns and not result.allow_empty:
         preview["error"] = (
             "Parsed zero transactions. The file is not being recorded, so you "
             "can re-import once this is resolved.")
+
+    # Checks against the ledger, then (optionally) the analysis model's read
+    # of them. Neither writes anything.
+    from ...import_review import preflight, preflight_verdict
+    preview["quality"] = preflight(
+        conn, result, parser_id=parser.parser_id, digest=digest, account_id=account_id)
+    if review and result.txns:
+        from ...llm.provider import build_provider
+        provider = build_provider(conn, purpose="analysis")
+        if provider.name != "null":
+            preview["agent"] = preflight_verdict(provider, preview)
     return preview
 
 
@@ -181,6 +199,7 @@ async def preview_upload(
     institution_id: str | None = Form(None),
     account_id: str | None = Form(None),
     currency: str | None = Form(None),
+    review: bool = Form(False),
     conn=Depends(get_conn),
 ) -> dict:
     """Parse an upload without retaining bytes or changing the ledger."""
@@ -188,7 +207,7 @@ async def preview_upload(
     with _request_file(name, data) as path:
         return _preview(conn, path, name=name, size=len(data), digest=digest,
                         institution_id=institution_id, account_id=account_id,
-                        currency=currency)
+                        currency=currency, review=review)
 
 
 def _confirm(
@@ -255,13 +274,14 @@ async def agent_preview_upload(
     institution_id: str | None = Form(None),
     account_id: str | None = Form(None),
     currency: str | None = Form(None),
+    review: bool = Form(False),
 ) -> dict:
     user_id = _agent_owner(request, "imports:write")
     name, data, digest = await _uploaded_file(file)
     with _request_file(name, data) as path, write_conn(user_id) as conn:
         return _preview(conn, path, name=name, size=len(data), digest=digest,
                         institution_id=institution_id, account_id=account_id,
-                        currency=currency)
+                        currency=currency, review=review)
 
 
 @router.post("/agent/imports/confirm")
@@ -326,7 +346,10 @@ def _import_history(conn, limit: int) -> dict:
         "SELECT sf.id, sf.source_path, sf.institution_id, sf.account_id, "
         "       sf.file_format, sf.parser_id, sf.imported_at, sf.row_count, "
         "       sf.period_start, sf.period_end, "
-        "       (SELECT COUNT(*) FROM txn WHERE statement_file_id = sf.id) AS txn_count "
+        "       (SELECT COUNT(*) FROM txn WHERE statement_file_id = sf.id) AS txn_count, "
+        "       (SELECT ao.result->'summary'->>'status' FROM agent_operation ao "
+        "        WHERE ao.action='import_review' AND ao.subject='statement:' || sf.id "
+        "        ORDER BY ao.created_at DESC LIMIT 1) AS review_status "
         "FROM statement_file sf ORDER BY sf.imported_at DESC LIMIT %s",
         (min(max(limit, 1), 500),),
     )]
@@ -372,6 +395,43 @@ def run_fx_harvest(request: Request) -> dict:
 @router.get("/imports/history")
 def import_history(limit: int = 50, conn=Depends(get_conn)) -> dict:
     return _import_history(conn, limit)
+
+
+def _review(conn, statement_file_id: str, user_id: str) -> dict:
+    from ...import_review import review_statement
+    from ...llm.provider import build_provider
+    try:
+        return review_statement(
+            conn, statement_file_id,
+            classify=build_provider(conn),
+            analyse=build_provider(conn, purpose="analysis"),
+            user_id=user_id)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post("/imports/{statement_file_id}/review")
+def review_import(statement_file_id: str, request: Request) -> dict:
+    """Categorise, tag and link-check an imported statement, then summarise it."""
+    with write_conn(request.state.user_id) as conn:
+        return _review(conn, statement_file_id, request.state.user_id)
+
+
+@router.get("/imports/{statement_file_id}/review")
+def last_import_review(statement_file_id: str, conn=Depends(get_conn)) -> dict:
+    from ...import_review import latest_review
+    owned = conn.execute(
+        "SELECT 1 FROM statement_file WHERE id=%s", (statement_file_id,)).fetchone()
+    if not owned:
+        raise HTTPException(404, "statement file not found")
+    return {"review": latest_review(conn, statement_file_id)}
+
+
+@router.post("/agent/imports/{statement_file_id}/review")
+def agent_review_import(statement_file_id: str, request: Request) -> dict:
+    user_id = _agent_owner(request, "imports:write")
+    with write_conn(user_id) as conn:
+        return _review(conn, statement_file_id, user_id)
 
 
 def _humanize(value: str) -> str:
