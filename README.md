@@ -9,7 +9,7 @@ No financial data or production credentials are stored in this repository.
 
 ## Live demo
 
-Open [finto-demo.vercel.app](https://finto-demo.vercel.app) and sign in with:
+Open [demo.finto.zepto.page](https://demo.finto.zepto.page) and sign in with:
 
 - Username: `demo`
 - Password: `finto-demo-2026`
@@ -275,10 +275,12 @@ The workflow requires the `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
 `VERCEL_PROJECT_ID` repository secrets. A manual production deployment remains
 available with `vercel deploy --prod`.
 
-Every push to `main` also runs `.github/workflows/demo-production.yml`. That
-workflow deploys the commit to the separate `finto-demo` Vercel project,
-refreshes its guarded `finto_demo` schema, and verifies the public demo login
-and account data.
+Every push to `main` also deploys to the `finto` project's `demo` custom
+environment, which tracks `main` and serves `demo.finto.zepto.page`. Its own
+variables pin every connection to the guarded `finto_demo` schema
+(`PGOPTIONS=-c search_path=finto_demo`) and enable the demo seed, so it never
+reads the live ledger. Run `.github/workflows/demo-check.yml` to verify the
+public demo login and account data.
 
 Apply database migrations before deploying code that depends on them. Do not
 place database URLs or API keys in committed files.

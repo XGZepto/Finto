@@ -1,52 +1,27 @@
-name: Deploy demo
+name: Check demo
+
+# Vercel deploys every push to `main` to the `finto` project's `demo` custom
+# environment, which serves demo.finto.zepto.page. This checks that the public
+# demo login works and reaches the seeded demo ledger.
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: vercel-demo-production
-  cancel-in-progress: true
-
 jobs:
-  deploy:
-    name: Deploy seeded demo to Vercel
+  check:
+    name: Check the public demo
     runs-on: ubuntu-latest
     environment: Demo
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DEMO_PROJECT_ID }}
-
     steps:
-      - name: Check out main
-        uses: actions/checkout@v7
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          package-manager-cache: false
-
-      - name: Install Vercel CLI
-        run: npm install --global vercel@59.0.0
-
-      - name: Pull demo production environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy demo
-        run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Verify refreshed demo data
+      - name: Verify demo login and data
         shell: bash
         env:
           DEMO_PASSWORD: ${{ secrets.FINTO_DEMO_PASSWORD }}
         run: |
-          demo_url="https://finto-demo.vercel.app"
+          demo_url="https://demo.finto.zepto.page"
           for attempt in {1..12}; do
             if curl --fail --silent --show-error "$demo_url/api/health" >/dev/null; then
               break
