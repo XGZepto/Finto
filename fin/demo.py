@@ -111,6 +111,24 @@ def demo_write_blocked(method: str, path: str, user_id: str) -> bool:
     return path not in {"/api/query", "/api/summary"}
 
 
+def seed_version(today=None) -> str:
+    """The version a demo deployment seeds to: the seed code plus the UTC day.
+
+    It used to be the deployment id, so an older deployment that cold-started
+    during an alias switch saw a "different" version and reset the schema,
+    sessions included, under the new one. Deployments that run the same seed
+    code now agree, and the date-relative data still refreshes once a day.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).parent
+    digest = hashlib.sha256()
+    for name in ("demo.py", "schema.sql"):
+        digest.update((root / name).read_bytes())
+    day = (today or datetime.now(timezone.utc).date()).isoformat()
+    return f"{digest.hexdigest()[:12]}-{day}"
+
+
 def _prepare_schema(conn, *, reset: bool, schema: str | None) -> None:
     if not reset:
         return

@@ -60,3 +60,14 @@ def test_schema_builds_when_pg_trgm_lives_outside_the_search_path(
         admin.execute("DROP SCHEMA IF EXISTS trgm_home CASCADE")
         admin.commit()
         admin.close()
+
+
+def test_seed_version_is_shared_by_deployments_and_moves_daily():
+    """Two deployments of the same seed agree; tomorrow's data is a new version."""
+    from datetime import date
+
+    from fin.demo import seed_version
+
+    today = date(2026, 11, 5)
+    assert seed_version(today) == seed_version(today)
+    assert seed_version(today) != seed_version(date(2026, 11, 6))

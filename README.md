@@ -15,7 +15,7 @@ Open [finto-demo.vercel.app](https://finto-demo.vercel.app) and sign in with:
 - Password: `finto-demo-2026`
 
 The account is read-only and contains invented transactions. Its isolated data
-is regenerated after each pull request is merged into `main`.
+is regenerated daily and whenever the seed code changes on `main`.
 
 ## Capabilities
 
