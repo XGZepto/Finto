@@ -575,7 +575,7 @@ def _apply_section(
             )
             continue
 
-        mine, theirs = _split_wrapped(pending_desc, last_row, idx)
+        mine, theirs = _split_wrapped(pending_desc, last_row, idx, lines)
         if theirs and last_row is not None:
             last_row.description = _join([last_row.description, *theirs])
         description = _join([*mine, date_remainder, _describe(cells, spec)])
@@ -978,8 +978,13 @@ def _join(parts) -> str:
     return re.sub(r"\s{2,}", " ", " ".join(p for p in parts if p)).strip()
 
 
+#: Vertical gaps closer than this, in points, are a tie.
+_GAP_TOLERANCE = 0.5
+
+
 def _split_wrapped(
-    pending: list[tuple[int, str, bool]], previous: ExtractedRow | None, row_idx: int
+    pending: list[tuple[int, str, bool]], previous: ExtractedRow | None, row_idx: int,
+    lines: list[TextLine],
 ) -> tuple[list[str], list[str]]:
     """Share wrapped lines between the transaction above and the one below.
 
@@ -987,13 +992,26 @@ def _split_wrapped(
     the row above. A line that carried its own date is the start of the next
     entry, so it always stays with this row even when it sits closer to the
     figures already emitted.
+
+    Nearness is the printed distance where all three lines share a page. Mox
+    centres the figures between a description's two lines, so the first line
+    is one text line from both neighbours yet sits much closer to its own
+    figures than to the row above. Across a page break, line count decides.
     Returns (this row's lines, the previous row's lines).
     """
     if previous is None:
         return [text for _i, text, _dated in pending], []
+    above_line, below_line = lines[previous.line_index], lines[row_idx]
     mine, theirs = [], []
     for i, text, dated in pending:
-        if dated or i - previous.line_index > row_idx - i:
+        line = lines[i]
+        if line.page_no == above_line.page_no == below_line.page_no:
+            above = line.top - above_line.top
+            below = below_line.top - line.top
+            nearer_below = above - below > _GAP_TOLERANCE
+        else:
+            nearer_below = i - previous.line_index > row_idx - i
+        if dated or nearer_below:
             mine.append(text)
         else:
             theirs.append(text)

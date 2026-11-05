@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- A wrapped PDF description goes to the row it is printed nearest, measured
+  on the page rather than by counting text lines. Mox Credit centres the
+  amount between a payment's two description lines, so every payment after
+  the first lost "Mox Credit Payment Mox" to the charge above it and was
+  booked as an unlinked "(no description)" refund.
+
 ## 0.4.33 — 2026-11-02
 
 - The Summary hero anchors on the last day anything was spent. An interest
