@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import {
-  Account, Card, CategorySuggestion, CompleteThrough, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
+  Account, Card, CategorySuggestion, ImportReview, CompleteThrough, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
   ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentActivity, InvestmentDetail,
   InvestmentHistory, InvestmentSnapshot, Job, MpfBundlePreview, MpfImportResult,
   LedgerFilter, Money, Page, Position, QueryResult, ReviewCandidate, StagePreview, StatementFreshness, SummaryRow,
@@ -36,6 +36,7 @@ export function filterToParams(f: LedgerFilter): HttpParams {
   put('q', f.q);
   put('detail', f.detail);
   put('tags', f.tags);
+  put('statements', f.statements);
   if (f.includeTransfers) put('includeTransfers', true);
   if (f.includeDuplicates) put('includeDuplicates', true);
   if (f.uncategorisedOnly) put('uncategorisedOnly', true);
@@ -224,10 +225,11 @@ addTag(id: string, tag: string): Observable<Txn> {
 
   // --- Import -------------------------------------------------------------
 
-  stage(file: File, meta: { institution_id?: string; account_id?: string; currency?: string }):
-    Observable<StagePreview> {
+  stage(file: File, meta: { institution_id?: string; account_id?: string; currency?: string },
+    review = true): Observable<StagePreview> {
     const form = new FormData();
     form.append('file', file, file.name);
+    if (review) form.append('review', 'true');
     if (meta.institution_id) form.append('institution_id', meta.institution_id);
     if (meta.account_id) form.append('account_id', meta.account_id);
     if (meta.currency) form.append('currency', meta.currency);
@@ -244,6 +246,16 @@ addTag(id: string, tag: string): Observable<Txn> {
     if (meta.account_id) form.append('account_id', meta.account_id);
     if (meta.currency) form.append('currency', meta.currency);
     return this.http.post<any>(`${this.base}/imports/confirm`, form);
+  }
+
+  /** Categorise, tag and link-check an imported statement (writes; can take a while). */
+  reviewImport(statementFileId: string): Observable<ImportReview> {
+    this.invalidateReads();
+    return this.http.post<ImportReview>(`${this.base}/imports/${statementFileId}/review`, {});
+  }
+
+  lastImportReview(statementFileId: string): Observable<{ review: ImportReview | null }> {
+    return this.http.get<{ review: ImportReview | null }>(`${this.base}/imports/${statementFileId}/review`);
   }
 
   importHistory(): Observable<{ files: any[] }> {

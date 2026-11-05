@@ -1040,3 +1040,115 @@ def test_composition_never_lists_other_twice(client, database_url):
     conn.close()
     buckets = [series["bucket"] for series in body["series"]]
     assert buckets.count("other") == 1
+
+
+# ---------------------------------------------------------------------------
+# Import review
+# ---------------------------------------------------------------------------
+
+def _stage(client, path, name="extra.csv", **extra):
+    with path.open("rb") as f:
+        return client.post("/api/imports/preview",
+                           files={"file": (name, f, "text/csv")},
+                           data={"institution_id": "hsbc_hk",
+                                 "account_id": "hsbc_hk_current",
+                                 "currency": "HKD", **extra}).json()
+
+
+def _new_statement(tmp_path):
+    csv = tmp_path / "extra.csv"
+    csv.write_text(
+        "Date,Transaction Details,Deposit,Withdrawal,Balance\n"
+        "05/02/2025,NEW MERCHANT LTD,,123.45,51354.80\n")
+    return csv
+
+
+def test_preview_flags_a_statement_already_in_the_ledger(client):
+    preview = _stage(client, FIXTURES / "hsbc_sample.csv", name="again.csv")
+    quality = preview["quality"]
+    assert quality["grade"] == "bad"
+    ids = {c["id"] for c in quality["checks"]}
+    assert "duplicate_file" in ids
+    assert any(i.startswith("present:") for i in ids)
+
+
+def test_preview_of_new_rows_names_the_account_and_passes(client, tmp_path):
+    preview = _stage(client, _new_statement(tmp_path))
+    quality = preview["quality"]
+    assert quality["grade"] != "bad"
+    account = next(c for c in quality["checks"] if c["id"] == "account")
+    assert account["level"] == "ok" and "HSBC Current" in account["title"]
+    assert preview["totals"]["HKD"]["out"] == -12345
+    # The model layer is off in tests, so asking for a verdict adds none.
+    assert "agent" not in _stage(client, _new_statement(tmp_path), review="true")
+
+
+def _confirm(client, path, preview):
+    with path.open("rb") as f:
+        return client.post("/api/imports/confirm",
+                           files={"file": (path.name, f, "text/csv")},
+                           data={"expected_sha256": preview["sha256"],
+                                 "institution_id": "hsbc_hk",
+                                 "account_id": "hsbc_hk_current",
+                                 "currency": "HKD"}).json()
+
+
+def test_review_categorises_the_new_rows_and_is_stored(client, tmp_path, monkeypatch):
+    from fin.llm import provider as provider_module
+
+    echo = provider_module.EchoProvider({
+        "You categorise": [{"i": 0, "category": "shopping", "subcategory": "general",
+                            "merchant": "New Merchant", "tags": ["online"],
+                            "confidence": 0.9}],
+        "You review a statement": {"status": "clean", "headline": "Imported cleanly.",
+                                   "notes": []},
+    })
+    monkeypatch.setattr(provider_module, "build_provider", lambda *a, **k: echo)
+
+    path = _new_statement(tmp_path)
+    result = _confirm(client, path, _stage(client, path))
+    statement_id = result["import"]["statement_file_id"]
+
+    report = client.post(f"/api/imports/{statement_id}/review").json()
+    assert report["categories"]["by_source"].get("model") == 1
+    assert report["categories"]["tags"] >= 1
+    assert report["summary"]["status"] == "clean"
+
+    rows = client.get(f"/api/transactions?statements={statement_id}").json()
+    assert rows["total"] == 1
+    assert rows["items"][0]["category"] == "shopping"
+    assert rows["items"][0]["merchant"] == "New Merchant"
+
+    stored = client.get(f"/api/imports/{statement_id}/review").json()["review"]
+    assert stored["summary"]["headline"] == "Imported cleanly."
+    history = client.get("/api/imports/history").json()["files"]
+    assert next(f for f in history if f["id"] == statement_id)["review_status"] == "clean"
+
+
+def test_review_puts_a_card_payment_back_under_transfers(
+    client, tmp_path, database_url, monkeypatch,
+):
+    from fin.llm import provider as provider_module
+
+    monkeypatch.setattr(provider_module, "build_provider",
+                        lambda *a, **k: provider_module.NullProvider())
+    path = _new_statement(tmp_path)
+    statement_id = _confirm(client, path, _stage(client, path))["import"]["statement_file_id"]
+    conn = dbm.connect(database_url)
+    conn.execute("UPDATE txn SET kind='cc_payment', category='fees', subcategory='card' "
+                 "WHERE statement_file_id=%s", (statement_id,))
+    conn.commit()
+    conn.close()
+
+    report = client.post(f"/api/imports/{statement_id}/review").json()
+    assert report["categories"]["movement_fixed"] == 1
+    assert report["links"]["unlinked_count"] == 1
+    # Without a model the summary is still written, from the facts alone.
+    assert report["summary"]["status"] == "attention"
+    row = client.get(
+        f"/api/transactions?statements={statement_id}&includeTransfers=true").json()["items"][0]
+    assert (row["category"], row["subcategory"]) == ("transfers", "card_payment")
+
+
+def test_review_of_an_unknown_statement_is_404(client):
+    assert client.post("/api/imports/nope/review").status_code == 404

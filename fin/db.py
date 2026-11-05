@@ -79,18 +79,22 @@ def init_db(conn: psycopg.Connection) -> None:
             ("base_currency", "HKD"),
             ("period_start", "2025-01-01"),
             ("llm_enabled", "0"),
-            ("llm_model", "claude-haiku-4-5-20251001"),
-            ("llm_agent_model", "claude-haiku-4-5-20251001"),
+            ("llm_model", "claude-sonnet-5-5"),
+            ("llm_agent_model", "claude-opus-5-5"),
         ),
     )
-    # Ask is a bounded tool-selection task, not open-ended financial reasoning.
-    # Move installations that still carry the old default to the lower-latency
-    # model; a different explicit model remains untouched.
-    conn.execute(
-        "UPDATE setting SET value=%s "
-        "WHERE key='llm_agent_model' AND value=%s",
-        ("claude-haiku-4-5-20251001", "claude-sonnet-5"),
-    )
+    # Installations still on an earlier default move to the current one; a
+    # model someone chose explicitly stays. Haiku 4.5 also no longer works
+    # with the anthropic 2.x SDK the deployment installs.
+    for key, new, old in (
+        ("llm_model", "claude-sonnet-5-5", ("claude-haiku-4-5-20251001",)),
+        ("llm_agent_model", "claude-opus-5-5",
+         ("claude-haiku-4-5-20251001", "claude-sonnet-5")),
+    ):
+        conn.execute(
+            "UPDATE setting SET value=%s WHERE key=%s AND value = ANY(%s)",
+            (new, key, list(old)),
+        )
     password = os.environ.get("FINTO_AUTH_PASSWORD")
     owner = conn.execute(
         "SELECT password_hash FROM app_user WHERE id='owner'"

@@ -115,6 +115,14 @@ Import, reconcile, and verify the ledger:
 .venv/bin/finto check
 ```
 
+In the web app, a preview also checks the statement against the ledger
+(already imported, account, rows already present, gaps and overlaps with
+earlier statements, dates, currencies, signs) and, with the LLM layer on, asks
+Claude for a go-ahead. After the import, a review categorises, names and tags
+the new rows, checks which payments found their other leg and summarises what
+is left to do. Agents can run the same review with
+`POST /api/agent/imports/{statement_file_id}/review`.
+
 An empty statement is retained as evidence that the period was checked. It does
 not make an inactive account overdue or create synthetic transactions.
 
@@ -217,15 +225,20 @@ Anthropic prompt-prefix caching covers the tool definitions, system
 instructions, and current ledger vocabulary. PostgreSQL decision caching remains
 separate and is used for deterministic categorisation and query audit records.
 
-Classification and Ask default to Claude Haiku 4.5. Ask is a bounded
-tool-selection loop, so the smaller model materially reduces its two-request
-latency while SQL remains authoritative. Complete answers are reused while the
-authenticated user's ledger revision is unchanged. The web client renders the
-answer as structured text, not raw Markdown. It can be configured independently:
+Classification (merchant names, categories and tags) defaults to Claude
+Sonnet 5.5 at low effort; analysis (Ask and the import review) defaults to
+Claude Opus 5.5 at medium effort. Both use the server-side refusal fallback,
+so a false-positive decline on a statement line is retried on another model
+inside the same request. No sampling parameters are sent: current models accept
+only the defaults and the anthropic 2.x SDK rejects them. Complete answers are
+reused while the authenticated user's ledger revision is unchanged. The web
+client renders the answer as structured text, not raw Markdown. Each role can be
+configured independently:
 
 ```bash
 finto config set llm_enabled 1
-finto config set llm_agent_model claude-haiku-4-5-20251001
+finto config set llm_model claude-sonnet-5-5
+finto config set llm_agent_model claude-opus-5-5
 ```
 
 Deployments can use `FINTO_LLM_ENABLED`, `FINTO_LLM_MODEL`, and

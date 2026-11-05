@@ -297,7 +297,7 @@ def _parse_hsbc_mpf_pdf_llm(
     response = provider.complete_json(
         _MPF_LLM_SYSTEM,
         f"Filename: {Path(path).name}\n\nExtracted PDF text:\n{document.text}",
-        max_tokens=6000,
+        max_tokens=16000,
     )
     data = response.data
     if not isinstance(data, dict):

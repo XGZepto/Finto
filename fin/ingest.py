@@ -58,6 +58,7 @@ from .parsers import institutions as _institutions  # noqa: F401 (registers pars
 from .parsers import pdf as _pdf_parser  # noqa: F401 (registers the PDF parser)
 from .parsers.base import ParseContext, select_parser
 from .refunds import apply_refund_links, find_refunds
+from .reporting import MOVEMENT_KINDS
 from .transfers import find_transfers, transfer_group_id
 
 
@@ -252,6 +253,12 @@ def apply_category_rules(conn, txns: Iterable[Txn]) -> int:
                 else field.upper() == pat.upper() if r["match_type"] == "exact"
                 else bool(re.search(pat, field, re.IGNORECASE))
             )
+            if hit and t.kind.value in MOVEMENT_KINDS and not r["set_kind"] \
+                    and r["set_category"] not in (None, "transfers"):
+                # A card payment or currency swap is never spending, whatever
+                # its description resembles: "HSBC CREDIT CARDS" paid from Mox
+                # had been filed as a card fee. Its kind decides the category.
+                continue
             if hit:
                 if r["set_category"]:
                     t.category = r["set_category"]

@@ -38,6 +38,8 @@ class LedgerFilter(BaseModel):
     #: Exact structured-fact filters, each "key" or "key=value".
     detail: list[str] | None = None
     tags: list[str] | None = None
+    #: Rows imported from these statement files.
+    statements: list[str] | None = None
     # Transfers are money moved between your own accounts. Counting them as
     # spending is the specific error transfer linking exists to prevent, so the
     # caller has to opt in.

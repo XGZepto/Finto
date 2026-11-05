@@ -85,6 +85,15 @@ def _undecided(conn, descriptions: Sequence[str]) -> list[str]:
     ]
 
 
+def _scope(txn_ids: Sequence[str] | None) -> str:
+    """Restrict a ledger-wide pass to given rows, e.g. one imported statement."""
+    return " AND t.id = ANY(%s)" if txn_ids is not None else ""
+
+
+def _scope_params(txn_ids: Sequence[str] | None) -> tuple:
+    return (list(txn_ids),) if txn_ids is not None else ()
+
+
 def _clean_tags(value) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -120,7 +129,7 @@ def categorize_merchants(
         batch = todo[start:start + batch_size]
         try:
             resp = provider.complete_json(
-                SYSTEM, _user_prompt(batch, taxonomy), max_tokens=4000
+                SYSTEM, _user_prompt(batch, taxonomy), max_tokens=16000
             )
         except (LLMUnavailable, ValueError):
             # Leave the rows uncategorised when the provider is unavailable.
@@ -152,7 +161,7 @@ def categorize_merchants(
 
 def apply_to_ledger(
     conn, provider: LLMProvider, *, dry_run: bool = False,
-    max_merchants: int | None = None,
+    max_merchants: int | None = None, txn_ids: Sequence[str] | None = None,
 ) -> dict:
     """Categorise every uncategorised transaction the rules didn't claim.
 
@@ -164,7 +173,8 @@ def apply_to_ledger(
         "SELECT t.id, t.description_norm, t.description_raw, a.user_id FROM txn t "
         "JOIN account a ON a.id=t.account_id "
         "WHERE category IS NULL AND duplicate_of_id IS NULL "
-        "AND kind NOT IN ('transfer','cc_payment','fx_conversion')"))
+        "AND kind NOT IN ('transfer','cc_payment','fx_conversion')" + _scope(txn_ids),
+        _scope_params(txn_ids)))
     if not rows:
         return {"transactions": 0, "distinct_merchants": 0, "applied": 0}
 
@@ -224,7 +234,7 @@ def apply_to_ledger(
 
 def apply_tags(
     conn, provider: LLMProvider, *, dry_run: bool = False,
-    max_merchants: int | None = None,
+    max_merchants: int | None = None, txn_ids: Sequence[str] | None = None,
 ) -> dict:
     """Tag transactions that carry no tags yet, categorised or not.
 
@@ -236,7 +246,8 @@ def apply_tags(
         "SELECT t.id, t.description_norm, t.description_raw FROM txn t "
         "WHERE t.duplicate_of_id IS NULL "
         "AND t.kind NOT IN ('transfer','cc_payment','fx_conversion') "
-        "AND NOT EXISTS (SELECT 1 FROM txn_tag g WHERE g.txn_id = t.id)"))
+        "AND NOT EXISTS (SELECT 1 FROM txn_tag g WHERE g.txn_id = t.id)" + _scope(txn_ids),
+        _scope_params(txn_ids)))
     if not rows:
         return {"transactions": 0, "distinct_merchants": 0, "tagged": 0}
 
@@ -280,7 +291,7 @@ def apply_tags(
 
 def apply_merchants(
     conn, provider: LLMProvider, *, dry_run: bool = False,
-    max_merchants: int | None = None,
+    max_merchants: int | None = None, txn_ids: Sequence[str] | None = None,
 ) -> dict:
     """Give a readable title to rows that have none.
 
@@ -292,7 +303,8 @@ def apply_merchants(
     rows = list(conn.execute(
         "SELECT t.id, t.description_norm, t.description_raw FROM txn t "
         "WHERE t.merchant IS NULL AND t.duplicate_of_id IS NULL "
-        "AND t.kind NOT IN ('transfer','cc_payment','fx_conversion')"))
+        "AND t.kind NOT IN ('transfer','cc_payment','fx_conversion')" + _scope(txn_ids),
+        _scope_params(txn_ids)))
     if not rows:
         return {"transactions": 0, "distinct_merchants": 0, "named": 0}
 

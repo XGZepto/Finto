@@ -1,8 +1,14 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { Api } from '../../core/api.service';
+import { Haptics } from '../../core/haptics';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { Facets, ImportCapabilities, ImportFormat, Job, StagePreview } from '../../core/models';
+import {
+  CheckLevel, Facets, ImportCapabilities, ImportFormat, ImportQuality, ImportReview, Job, StagePreview,
+} from '../../core/models';
+import { SHARE_CACHE, takeSharedFiles } from './shared-files';
 import { FintoSelect } from '../../shared/finto-select';
 
 /**
@@ -23,6 +29,11 @@ interface Entry {
   institutionId: string;
   accountId: string;
   currency: string;
+  /** Set once committed: the statement the rows now belong to. */
+  statementId?: string;
+  review?: ImportReview;
+  reviewState?: 'running' | 'done' | 'failed';
+  reviewError?: string;
 }
 
 /**
@@ -40,12 +51,14 @@ interface Entry {
  */
 @Component({
   selector: 'app-import',
-  imports: [FormsModule, MoneyPipe, ShortDatePipe, FintoSelect],
+  imports: [FormsModule, MoneyPipe, ShortDatePipe, FintoSelect, NgTemplateOutlet],
   templateUrl: './import.html',
   styleUrl: './import.css',
 })
 export class ImportPage {
   private api = inject(Api);
+  private router = inject(Router);
+  private haptics = inject(Haptics);
 
   facets = signal<Facets | null>(null);
   entries = signal<Entry[]>([]);
@@ -62,10 +75,16 @@ export class ImportPage {
 
   private seq = 0;
 
+  /** A past import whose review is open below the history table. */
+  historyReview = signal<{ id: string; file: string; review: ImportReview | null; state: 'loading' | 'running' | 'done' | 'failed' } | null>(null);
+
   constructor() {
     this.api.facets().subscribe({ next: (f) => this.facets.set(f) });
     this.api.importCapabilities().subscribe({ next: (value) => this.capabilities.set(value) });
     this.loadHistory();
+    // Statements shared to Finto from another app arrive through the service
+    // worker; stage them exactly as if they had been picked here.
+    void takeSharedFiles(SHARE_CACHE).then((files) => files.forEach((file) => this.stage(file)));
   }
 
   formatGroups = computed(() => {
@@ -195,8 +214,12 @@ export class ImportPage {
         next: (result) => {
           const job = this.completedJob('import', result);
           const failed = result?.import?.status === 'error';
-          this.patch(entry.key, { job, state: failed ? 'failed' : 'done' });
+          const statementId = result?.import?.statement_file_id as string | undefined;
+          this.patch(entry.key, { job, state: failed ? 'failed' : 'done', statementId });
           this.loadHistory();
+          if (!failed && result?.import?.status === 'imported' && statementId) {
+            this.runReview(entry.key, statementId);
+          }
         },
         error: (err) =>
           this.patch(entry.key, {
@@ -204,6 +227,83 @@ export class ImportPage {
             error: err?.error?.detail ?? 'Import could not be queued.',
           }),
       });
+  }
+
+  /**
+   * The post-import pass: categories, tags and merchant names for the new
+   * rows, then the linking check and a summary. Runs on its own request so the
+   * import itself is never held up by the model.
+   */
+  runReview(key: string, statementId: string): void {
+    this.patch(key, { reviewState: 'running', reviewError: undefined });
+    this.api.reviewImport(statementId).subscribe({
+      next: (review) => {
+        this.patch(key, { review, reviewState: 'done' });
+        this.haptics.fire(review.summary.status === 'clean' ? 'success' : 'warning');
+        this.loadHistory();
+      },
+      error: (err) => {
+        this.patch(key, {
+          reviewState: 'failed',
+          reviewError: err?.error?.detail ?? 'The review could not finish. The import itself is saved.',
+        });
+        this.haptics.fire('error');
+      },
+    });
+  }
+
+  /** Open, or run for the first time, the review of an earlier import. */
+  openHistoryReview(file: any): void {
+    const current = this.historyReview();
+    if (current && current.id === file.id && current.state !== 'failed') {
+      this.historyReview.set(null);
+      return;
+    }
+    const base = { id: file.id as string, file: file.source_path as string, review: null };
+    if (!file.review_status) {
+      this.rerunHistoryReview(base);
+      return;
+    }
+    this.historyReview.set({ ...base, state: 'loading' });
+    this.api.lastImportReview(file.id).subscribe({
+      next: (r) => this.historyReview.set({ ...base, review: r.review, state: 'done' }),
+      error: () => this.historyReview.set({ ...base, state: 'failed' }),
+    });
+  }
+
+  rerunHistoryReview(base: { id: string; file: string }): void {
+    this.historyReview.set({ ...base, review: null, state: 'running' });
+    this.api.reviewImport(base.id).subscribe({
+      next: (review) => {
+        this.historyReview.set({ ...base, review, state: 'done' });
+        this.loadHistory();
+      },
+      error: () => this.historyReview.set({ ...base, review: null, state: 'failed' }),
+    });
+  }
+
+  // --- Ways into the ledger from a review --------------------------------
+
+  openRows(statementId: string, extra: Record<string, unknown> = {}): void {
+    this.router.navigate(['/blotter'], {
+      queryParams: { statements: statementId, includeTransfers: true, ...extra },
+    });
+  }
+
+  openUncategorised(statementId: string): void {
+    this.openRows(statementId, { uncategorisedOnly: true });
+  }
+
+  openTxn(statementId: string, txnId: string): void {
+    this.openRows(statementId, { txn: txnId });
+  }
+
+  openMatching(): void {
+    this.router.navigate(['/review']);
+  }
+
+  openAccount(accountId: string): void {
+    this.router.navigate(['/accounts', accountId]);
   }
 
   discard(entry: Entry): void {
@@ -264,6 +364,33 @@ export class ImportPage {
   }
 
   // --- Rendering helpers ---------------------------------------------------
+
+  readonly gradeTitles: Record<CheckLevel, string> = {
+    ok: 'Looks right', info: 'Looks right', warn: 'Worth a look', bad: 'Do not import as is',
+  };
+
+  readonly verdictTitles = { import: 'go ahead', review: 'review first', hold: 'hold' } as const;
+
+  /** Problems first; passing checks stay listed, quietly, under them. */
+  sortedChecks(quality: ImportQuality) {
+    const order: CheckLevel[] = ['bad', 'warn', 'info', 'ok'];
+    return [...quality.checks].sort((a, b) => order.indexOf(a.level) - order.indexOf(b.level));
+  }
+
+  importLabel(entry: Entry): string {
+    const n = entry.preview?.txn_count ?? 0;
+    const bad = entry.preview?.quality?.grade === 'bad' || entry.preview?.agent?.verdict === 'hold';
+    return `${bad ? 'Import anyway' : 'Import'} ${n} row${n === 1 ? '' : 's'}`;
+  }
+
+  categorised(review: ImportReview): number {
+    const s = review.categories.by_source;
+    return (s.rules ?? 0) + (s.model ?? 0) + (s.manual ?? 0);
+  }
+
+  share(part: number, whole: number): string {
+    return whole ? `${Math.round((part / whole) * 100)}%` : '0%';
+  }
 
   kb(bytes: number): string {
     return bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024).toLocaleString()} KB`;
