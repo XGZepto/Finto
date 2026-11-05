@@ -252,8 +252,15 @@ export class ImportPage {
     });
   }
 
+  /** Bring the review that just opened under its row into view. */
+  private revealReview(id: string): void {
+    requestAnimationFrame(() => document.getElementById(`review-${id}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  }
+
   /** Open, or run for the first time, the review of an earlier import. */
   openHistoryReview(file: any): void {
+    this.revealReview(file.id);
     const current = this.historyReview();
     if (current && current.id === file.id && current.state !== 'failed') {
       this.historyReview.set(null);

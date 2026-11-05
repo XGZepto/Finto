@@ -346,33 +346,38 @@
               </button>
             </td>
           </tr>
+          <!-- The review opens under the row that was tapped, not below the list. -->
+          @if (historyReview()?.id === f.id) {
+            @if (historyReview(); as h) {
+              <tr class="history-review-row">
+                <td colspan="7" class="history-review" [attr.id]="'review-' + f.id">
+                  <div class="section-head">
+                    <h3>Review</h3>
+                    @if (h.state === 'done') {
+                      <button class="bare" (click)="rerunHistoryReview(h)">Run again</button>
+                    }
+                  </div>
+                  @switch (h.state) {
+                    @case ('loading') { <div class="spinner">loading</div> }
+                    @case ('running') {
+                      <div class="review-running" role="status"><span class="pulse" aria-hidden="true"></span>
+                        Claude is categorising, tagging and checking links…</div>
+                    }
+                    @case ('failed') { <p class="banner warn">The review could not finish.</p> }
+                    @default {
+                      @if (h.review; as r) { <ng-container *ngTemplateOutlet="reviewPanel; context: { $implicit: r }" /> }
+                    }
+                  }
+                </td>
+              </tr>
+            }
+          }
         } @empty {
           <tr><td colspan="7" class="empty">Nothing imported yet</td></tr>
         }
       </tbody>
     </table>
   </div>
-  @if (historyReview(); as h) {
-    <div class="history-review">
-      <div class="section-head">
-        <h3>{{ h.file }}</h3>
-        @if (h.state === 'done') {
-          <button class="bare" (click)="rerunHistoryReview(h)">Run again</button>
-        }
-      </div>
-      @switch (h.state) {
-        @case ('loading') { <div class="spinner">loading</div> }
-        @case ('running') {
-          <div class="review-running" role="status"><span class="pulse" aria-hidden="true"></span>
-            Claude is categorising, tagging and checking links…</div>
-        }
-        @case ('failed') { <p class="banner warn">The review could not finish.</p> }
-        @default {
-          @if (h.review; as r) { <ng-container *ngTemplateOutlet="reviewPanel; context: { $implicit: r }" /> }
-        }
-      }
-    </div>
-  }
 </section>
 
 <ng-template #reviewPanel let-r>

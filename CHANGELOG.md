@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.37 — 2026-11-05
+
+- An earlier import's review opens under the row that was tapped and scrolls
+  into view. On a phone it had rendered below the whole history list, so the
+  Review button looked like it did nothing.
+
 ## 0.4.36 — 2026-11-05
 
 - The demo seeds to a version made from its seed code and the UTC day, not

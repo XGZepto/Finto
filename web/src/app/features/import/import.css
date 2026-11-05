@@ -122,8 +122,11 @@ td.path { font-family: var(--mono); font-size: var(--t-meta); word-break: break-
   .history td { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; min-height: 34px; padding: 7px 9px; border-bottom: 1px solid var(--line); text-align: left; }
   .history td:last-child { border-bottom: 0; }
   .history td::before { content: attr(data-label); color: var(--fg-4); font: var(--t-micro)/1.5 var(--mono); letter-spacing: .09em; text-transform: uppercase; }
-  .history td.empty { display: block; }
-  .history td.empty::before { display: none; }
+  .history td.empty, .history td.history-review { display: block; }
+  .history td.empty::before, .history td.history-review::before { display: none; }
+  /* The review joins the card above it instead of floating as its own. */
+  .history tr:has(+ .history-review-row) { margin-bottom: 0; border-bottom: 0; }
+  .history tr.history-review-row { margin-top: 0; border-top: 0; }
 }
 
 /* --- Import check and review ------------------------------------------------
@@ -213,8 +216,9 @@ button.primary.risky { background: transparent; color: var(--bad); border-color:
 .review-link { min-height: 0; padding: 0; color: var(--fg-3); font-size: var(--t-meta); text-decoration: underline; text-underline-offset: 3px; }
 .review-link[data-status='clean'] { color: var(--pos); }
 .review-link[data-status='attention'] { color: var(--warn); }
-.history-review { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
-.history-review h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-review-row td.history-review { padding: var(--s3); background: var(--panel); }
+@media (hover: hover) { tbody tr.history-review-row:hover { background: none; } }
+.history-review h3 { margin: 0; }
 
 @media (max-width: 880px) {
   .review-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
