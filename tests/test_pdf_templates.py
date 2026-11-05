@@ -310,3 +310,39 @@ def test_mox_description_wrapped_above_the_figures_is_kept():
     assert [r.amount.amount for r in result.rows] == [-4000]
     assert "Move between own" in result.rows[0].description
     assert report.status == "verified"
+
+
+def test_mox_credit_wrapped_description_follows_printed_distance():
+    """A wrapped payment between single-line rows keeps both its lines.
+
+    Mox centres the figures between a description's two lines, so the first
+    line is one text line from both neighbours. Printed distance (blank rows
+    here) shows it belongs to the payment, not to the charge above.
+    """
+    page = "\n".join([
+        row((0, "Mox Credit statement")),
+        row((0, "5 Oct 2026 - 4 Nov 2026")),
+        row((0, "-29,994.10 HKD")),
+        row((0, "Statement balance")),
+        row((0, "Transaction details")),
+        row((2, "Activity date"), (14, "Settlement date"), (28, "Description"),
+            (58, "Foreign currency amount"), (82, "Amount (HKD)")),
+        "",
+        row((2, "22 Oct"), (14, "22 Oct"), (28, "American Express Cards"),
+            right(88, "-10,432.45")),
+        "",
+        row((28, "Mox Credit Payment Mox")),
+        row((2, "23 Oct"), (14, "23 Oct"), right(88, "53,222.88")),
+        row((28, "Credit 繳款")),
+        "",
+        row((2, "23 Oct"), (14, "23 Oct"), (28, "HSBC Credit Cards"),
+            right(88, "-23,110.92")),
+        "",
+        row((0, "Repayment calculator")),
+    ])
+    result, _ = run(make_document(page), "mox_credit")
+    assert [(r.amount.amount, r.description) for r in result.rows] == [
+        (-1043245, "American Express Cards"),
+        (5322288, "Mox Credit Payment Mox Credit 繳款"),
+        (-2311092, "HSBC Credit Cards"),
+    ]
