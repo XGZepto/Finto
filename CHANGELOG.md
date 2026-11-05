@@ -2,13 +2,19 @@
 
 ## Unreleased
 
-## 0.4.37 — 2026-11-05
+## 0.4.38 — 2026-11-05
 
 - A wrapped PDF description goes to the row it is printed nearest, measured
   on the page rather than by counting text lines. Mox Credit centres the
   amount between a payment's two description lines, so every payment after
   the first lost "Mox Credit Payment Mox" to the charge above it and was
   booked as an unlinked "(no description)" refund.
+
+## 0.4.37 — 2026-11-05
+
+- An earlier import's review opens under the row that was tapped and scrolls
+  into view. On a phone it had rendered below the whole history list, so the
+  Review button looked like it did nothing.
 
 ## 0.4.36 — 2026-11-05
 
