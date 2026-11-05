@@ -259,7 +259,7 @@ def test_agent_answer_uses_allowlisted_sql_tool(seeded):
         "SELECT output,prompt_version FROM llm_decision WHERE task='query'"
     ).fetchone()
     assert "Dining spend was USD 134.00" in audit["output"]
-    assert audit["prompt_version"] == "agent-v2"
+    assert audit["prompt_version"] == "agent-v3"
 
     repeated = answer_question(
         seeded, provider, "How much did I spend on dining?",
@@ -422,3 +422,25 @@ def test_deployment_can_enable_analysis_without_changing_database(seeded, monkey
     provider = build_provider(seeded, purpose="analysis")
     assert provider.name == "anthropic"
     assert provider.model == "claude-sonnet-5"
+
+
+@pytest.mark.parametrize("bad_filter", [
+    {"category": "dining", "start_date": "2026-10-01"},   # guessed keys
+    {"categories": ["Not A Category"]},                    # unknown name
+    {"from": "October 2026"},                              # unparseable date
+])
+def test_agent_filter_is_refused_rather_than_widened(seeded, bad_filter):
+    """A dropped key would answer a wider question than the one asked."""
+    with pytest.raises(ValueError, match="invalid filter"):
+        _execute_tool(
+            seeded, build_context(seeded), "ledger_totals", {"filter": bad_filter},
+            default_currency="USD",
+        )
+
+
+def test_agent_tools_publish_the_filter_keys():
+    from fin.llm.agent import FILTER_SCHEMA, TOOLS
+    assert FILTER_SCHEMA["additionalProperties"] is False
+    assert {"from", "to", "categories"} <= set(FILTER_SCHEMA["properties"])
+    assert all(t["input_schema"]["properties"]["filter"] is FILTER_SCHEMA
+               for t in TOOLS if "filter" in t["input_schema"]["properties"])

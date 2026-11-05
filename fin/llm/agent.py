@@ -11,7 +11,7 @@ from . import cache
 from .provider import LLMProvider, LLMUnavailable
 from .query import VALID_GROUP_BY, build_context, sanitise
 
-PROMPT_VERSION = "agent-v2"
+PROMPT_VERSION = "agent-v3"
 MAX_TOOL_CALLS = 8
 
 SYSTEM = """You answer questions about the user's Finto ledger.
@@ -30,6 +30,30 @@ financial advice. If the available data cannot answer the question, state the
 missing data precisely."""
 
 
+#: The ledger filter every tool takes. Spelled out so the model uses the real
+#: keys; a guessed key (category, start_date) is refused, not ignored.
+FILTER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": "Rows to include. Omit a key to leave it unfiltered.",
+    "properties": {
+        "from": {"type": "string", "format": "date", "description": "First day, inclusive."},
+        "to": {"type": "string", "format": "date", "description": "Last day, inclusive."},
+        "accounts": {"type": "array", "items": {"type": "string"},
+                     "description": "Account ids from the context."},
+        "categories": {"type": "array", "items": {"type": "string"},
+                       "description": "Category names exactly as in the context."},
+        "kinds": {"type": "array", "items": {"type": "string"}},
+        "currency": {"type": "string", "description": "Booked currency code."},
+        "q": {"type": "string", "description": "Text search over merchant and description."},
+        "minAmount": {"type": "integer", "description": "Signed minor units."},
+        "maxAmount": {"type": "integer", "description": "Signed minor units."},
+        "includeTransfers": {"type": "boolean"},
+        "uncategorisedOnly": {"type": "boolean"},
+        "installmentsOnly": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
 TOOLS: list[dict[str, Any]] = [
     {
         "name": "ledger_totals",
@@ -37,7 +61,7 @@ TOOLS: list[dict[str, Any]] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "filter": {"type": "object"},
+                "filter": FILTER_SCHEMA,
                 "reporting_currency": {"type": "string"},
             },
         },
@@ -49,7 +73,7 @@ TOOLS: list[dict[str, Any]] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "filter": {"type": "object"},
+                "filter": FILTER_SCHEMA,
                 "group_by": {"type": "string", "enum": sorted(VALID_GROUP_BY)},
                 "reporting_currency": {"type": "string"},
             },
@@ -63,7 +87,7 @@ TOOLS: list[dict[str, Any]] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "filter": {"type": "object"},
+                "filter": FILTER_SCHEMA,
                 "limit": {"type": "integer", "minimum": 1, "maximum": 25},
                 "sort": {"type": "string",
                          "enum": ["date", "amount", "merchant", "account", "category"]},
@@ -90,7 +114,7 @@ TOOLS: list[dict[str, Any]] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "filter": {"type": "object"},
+                "filter": FILTER_SCHEMA,
                 "reporting_currency": {"type": "string"},
             },
             "required": ["reporting_currency"],
@@ -275,8 +299,21 @@ def _execute_tool(
 
 
 def _filter(value: Any, context: dict[str, Any]) -> dict[str, Any]:
+    """The model's filter, or an error it can correct.
+
+    Dropping a key the ledger does not know would widen the question: a
+    misspelt "category" turned "dining in October" into every row ever. The
+    tool fails instead, naming what was wrong, and the model retries.
+    """
     proposed = value if isinstance(value, dict) else {}
-    return sanitise({"filter": proposed}, context)["filter"]
+    result = sanitise({"filter": proposed}, context)
+    if result["dropped_fields"]:
+        raise ValueError(
+            "invalid filter: " + ", ".join(result["dropped_fields"])
+            + ". Use only: from, to (YYYY-MM-DD), accounts, categories, kinds, currency,"
+            " q, minAmount, maxAmount, includeTransfers, uncategorisedOnly,"
+            " installmentsOnly; account ids and category names exactly as in the context.")
+    return result["filter"]
 
 
 def _prompt_cache(usage: dict[str, Any]) -> dict[str, int | bool]:

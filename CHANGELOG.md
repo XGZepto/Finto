@@ -2,13 +2,21 @@
 
 ## Unreleased
 
-## 0.4.35 — 2026-11-05
+## 0.4.36 — 2026-11-05
 
 - A wrapped PDF description goes to the row it is printed nearest, measured
   on the page rather than by counting text lines. Mox Credit centres the
   amount between a payment's two description lines, so every payment after
   the first lost "Mox Credit Payment Mox" to the charge above it and was
   booked as an unlinked "(no description)" refund.
+
+## 0.4.35 — 2026-11-05
+
+- Ask refuses a filter it cannot apply instead of dropping it. A guessed key
+  such as `category` or `start_date`, an unknown category name or an unreadable
+  date had been ignored, so "dining in October" was answered with every row in
+  the ledger. The model now gets an error naming the valid keys and retries.
+  The tools publish the filter's keys, and earlier cached answers are retired.
 
 ## 0.4.34 — 2026-11-05
 
