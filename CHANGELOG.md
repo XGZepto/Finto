@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.35 — 2026-11-05
+
+- Ask refuses a filter it cannot apply instead of dropping it. A guessed key
+  such as `category` or `start_date`, an unknown category name or an unreadable
+  date had been ignored, so "dining in October" was answered with every row in
+  the ledger. The model now gets an error naming the valid keys and retries.
+  The tools publish the filter's keys, and earlier cached answers are retired.
+
 ## 0.4.34 — 2026-11-05
 
 - Import checks a statement against the ledger before anything is written:
