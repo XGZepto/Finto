@@ -1,0 +1,268 @@
+{
+ "extensions": [
+  ".csv",
+  ".pdf",
+  ".tsv",
+  ".txt"
+ ],
+ "formats": [
+  {
+   "id": "amex_csv",
+   "label": "American Express card activity CSV",
+   "file_format": "csv",
+   "extensions": [
+    ".csv"
+   ],
+   "version": "0.1.0",
+   "source": "bundled",
+   "institution_ids": [
+    "amex_hk",
+    "amex_us"
+   ],
+   "institutions": [
+    "AMEX HK",
+    "AMEX US"
+   ],
+   "generic": false,
+   "verified": false
+  },
+  {
+   "id": "amex_us_savings_csv",
+   "label": "American Express US savings CSV",
+   "file_format": "csv",
+   "extensions": [
+    ".csv"
+   ],
+   "version": "0.1.0",
+   "source": "bundled",
+   "institution_ids": [
+    "amex_us_bank"
+   ],
+   "institutions": [
+    "AMEX US Bank"
+   ],
+   "generic": false,
+   "verified": false
+  },
+  {
+   "id": "generic_csv",
+   "label": "Generic transaction table",
+   "file_format": "csv",
+   "extensions": [
+    ".csv",
+    ".tsv",
+    ".txt"
+   ],
+   "version": "0.1.0",
+   "source": "bundled",
+   "institution_ids": [
+    "generic"
+   ],
+   "institutions": [],
+   "generic": true,
+   "verified": false
+  },
+  {
+   "id": "hsbc_hk_csv",
+   "label": "HSBC HK transaction history CSV",
+   "file_format": "csv",
+   "extensions": [
+    ".csv"
+   ],
+   "version": "0.1.0",
+   "source": "bundled",
+   "institution_ids": [
+    "hsbc_hk"
+   ],
+   "institutions": [
+    "HSBC HK"
+   ],
+   "generic": false,
+   "verified": false
+  },
+  {
+   "id": "mox_csv",
+   "label": "Mox account activity CSV",
+   "file_format": "csv",
+   "extensions": [
+    ".csv"
+   ],
+   "version": "0.1.0",
+   "source": "bundled",
+   "institution_ids": [
+    "mox"
+   ],
+   "institutions": [
+    "Mox"
+   ],
+   "generic": false,
+   "verified": false
+  },
+  {
+   "id": "wise_csv",
+   "label": "Wise account statement CSV",
+   "file_format": "csv",
+   "extensions": [
+    ".csv"
+   ],
+   "version": "0.1.0",
+   "source": "bundled",
+   "institution_ids": [
+    "wise"
+   ],
+   "institutions": [
+    "Wise"
+   ],
+   "generic": false,
+   "verified": false
+  },
+  {
+   "id": "amex_hk_card",
+   "label": "American Express Hong Kong card statement",
+   "file_format": "pdf",
+   "extensions": [
+    ".pdf"
+   ],
+   "version": "2.0.0",
+   "source": "builtin",
+   "institution_ids": [
+    "amex_hk"
+   ],
+   "institutions": [
+    "AMEX HK"
+   ],
+   "generic": false,
+   "verified": true
+  },
+  {
+   "id": "amex_us_savings",
+   "label": "American Express National Bank High Yield Savings statement",
+   "file_format": "pdf",
+   "extensions": [
+    ".pdf"
+   ],
+   "version": "1.0.0",
+   "source": "builtin",
+   "institution_ids": [
+    "amex_us_bank"
+   ],
+   "institutions": [
+    "AMEX US Bank"
+   ],
+   "generic": false,
+   "verified": true
+  },
+  {
+   "id": "amex_us_card",
+   "label": "American Express US card statement (Platinum, Bonvoy Brilliant, Green)",
+   "file_format": "pdf",
+   "extensions": [
+    ".pdf"
+   ],
+   "version": "2.0.0",
+   "source": "builtin",
+   "institution_ids": [
+    "amex_us"
+   ],
+   "institutions": [
+    "AMEX US"
+   ],
+   "generic": false,
+   "verified": true
+  },
+  {
+   "id": "chase_us_consolidated",
+   "label": "Chase US consolidated checking and savings statement",
+   "file_format": "pdf",
+   "extensions": [
+    ".pdf"
+   ],
+   "version": "2.0.0",
+   "source": "builtin",
+   "institution_ids": [
+    "chase_us"
+   ],
+   "institutions": [
+    "Chase US"
+   ],
+   "generic": false,
+   "verified": true
+  },
+  {
+   "id": "hsbc_hk_card",
+   "label": "HSBC HK credit card statement (Pulse dual currency, EveryMile)",
+   "file_format": "pdf",
+   "extensions": [
+    ".pdf"
+   ],
+   "version": "2.0.0",
+   "source": "builtin",
+   "institution_ids": [
+    "hsbc_hk"
+   ],
+   "institutions": [
+    "HSBC HK"
+   ],
+   "generic": false,
+   "verified": true
+  },
+  {
+   "id": "hsbc_hk_savings",
+   "label": "HSBC HK savings / HSBC One statement",
+   "file_format": "pdf",
+   "extensions": [
+    ".pdf"
+   ],
+   "version": "2.0.0",
+   "source": "builtin",
+   "institution_ids": [
+    "hsbc_hk"
+   ],
+   "institutions": [
+    "HSBC HK"
+   ],
+   "generic": false,
+   "verified": true
+  },
+  {
+   "id": "mox_bank",
+   "label": "Mox Bank monthly statement (multi-currency)",
+   "file_format": "pdf",
+   "extensions": [
+    ".pdf"
+   ],
+   "version": "1.0.0",
+   "source": "builtin",
+   "institution_ids": [
+    "mox"
+   ],
+   "institutions": [
+    "Mox"
+   ],
+   "generic": false,
+   "verified": true
+  },
+  {
+   "id": "mox_credit",
+   "label": "Mox Credit card statement",
+   "file_format": "pdf",
+   "extensions": [
+    ".pdf"
+   ],
+   "version": "1.0.0",
+   "source": "builtin",
+   "institution_ids": [
+    "mox"
+   ],
+   "institutions": [
+    "Mox"
+   ],
+   "generic": false,
+   "verified": true
+  }
+ ],
+ "contribution": {
+  "guide": "https://github.com/XGZepto/Finto/wiki/Statement-Formats",
+  "request": "https://github.com/XGZepto/Finto/issues/new?labels=statement-format"
+ }
+}

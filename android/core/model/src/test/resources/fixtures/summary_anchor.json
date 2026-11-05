@@ -1,0 +1,58 @@
+{
+ "group_by": "kind",
+ "rows": [
+  {
+   "bucket": "purchase",
+   "currency": "HKD",
+   "txn_count": 1,
+   "net": {
+    "amount": -7800,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 7800,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   }
+  }
+ ],
+ "totals": [
+  {
+   "currency": "HKD",
+   "txn_count": 1,
+   "net": {
+    "amount": -7800,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 7800,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "uncategorised": 0
+  }
+ ],
+ "dimensions": [
+  "account",
+  "card",
+  "cardholder",
+  "category",
+  "currency",
+  "day",
+  "institution",
+  "kind",
+  "merchant",
+  "month",
+  "quarter",
+  "subcategory",
+  "tag",
+  "year"
+ ],
+ "ledger_through": "2026-11-22"
+}

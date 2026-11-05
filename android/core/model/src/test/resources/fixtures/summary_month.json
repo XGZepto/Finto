@@ -1,0 +1,914 @@
+{
+ "group_by": "month",
+ "rows": [
+  {
+   "bucket": "2025-12",
+   "currency": "HKD",
+   "txn_count": 63,
+   "net": {
+    "amount": -641917,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 8241917,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -641917,
+    "currency": "HKD",
+    "source": {
+     "amount": -641917,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 8241917,
+    "currency": "HKD",
+    "source": {
+     "amount": 8241917,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-01",
+   "currency": "HKD",
+   "txn_count": 54,
+   "net": {
+    "amount": -1213650,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 8813650,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -1213650,
+    "currency": "HKD",
+    "source": {
+     "amount": -1213650,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 8813650,
+    "currency": "HKD",
+    "source": {
+     "amount": 8813650,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-02",
+   "currency": "HKD",
+   "txn_count": 66,
+   "net": {
+    "amount": -1336693,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 8936693,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -1336693,
+    "currency": "HKD",
+    "source": {
+     "amount": -1336693,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 8936693,
+    "currency": "HKD",
+    "source": {
+     "amount": 8936693,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-03",
+   "currency": "HKD",
+   "txn_count": 77,
+   "net": {
+    "amount": -3791838,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 11391838,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -3791838,
+    "currency": "HKD",
+    "source": {
+     "amount": -3791838,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 11391838,
+    "currency": "HKD",
+    "source": {
+     "amount": 11391838,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-04",
+   "currency": "HKD",
+   "txn_count": 81,
+   "net": {
+    "amount": -4902730,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 12502730,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -4902730,
+    "currency": "HKD",
+    "source": {
+     "amount": -4902730,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 12502730,
+    "currency": "HKD",
+    "source": {
+     "amount": 12502730,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-05",
+   "currency": "HKD",
+   "txn_count": 71,
+   "net": {
+    "amount": 616665,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 6983335,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": 616665,
+    "currency": "HKD",
+    "source": {
+     "amount": 616665,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 6983335,
+    "currency": "HKD",
+    "source": {
+     "amount": 6983335,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-06",
+   "currency": "HKD",
+   "txn_count": 75,
+   "net": {
+    "amount": -1585350,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 9185350,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -1585350,
+    "currency": "HKD",
+    "source": {
+     "amount": -1585350,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 9185350,
+    "currency": "HKD",
+    "source": {
+     "amount": 9185350,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-07",
+   "currency": "HKD",
+   "txn_count": 63,
+   "net": {
+    "amount": -4651025,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 12251025,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -4651025,
+    "currency": "HKD",
+    "source": {
+     "amount": -4651025,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 12251025,
+    "currency": "HKD",
+    "source": {
+     "amount": 12251025,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-08",
+   "currency": "HKD",
+   "txn_count": 65,
+   "net": {
+    "amount": -4775712,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 12375712,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -4775712,
+    "currency": "HKD",
+    "source": {
+     "amount": -4775712,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 12375712,
+    "currency": "HKD",
+    "source": {
+     "amount": 12375712,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-09",
+   "currency": "HKD",
+   "txn_count": 65,
+   "net": {
+    "amount": 888725,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 6711275,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": 888725,
+    "currency": "HKD",
+    "source": {
+     "amount": 888725,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 6711275,
+    "currency": "HKD",
+    "source": {
+     "amount": 6711275,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-10",
+   "currency": "HKD",
+   "txn_count": 83,
+   "net": {
+    "amount": 1331500,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 6268500,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": 1331500,
+    "currency": "HKD",
+    "source": {
+     "amount": 1331500,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 6268500,
+    "currency": "HKD",
+    "source": {
+     "amount": 6268500,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "2026-11",
+   "currency": "HKD",
+   "txn_count": 28,
+   "net": {
+    "amount": 4064482,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 3535518,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 7600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": 4064482,
+    "currency": "HKD",
+    "source": {
+     "amount": 4064482,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 3535518,
+    "currency": "HKD",
+    "source": {
+     "amount": 3535518,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 7600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 7600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  }
+ ],
+ "totals": [
+  {
+   "currency": "HKD",
+   "txn_count": 791,
+   "net": {
+    "amount": -15997543,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 107197543,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 91200000,
+    "currency": "HKD"
+   },
+   "uncategorised": 38,
+   "net_converted": {
+    "amount": -15997543,
+    "currency": "HKD",
+    "source": {
+     "amount": -15997543,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 107197543,
+    "currency": "HKD",
+    "source": {
+     "amount": 107197543,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 91200000,
+    "currency": "HKD",
+    "source": {
+     "amount": 91200000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  }
+ ],
+ "dimensions": [
+  "account",
+  "card",
+  "cardholder",
+  "category",
+  "currency",
+  "day",
+  "institution",
+  "kind",
+  "merchant",
+  "month",
+  "quarter",
+  "subcategory",
+  "tag",
+  "year"
+ ],
+ "ledger_through": "2026-11-22",
+ "normalised": {
+  "to": "HKD",
+  "rows": [
+   {
+    "bucket": "2025-12",
+    "net": {
+     "amount": -641917,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 8241917,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-01",
+    "net": {
+     "amount": -1213650,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 8813650,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-02",
+    "net": {
+     "amount": -1336693,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 8936693,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-03",
+    "net": {
+     "amount": -3791838,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 11391838,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-04",
+    "net": {
+     "amount": -4902730,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 12502730,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-05",
+    "net": {
+     "amount": 616665,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 6983335,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-06",
+    "net": {
+     "amount": -1585350,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 9185350,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-07",
+    "net": {
+     "amount": -4651025,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 12251025,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-08",
+    "net": {
+     "amount": -4775712,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 12375712,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-09",
+    "net": {
+     "amount": 888725,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 6711275,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-10",
+    "net": {
+     "amount": 1331500,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 6268500,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "2026-11",
+    "net": {
+     "amount": 4064482,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 3535518,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 7600000,
+     "currency": "HKD"
+    }
+   }
+  ],
+  "total": {
+   "unconvertible_currencies": [],
+   "net": {
+    "amount": -15997543,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 107197543,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 91200000,
+    "currency": "HKD"
+   }
+  },
+  "unconvertible_currencies": []
+ }
+}

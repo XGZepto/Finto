@@ -1,0 +1,846 @@
+{
+ "group_by": "category",
+ "rows": [
+  {
+   "bucket": "(uncategorised)",
+   "currency": "HKD",
+   "txn_count": 38,
+   "net": {
+    "amount": -325656,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 9925656,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 9600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -325656,
+    "currency": "HKD",
+    "source": {
+     "amount": -325656,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 9925656,
+    "currency": "HKD",
+    "source": {
+     "amount": 9925656,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 9600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 9600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "dining",
+   "currency": "HKD",
+   "txn_count": 171,
+   "net": {
+    "amount": -5548350,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 5548350,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -5548350,
+    "currency": "HKD",
+    "source": {
+     "amount": -5548350,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 5548350,
+    "currency": "HKD",
+    "source": {
+     "amount": 5548350,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "groceries",
+   "currency": "HKD",
+   "txn_count": 86,
+   "net": {
+    "amount": -2794580,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 2794580,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -2794580,
+    "currency": "HKD",
+    "source": {
+     "amount": -2794580,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 2794580,
+    "currency": "HKD",
+    "source": {
+     "amount": 2794580,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "health",
+   "currency": "HKD",
+   "txn_count": 49,
+   "net": {
+    "amount": -1647267,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 1647267,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -1647267,
+    "currency": "HKD",
+    "source": {
+     "amount": -1647267,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 1647267,
+    "currency": "HKD",
+    "source": {
+     "amount": 1647267,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "housing",
+   "currency": "HKD",
+   "txn_count": 12,
+   "net": {
+    "amount": -23400000,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 23400000,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -23400000,
+    "currency": "HKD",
+    "source": {
+     "amount": -23400000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 23400000,
+    "currency": "HKD",
+    "source": {
+     "amount": 23400000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "income",
+   "currency": "HKD",
+   "txn_count": 12,
+   "net": {
+    "amount": 81600000,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 81600000,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": 81600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 81600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 81600000,
+    "currency": "HKD",
+    "source": {
+     "amount": 81600000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "shopping",
+   "currency": "HKD",
+   "txn_count": 159,
+   "net": {
+    "amount": -33183185,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 33183185,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -33183185,
+    "currency": "HKD",
+    "source": {
+     "amount": -33183185,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 33183185,
+    "currency": "HKD",
+    "source": {
+     "amount": 33183185,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "subscriptions",
+   "currency": "HKD",
+   "txn_count": 72,
+   "net": {
+    "amount": -617328,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 617328,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -617328,
+    "currency": "HKD",
+    "source": {
+     "amount": -617328,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 617328,
+    "currency": "HKD",
+    "source": {
+     "amount": 617328,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "transport",
+   "currency": "HKD",
+   "txn_count": 46,
+   "net": {
+    "amount": -388640,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 388640,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -388640,
+    "currency": "HKD",
+    "source": {
+     "amount": -388640,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 388640,
+    "currency": "HKD",
+    "source": {
+     "amount": 388640,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "travel",
+   "currency": "HKD",
+   "txn_count": 62,
+   "net": {
+    "amount": -27071306,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 27071306,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -27071306,
+    "currency": "HKD",
+    "source": {
+     "amount": -27071306,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 27071306,
+    "currency": "HKD",
+    "source": {
+     "amount": 27071306,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "bucket": "utilities",
+   "currency": "HKD",
+   "txn_count": 84,
+   "net": {
+    "amount": -2621231,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 2621231,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "net_converted": {
+    "amount": -2621231,
+    "currency": "HKD",
+    "source": {
+     "amount": -2621231,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 2621231,
+    "currency": "HKD",
+    "source": {
+     "amount": 2621231,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  }
+ ],
+ "totals": [
+  {
+   "currency": "HKD",
+   "txn_count": 791,
+   "net": {
+    "amount": -15997543,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 107197543,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 91200000,
+    "currency": "HKD"
+   },
+   "uncategorised": 38,
+   "net_converted": {
+    "amount": -15997543,
+    "currency": "HKD",
+    "source": {
+     "amount": -15997543,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "spend_converted": {
+    "amount": 107197543,
+    "currency": "HKD",
+    "source": {
+     "amount": 107197543,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "income_converted": {
+    "amount": 91200000,
+    "currency": "HKD",
+    "source": {
+     "amount": 91200000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  }
+ ],
+ "dimensions": [
+  "account",
+  "card",
+  "cardholder",
+  "category",
+  "currency",
+  "day",
+  "institution",
+  "kind",
+  "merchant",
+  "month",
+  "quarter",
+  "subcategory",
+  "tag",
+  "year"
+ ],
+ "ledger_through": "2026-11-22",
+ "normalised": {
+  "to": "HKD",
+  "rows": [
+   {
+    "bucket": "(uncategorised)",
+    "net": {
+     "amount": -325656,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 9925656,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 9600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "dining",
+    "net": {
+     "amount": -5548350,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 5548350,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 0,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "groceries",
+    "net": {
+     "amount": -2794580,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 2794580,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 0,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "health",
+    "net": {
+     "amount": -1647267,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 1647267,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 0,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "housing",
+    "net": {
+     "amount": -23400000,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 23400000,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 0,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "income",
+    "net": {
+     "amount": 81600000,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 81600000,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "shopping",
+    "net": {
+     "amount": -33183185,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 33183185,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 0,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "subscriptions",
+    "net": {
+     "amount": -617328,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 617328,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 0,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "transport",
+    "net": {
+     "amount": -388640,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 388640,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 0,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "travel",
+    "net": {
+     "amount": -27071306,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 27071306,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 0,
+     "currency": "HKD"
+    }
+   },
+   {
+    "bucket": "utilities",
+    "net": {
+     "amount": -2621231,
+     "currency": "HKD"
+    },
+    "spend": {
+     "amount": 2621231,
+     "currency": "HKD"
+    },
+    "income": {
+     "amount": 0,
+     "currency": "HKD"
+    }
+   }
+  ],
+  "total": {
+   "unconvertible_currencies": [],
+   "net": {
+    "amount": -15997543,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 107197543,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 91200000,
+    "currency": "HKD"
+   }
+  },
+  "unconvertible_currencies": []
+ }
+}
