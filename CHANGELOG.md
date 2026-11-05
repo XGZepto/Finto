@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.34 — 2026-11-05
+
 - A wrapped PDF description goes to the row it is printed nearest, measured
   on the page rather than by counting text lines. Mox Credit centres the
   amount between a payment's two description lines, so every payment after
