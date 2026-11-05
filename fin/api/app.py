@@ -50,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.4.35",
+    version="0.4.36",
 )
 
 
@@ -71,11 +71,9 @@ def _ensure_live_schema() -> None:
             ))
             conn.execute("SELECT set_config('search_path', %s, false)", (schema,))
             conn.execute("SELECT pg_advisory_xact_lock(hashtext('finto_demo_seed'))")
-            version = (
-                os.environ.get("VERCEL_DEPLOYMENT_ID")
-                or os.environ.get("VERCEL_GIT_COMMIT_SHA")
-                or "manual"
-            )
+            from ..demo import seed_version
+
+            version = seed_version()
             current_version = None
             if conn.execute("SELECT to_regclass('setting') AS name").fetchone()["name"]:
                 row = conn.execute(

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.36 — 2026-11-05
+
+- The demo seeds to a version made from its seed code and the UTC day, not
+  the deployment id. An older deployment that cold-started during an alias
+  switch had reset the schema under the new one, signing out the deploy
+  check mid-run.
+
 ## 0.4.35 — 2026-11-05
 
 - Ask refuses a filter it cannot apply instead of dropping it. A guessed key
