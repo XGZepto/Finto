@@ -6,6 +6,7 @@ import json
 import logging
 import queue
 import threading
+import time
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -49,9 +50,12 @@ def stream_query(req: QueryRequest, request: Request) -> StreamingResponse:
     """
     user_id = request.state.user_id
     events: queue.Queue = queue.Queue()
+    started = time.monotonic()
 
     def emit(kind: str, payload: dict) -> None:
-        events.put((kind, payload))
+        # Server-side seconds since the request began, so a client can tell
+        # network bunching from the model's own pace.
+        events.put((kind, {**payload, "at": round(time.monotonic() - started, 2)}))
 
     def work() -> None:
         try:
