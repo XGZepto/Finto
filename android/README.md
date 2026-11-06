@@ -68,7 +68,7 @@ core/network/           Retrofit + OkHttp, persistent session cookie, server swi
 core/data/              Repositories, Paging source, DataStore settings, error messages
 core/designsystem/      Material 3 theme (dynamic colour + Finto palette), shared components
 core/testing/           Fakes and rules for unit tests
-feature/auth/           Sign-in, including the public demo
+feature/auth/           Sign-in
 feature/summary/        Summary
 feature/transactions/   Activity (blotter), transaction details and editing
 feature/reports/        Reports and Timeline
@@ -115,7 +115,16 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The debug build installs as `page.zepto.finto.debug`, beside a release build.
-To try it without an account, tap **Try the demo** on the sign-in screen.
+
+The server is fixed when the APK is built: production Finto
+(`https://finto.zepto.page/`) unless you pass another. There is no server
+field or demo button in the app.
+
+```bash
+./gradlew assemblePreview -Pfinto.server=https://demo.finto.zepto.page/
+```
+
+The `FINTO_SERVER` environment variable does the same.
 
 Debug builds are slow by design (no R8, debuggable Compose). To judge real
 speed, install the `preview` build: release code signed with the debug key,
@@ -125,8 +134,8 @@ installed as `page.zepto.finto.preview`.
 ./gradlew assemblePreview
 ```
 
-To use a local server, run the API from the repository root and sign in to
-`http://10.0.2.2:8000` from the emulator:
+To use a local server, run the API from the repository root and build a debug
+APK with `-Pfinto.server=http://10.0.2.2:8000/` for the emulator:
 
 ```bash
 .venv/bin/uvicorn fin.api.app:app --reload --port 8000

@@ -110,8 +110,17 @@ class ScreenshotTest {
     @Test
     fun login() = capture("login") {
         LoginScreen(
-            state = LoginUiState(server = "finto.zepto.page", identifier = "owner"),
-            onServerChange = {}, onIdentifierChange = {}, onPasswordChange = {}, onSubmit = {}, onDemo = {},
+            state = LoginUiState(identifier = "owner", returning = true),
+            onIdentifierChange = {}, onPasswordChange = {}, onSubmit = {},
+            animateEntrance = false,
+        )
+    }
+
+    @Test
+    fun loginFirstTime() = capture("login-first") {
+        LoginScreen(
+            state = LoginUiState(identifier = "owner", password = "secret"),
+            onIdentifierChange = {}, onPasswordChange = {}, onSubmit = {},
             animateEntrance = false,
         )
     }

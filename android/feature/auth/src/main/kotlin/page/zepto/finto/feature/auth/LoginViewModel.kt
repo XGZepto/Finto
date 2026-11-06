@@ -16,20 +16,17 @@ import retrofit2.HttpException
 import javax.inject.Inject
 
 data class LoginUiState(
-    val server: String = displayServer(ServerEndpoint.DEFAULT_SERVER),
     val identifier: String = "",
     val password: String = "",
     val submitting: Boolean = false,
     val error: String? = null,
     val notice: String? = null,
+    /** Someone has signed in here before: greet them back. */
+    val returning: Boolean = false,
 ) {
     val canSubmit: Boolean
-        get() = server.isNotBlank() && identifier.isNotBlank() && password.isNotEmpty() && !submitting
+        get() = identifier.isNotBlank() && password.isNotEmpty() && !submitting
 }
-
-/** `https://finto.zepto.page/` → `finto.zepto.page`, the way people type it. */
-internal fun displayServer(url: String): String =
-    url.removePrefix("https://").trimEnd('/')
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
@@ -44,12 +41,10 @@ class LoginViewModel @Inject constructor(
         viewModelScope.launch {
             val saved = settings.current()
             mutableState.update {
-                it.copy(server = displayServer(saved.serverUrl), identifier = saved.lastIdentifier)
+                it.copy(identifier = saved.lastIdentifier, returning = saved.lastIdentifier.isNotBlank())
             }
         }
     }
-
-    fun onServerChange(value: String) = mutableState.update { it.copy(server = value, error = null) }
 
     fun onIdentifierChange(value: String) = mutableState.update { it.copy(identifier = value, error = null) }
 
@@ -60,7 +55,8 @@ class LoginViewModel @Inject constructor(
         if (!current.canSubmit) return
         mutableState.update { it.copy(submitting = true, error = null, notice = null) }
         viewModelScope.launch {
-            session.signIn(current.server, current.identifier, current.password)
+            // The server is fixed when the APK is built (see core/network's build file).
+            session.signIn(ServerEndpoint.DEFAULT_SERVER, current.identifier, current.password)
                 .onFailure { error ->
                     val message = if (error is HttpException && error.code() == 401) {
                         "Incorrect username, email or password."
@@ -75,23 +71,5 @@ class LoginViewModel @Inject constructor(
                     mutableState.update { it.copy(submitting = false, password = "") }
                 }
         }
-    }
-
-    /** The public demo: invented data, read-only, published credentials. */
-    fun useDemo() {
-        mutableState.update {
-            it.copy(
-                server = displayServer(ServerEndpoint.DEMO_SERVER),
-                identifier = DEMO_USER,
-                password = DEMO_PASSWORD,
-                error = null,
-            )
-        }
-        submit()
-    }
-
-    private companion object {
-        const val DEMO_USER = "demo"
-        const val DEMO_PASSWORD = "finto-demo-2026"
     }
 }

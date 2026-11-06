@@ -73,8 +73,8 @@ internal class DefaultSessionRepository @Inject constructor(
 
     override suspend fun restore() {
         val saved = settings.current()
-        val server = ServerEndpoint.normalize(saved.serverUrl)
-            ?: ServerEndpoint.normalize(ServerEndpoint.DEFAULT_SERVER)!!
+        // The server is fixed at build time; a session saved against any other is not resumed.
+        val server = ServerEndpoint.normalize(ServerEndpoint.DEFAULT_SERVER)!!
         endpoint.set(server)
         if (!cookies.hasCookieFor(server)) {
             mutableState.value = SessionState.SignedOut()

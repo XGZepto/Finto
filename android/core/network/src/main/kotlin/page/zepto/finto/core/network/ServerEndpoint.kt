@@ -6,9 +6,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The Finto server every request goes to. The data layer sets it from the
- * saved preference before the first call and whenever the user signs in to a
- * different server.
+ * The Finto server every request goes to: the one the APK was built for
+ * ([DEFAULT_SERVER]), set by the data layer before the first call.
  */
 @Singleton
 class ServerEndpoint @Inject constructor() {
@@ -21,7 +20,8 @@ class ServerEndpoint @Inject constructor() {
     }
 
     companion object {
-        const val DEFAULT_SERVER = "https://finto.zepto.page/"
+        /** Set at build time with `-Pfinto.server`; production Finto by default. */
+        const val DEFAULT_SERVER: String = BuildConfig.FINTO_SERVER
         const val DEMO_SERVER = "https://demo.finto.zepto.page/"
 
         /** Placeholder host Retrofit is built with; [ServerRewriteInterceptor] replaces it. */

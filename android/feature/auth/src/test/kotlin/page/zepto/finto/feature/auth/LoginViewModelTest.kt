@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import page.zepto.finto.core.network.ServerEndpoint
 import page.zepto.finto.core.data.repository.AppSettings
 import page.zepto.finto.core.testing.FakeSessionRepository
 import page.zepto.finto.core.testing.FakeSettingsRepository
@@ -21,10 +22,10 @@ class LoginViewModelTest {
     private val settings = FakeSettingsRepository(AppSettings(serverUrl = "https://finto.example.com/", lastIdentifier = "owner"))
 
     @Test
-    fun prefillsTheLastServerAndUser() {
+    fun prefillsTheLastUserAndGreetsThemBack() {
         val state = LoginViewModel(session, settings).state.value
-        assertEquals("finto.example.com", state.server)
         assertEquals("owner", state.identifier)
+        assertTrue(state.returning)
         assertFalse(state.canSubmit)
     }
 
@@ -43,17 +44,8 @@ class LoginViewModelTest {
         val viewModel = LoginViewModel(session, settings)
         viewModel.onPasswordChange("secret")
         viewModel.submit()
-        assertEquals(Triple("finto.example.com", "owner", "secret"), session.signIns.single())
+        // Always the server the APK was built for, whatever an older version saved.
+        assertEquals(Triple(ServerEndpoint.DEFAULT_SERVER, "owner", "secret"), session.signIns.single())
         assertEquals("", viewModel.state.value.password)
-    }
-
-    @Test
-    fun demoUsesThePublicDemoServer() {
-        val viewModel = LoginViewModel(session, settings)
-        viewModel.useDemo()
-        val (server, user, _) = session.signIns.single()
-        assertEquals("demo.finto.zepto.page", server)
-        assertEquals("demo", user)
-        assertTrue(viewModel.state.value.error == null)
     }
 }
