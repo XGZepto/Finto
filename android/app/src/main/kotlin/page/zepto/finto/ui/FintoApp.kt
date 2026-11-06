@@ -28,6 +28,10 @@ import page.zepto.finto.core.data.IncomingFiles
 import page.zepto.finto.core.data.repository.SessionState
 import androidx.navigation.compose.composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.navigation.compose.currentBackStackEntryAsState
 import page.zepto.finto.core.designsystem.theme.FintoMotion
 import page.zepto.finto.core.designsystem.theme.LocalFintoLanguage
 import page.zepto.finto.core.designsystem.theme.tr
@@ -76,14 +80,19 @@ fun FintoApp(session: SessionState, appVersion: String, incomingFiles: IncomingF
 @Composable
 private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
     val navController = rememberNavController()
-    val entries by navController.currentBackStack.collectAsStateWithLifecycle()
-    val selectedTab = entries.selectedTab()
+    val backStack by navController.currentBackStackEntryAsState()
+    // A drilled-into screen (a scoped blotter) highlights the tab it was opened
+    // from: remember, per back stack entry, which tab was showing when it arrived.
+    val origins = remember { HashMap<String, TopLevelDestination>() }
+    val lastTab = remember { mutableStateOf(TopLevelDestination.Summary) }
+    val selectedTab = backStack?.let { entry -> entry.ownTab() ?: origins.getOrPut(entry.id) { lastTab.value } }
+    SideEffect { selectedTab?.let { lastTab.value = it } }
     val layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(currentWindowAdaptiveInfo())
 
     val incoming by incomingFiles.file.collectAsStateWithLifecycle()
     LaunchedEffect(incoming) {
         if (incoming != null) {
-            navController.navigateToTopLevel(TopLevelDestination.More)
+            navController.navigateToTopLevel(TopLevelDestination.More, selectedTab)
             navController.navigate(ImportDestination) { launchSingleTop = true }
         }
     }
@@ -101,7 +110,7 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
                 val selected = destination == selectedTab
                 item(
                     selected = selected,
-                    onClick = { navController.navigateToTopLevel(destination) },
+                    onClick = { navController.navigateToTopLevel(destination, selectedTab) },
                     icon = { Icon(if (selected) destination.selectedIcon else destination.icon, contentDescription = null) },
                     label = { Text(tr(destination.label)) },
                 )
@@ -126,7 +135,7 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
             summaryScreen(
                 onOpenLedger = openLedger,
                 onOpenImport = {
-                    navController.navigateToTopLevel(TopLevelDestination.More)
+                    navController.navigateToTopLevel(TopLevelDestination.More, selectedTab)
                     navController.navigate(ImportDestination) { launchSingleTop = true }
                 },
             )
@@ -160,10 +169,9 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
     }
 }
 
-private fun NavHostController.navigateToTopLevel(destination: TopLevelDestination) {
+private fun NavHostController.navigateToTopLevel(destination: TopLevelDestination, selected: TopLevelDestination?) {
     // Tapping the tab you are on returns to its root, as on the web.
-    val stack = currentBackStack.value
-    if (stack.selectedTab() == destination && stack.lastOrNull()?.isTabRoot() == false) {
+    if (selected == destination && currentBackStackEntry?.isTabRoot() == false) {
         if (popBackStack(destination.routeClass, inclusive = false)) return
     }
     navigate(destination.route) {

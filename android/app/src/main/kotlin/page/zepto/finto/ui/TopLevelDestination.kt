@@ -94,13 +94,8 @@ fun NavBackStackEntry.isTabRoot(): Boolean {
     return root != TopLevelDestination.Activity || !toRoute<ActivityDestination>().isScoped
 }
 
-/**
- * The tab a back stack belongs to: the nearest screen, from the top, that a tab
- * owns. A drilled-into blotter belongs to whichever tab it was opened from.
- */
-fun List<NavBackStackEntry>.selectedTab(): TopLevelDestination? =
-    asReversed().firstNotNullOfOrNull { entry ->
-        TopLevelDestination.entries.firstOrNull { tab ->
-            tab.owns(entry.destination) && (tab != TopLevelDestination.Activity || entry.isTabRoot())
-        }
+/** The tab this screen is itself part of, or null for a drill-down that belongs to where it was opened. */
+fun NavBackStackEntry.ownTab(): TopLevelDestination? =
+    TopLevelDestination.entries.firstOrNull { tab ->
+        tab.owns(destination) && (tab != TopLevelDestination.Activity || isTabRoot())
     }
