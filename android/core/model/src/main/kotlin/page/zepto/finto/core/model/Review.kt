@@ -84,17 +84,23 @@ data class IntegrityReport(
 @Serializable
 data class Violation(val check: String, val count: Int = 0, val description: String = "")
 
+/**
+ * One statement period compared against the ledger. An `insufficient_data`
+ * check carries only the account, status and a note, so the period and the
+ * figures are optional.
+ */
 @Serializable
 data class BalanceCheck(
     val accountId: String,
     val accountName: String? = null,
-    val periodStart: String,
-    val periodEnd: String,
-    val expectedDelta: Money,
-    val actualDelta: Money,
-    val discrepancy: Money,
+    val periodStart: String = "",
+    val periodEnd: String = "",
+    val expectedDelta: Money? = null,
+    val actualDelta: Money? = null,
+    val discrepancy: Money? = null,
     /** `ok`, `discrepancy` or `insufficient_data`. */
-    val status: String,
+    val status: String = "insufficient_data",
+    val note: String? = null,
 )
 
 @Serializable

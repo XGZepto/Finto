@@ -11,5 +11,5 @@ data object AskDestination
 
 /** Questions to the ledger in plain language, answered with figures and rows. */
 fun NavGraphBuilder.askScreens(navController: NavController, onOpenLedger: OpenLedger) {
-    composable<AskDestination> { Placeholder("Ask", onBack = navController::popBackStack) }
+    composable<AskDestination> { AskRoute(onBack = navController::popBackStack, onOpenLedger = onOpenLedger) }
 }
