@@ -18,6 +18,10 @@ fun NavGraphBuilder.healthScreens(
     onOpenLedger: OpenLedger,
     onOpenAccount: (accountId: String) -> Unit,
 ) {
-    composable<ReviewDestination> { Placeholder("Matching suggestions", onBack = navController::popBackStack) }
-    composable<IntegrityDestination> { Placeholder("Integrity", onBack = navController::popBackStack) }
+    composable<ReviewDestination> {
+        ReviewRoute(onBack = navController::popBackStack, onOpenLedger = onOpenLedger)
+    }
+    composable<IntegrityDestination> {
+        IntegrityRoute(onBack = navController::popBackStack, onOpenLedger = onOpenLedger, onOpenAccount = onOpenAccount)
+    }
 }
