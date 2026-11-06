@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -30,7 +31,8 @@ fun StatTile(
     onClick: (() -> Unit)? = null,
 ) {
     val content: @Composable () -> Unit = {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp).semantics(mergeDescendants = true) {}) {
+        // One height whether or not a tile has a supporting line, so rows line up.
+        Column(Modifier.heightIn(min = 88.dp).padding(horizontal = 14.dp, vertical = 12.dp).semantics(mergeDescendants = true) {}) {
             Text(
                 label,
                 style = MaterialTheme.typography.labelMedium,

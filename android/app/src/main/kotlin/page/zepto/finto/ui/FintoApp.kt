@@ -28,7 +28,9 @@ import page.zepto.finto.core.data.IncomingFiles
 import page.zepto.finto.core.data.repository.SessionState
 import androidx.navigation.compose.composable
 import page.zepto.finto.core.designsystem.theme.FintoMotion
+import page.zepto.finto.core.model.LedgerFilter
 import page.zepto.finto.core.model.OpenLedger
+import page.zepto.finto.feature.health.ReviewDestination
 import page.zepto.finto.feature.accounts.AccountDetailDestination
 import page.zepto.finto.feature.accounts.accountDetailScreen
 import page.zepto.finto.feature.accounts.accountsScreen
@@ -80,6 +82,9 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
 
     val openLedger: OpenLedger = { filter, title -> navController.navigate(ActivityDestination.of(filter, title)) }
     val openAccount: (String) -> Unit = { id -> navController.navigate(AccountDetailDestination(id)) }
+    val openTransaction: (LedgerFilter, String?, String) -> Unit = { filter, title, id ->
+        navController.navigate(ActivityDestination.of(filter, title, txn = id))
+    }
 
     NavigationSuiteScaffold(
         layoutType = layoutType,
@@ -128,15 +133,14 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
                 onOpenAccount = openAccount,
                 onOpenGroup = { key -> navController.navigate(AccountDetailDestination(key, group = true)) },
             )
-            accountDetailScreen(
-                navController,
-                onOpenLedger = openLedger,
-                onOpenTransaction = { filter, title, id -> navController.navigate(ActivityDestination.of(filter, title, txn = id)) },
-            )
+            accountDetailScreen(navController, onOpenLedger = openLedger, onOpenTransaction = openTransaction)
             composable<MoreDestination> { MoreScreen(onOpen = { route -> navController.navigate(route) { launchSingleTop = true } }) }
             importScreen(
                 onBack = navController::popBackStack,
                 onOpenLedger = openLedger,
+                onOpenTransaction = openTransaction,
+                onOpenAccount = openAccount,
+                onOpenMatching = { navController.navigate(ReviewDestination) { launchSingleTop = true } },
             )
             settingsScreen(appVersion = appVersion, onBack = navController::popBackStack)
             recurringScreens(navController, onOpenLedger = openLedger)

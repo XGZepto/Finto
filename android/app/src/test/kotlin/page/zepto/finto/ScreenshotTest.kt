@@ -58,6 +58,18 @@ import page.zepto.finto.feature.auth.LoginUiState
 import page.zepto.finto.feature.imports.ImportScreen
 import page.zepto.finto.feature.imports.ImportStep
 import page.zepto.finto.feature.imports.ImportUiState
+import page.zepto.finto.feature.imports.ReviewLoad
+import page.zepto.finto.core.model.ImportedFile
+import page.zepto.finto.core.model.ImportResult
+import page.zepto.finto.core.model.ImportReview
+import page.zepto.finto.core.model.ReconcileSummary
+import page.zepto.finto.core.model.ReviewCategories
+import page.zepto.finto.core.model.ReviewLinks
+import page.zepto.finto.core.model.ReviewModel
+import page.zepto.finto.core.model.ReviewSummary
+import page.zepto.finto.core.model.ReviewedStatement
+import page.zepto.finto.core.model.UncategorisedGroup
+import page.zepto.finto.core.model.UnlinkedRow
 import page.zepto.finto.feature.settings.SettingsScreen
 import page.zepto.finto.feature.settings.SettingsUiState
 import page.zepto.finto.feature.summary.Hero
@@ -157,6 +169,38 @@ class ScreenshotTest {
     fun importPreview() = capture("import-preview", tab = TopLevelDestination.More) {
         ImportScreen(
             state = ImportUiState(step = ImportStep.Ready(Sample.staged, Sample.preview)),
+            onPick = {}, onConfirm = {}, onReset = {}, onOpenActivity = {},
+        )
+    }
+
+    @Test
+    fun importHome() = capture("import-home", tab = TopLevelDestination.More) {
+        ImportScreen(
+            state = ImportUiState(
+                historyLoading = false,
+                history = listOf(
+                    ImportedFile("sf-2", "/in/2026-11__Mox_Credit_Nov2026.pdf", accountId = "mox_credit", importedAt = "2026-11-05T10:00:00Z", txnCount = 9, reviewStatus = "attention"),
+                    ImportedFile("sf-1", "/in/2026-11__Mox_Bank_Oct2026.pdf", accountId = "mox_bank", importedAt = "2026-11-05T09:58:00Z", txnCount = 43, reviewStatus = "clean"),
+                    ImportedFile("sf-0", "/in/2026-10__HSBC_One_Sep.pdf", accountId = "hsbc_one", importedAt = "2026-10-03T08:00:00Z", txnCount = 61),
+                ),
+                historyReviewId = "sf-2",
+                historyReview = ReviewLoad.Done(Sample.review),
+            ),
+            onPick = {}, onConfirm = {}, onReset = {}, onOpenActivity = {},
+        )
+    }
+
+    @Test
+    fun importDone() = capture("import-done", dark = true, tab = TopLevelDestination.More) {
+        ImportScreen(
+            state = ImportUiState(
+                step = ImportStep.Done(
+                    Sample.preview,
+                    ImportResult("imported", txns = 9, statementFileId = "sf-2", periodStart = "2026-10-06", periodEnd = "2026-11-05"),
+                    ReconcileSummary(transactions = 1_204, transfersLinked = 2, transferCandidates = 1, refundsLinked = 1),
+                ),
+                review = ReviewLoad.Done(Sample.review),
+            ),
             onPick = {}, onConfirm = {}, onReset = {}, onOpenActivity = {},
         )
     }
@@ -305,6 +349,19 @@ private object Sample {
     )
 
     private fun row(bucket: String, spend: Long, count: Int) = SummaryRow(bucket, "HKD", count, hkd(-spend), hkd(spend), hkd(0))
+
+    val review = ImportReview(
+        statement = ReviewedStatement("sf-2", rows = 9),
+        categories = ReviewCategories(
+            bySource = mapOf("rules" to 5, "model" to 3, "uncategorised" to 1),
+            tags = 4,
+            merchantsNamed = 6,
+            topUncategorised = listOf(UncategorisedGroup("PAYPAL *STEAM GAMES", 1)),
+        ),
+        links = ReviewLinks(movements = 2, linked = 1, openTransferCandidates = 1, unlinked = listOf(UnlinkedRow("t9", "2026-10-28", "Mox Credit", "AUTOPAY FROM MOX BANK", "+HK$4,200.00"))),
+        model = ReviewModel(available = true),
+        summary = ReviewSummary("attention", "One payment has no other leg", listOf("The October repayment from Mox Bank is not in the bank statement yet."), model = "claude"),
+    )
 
     val staged = StagedFile("Mox_Credit_Nov2026.pdf", 308_565, "application/pdf", "/tmp/x.pdf")
 

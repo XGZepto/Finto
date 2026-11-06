@@ -46,6 +46,22 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import page.zepto.finto.core.designsystem.component.FintoTopBar
+import page.zepto.finto.core.designsystem.component.ListSkeleton
+import page.zepto.finto.core.designsystem.component.StatGrid
+import page.zepto.finto.core.designsystem.component.StatTile
+import page.zepto.finto.core.designsystem.theme.tabular
+import page.zepto.finto.core.model.ImportedFile
+import page.zepto.finto.core.model.Labels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import page.zepto.finto.core.model.LedgerFilter
 import page.zepto.finto.core.model.OpenLedger
 import page.zepto.finto.core.designsystem.component.MoneyText
@@ -68,6 +84,9 @@ private val STATEMENT_TYPES = arrayOf(
 fun ImportRoute(
     onBack: () -> Unit,
     onOpenLedger: OpenLedger,
+    onOpenTransaction: (LedgerFilter, String?, String) -> Unit = { _, _, _ -> },
+    onOpenAccount: (String) -> Unit = {},
+    onOpenMatching: () -> Unit = {},
     viewModel: ImportViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -88,6 +107,18 @@ fun ImportRoute(
             )
         },
         onBack = onBack,
+        actions = ImportActions(
+            onOpenRows = { statement, uncategorised ->
+                onOpenLedger(LedgerFilter(statements = listOf(statement), includeTransfers = true, uncategorisedOnly = uncategorised), if (uncategorised) "Uncategorised" else "Imported rows")
+            },
+            onOpenTransaction = { statement, id -> onOpenTransaction(LedgerFilter(statements = listOf(statement), includeTransfers = true), "Imported rows", id) },
+            onOpenAccount = onOpenAccount,
+            onOpenMatching = onOpenMatching,
+            onToggleHistory = viewModel::toggleHistoryReview,
+            onRerunHistoryReview = viewModel::rerunHistoryReview,
+            onRetryReview = viewModel::runReview,
+            onMaintenance = viewModel::runMaintenance,
+        ),
     )
 }
 
@@ -100,16 +131,17 @@ fun ImportScreen(
     onReset: () -> Unit,
     onOpenActivity: () -> Unit,
     onBack: (() -> Unit)? = null,
+    actions: ImportActions = ImportActions(),
 ) {
     Scaffold(topBar = { FintoTopBar("Import", onBack = onBack) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             when (val step = state.step) {
-                ImportStep.Idle -> IdleContent(state.formats, onPick)
+                ImportStep.Idle -> IdleContent(state, onPick, actions)
                 is ImportStep.Reading -> Progress("Reading ${step.name ?: "the file"}…")
                 is ImportStep.Previewing -> Progress("Checking ${step.file.name} against your ledger…")
                 is ImportStep.Ready -> PreviewContent(step.preview, importing = false, onConfirm, onReset)
                 is ImportStep.Importing -> PreviewContent(step.preview, importing = true, onConfirm, onReset)
-                is ImportStep.Done -> DoneContent(step, onOpenActivity, onReset)
+                is ImportStep.Done -> DoneContent(step, state.review, onOpenActivity, onReset, actions)
                 is ImportStep.Failed -> FailedContent(step, onPick, onReset)
             }
         }
@@ -117,12 +149,13 @@ fun ImportScreen(
 }
 
 @Composable
-private fun IdleContent(formats: List<ImportFormat>, onPick: () -> Unit) {
-    LazyColumn(contentPadding = PaddingValues(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
+private fun IdleContent(state: ImportUiState, onPick: () -> Unit, actions: ImportActions) {
+    var showFormats by rememberSaveable { mutableStateOf(false) }
+    LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)) {
+        item("pick") {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Column(
                     Modifier.fillMaxWidth().padding(24.dp),
@@ -141,18 +174,122 @@ private fun IdleContent(formats: List<ImportFormat>, onPick: () -> Unit) {
                 }
             }
         }
-        if (formats.isNotEmpty()) {
-            item { SectionHeader("Supported statements") }
-            items(formats.sortedBy { it.label.lowercase() }, key = { it.id }) { format ->
-                ListItem(
-                    headlineContent = { Text(format.label, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                    supportingContent = {
-                        Text(listOf(format.fileFormat.uppercase(), format.institutions.joinToString()).filter { it.isNotEmpty() }.joinToString(" · "))
-                    },
-                    trailingContent = {
-                        if (format.verified) Icon(Icons.Outlined.Verified, contentDescription = "Balance-verified", tint = MaterialTheme.colorScheme.primary)
-                    },
+        item("history-header") { SectionHeader("Imported files") }
+        if (state.historyLoading && state.history.isEmpty()) {
+            item("history-loading") { ListSkeleton(rows = 3) }
+        } else if (state.history.isEmpty()) {
+            item("history-empty") {
+                Text(
+                    "Nothing imported yet",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
+            }
+        }
+        state.history.forEach { file ->
+            item("file-${file.id}") {
+                HistoryRow(file, expanded = state.historyReviewId == file.id, onClick = { actions.onToggleHistory(file) }, modifier = Modifier.animateItem())
+            }
+            if (state.historyReviewId == file.id) {
+                item("file-review-${file.id}") {
+                    Column(Modifier.animateItem().padding(bottom = 8.dp)) {
+                        ReviewLoadPanel(
+                            state.historyReview,
+                            actions,
+                            onRetry = actions.onRerunHistoryReview,
+                            trailing = (state.historyReview as? ReviewLoad.Done)?.let { { TextButton(onClick = actions.onRerunHistoryReview) { Text("Run again") } } },
+                        )
+                    }
+                }
+            }
+        }
+        item("maintenance-header") { SectionHeader("Maintenance") }
+        item("maintenance") { MaintenancePanel(state.maintenance, actions.onMaintenance) }
+        if (state.formats.isNotEmpty()) {
+            item("formats-header") {
+                SectionHeader(
+                    "Statement formats",
+                    trailing = { TextButton(onClick = { showFormats = !showFormats }) { Text(if (showFormats) "Hide" else "Show ${state.formats.size}") } },
+                )
+            }
+            if (showFormats) {
+                items(state.formats.sortedBy { it.label.lowercase() }, key = { "format-${it.id}" }) { format ->
+                    ListItem(
+                        modifier = Modifier.animateItem(),
+                        headlineContent = { Text(format.label, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                        supportingContent = {
+                            Text(listOf(format.fileFormat.uppercase(), format.institutions.joinToString()).filter { it.isNotEmpty() }.joinToString(" · "))
+                        },
+                        trailingContent = {
+                            if (format.verified) Icon(Icons.Outlined.Verified, contentDescription = "Balance-verified", tint = MaterialTheme.colorScheme.primary)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryRow(file: ImportedFile, expanded: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val status = file.reviewStatus
+    ListItem(
+        modifier = modifier.clickable(role = Role.Button, onClickLabel = if (expanded) "Hide review" else "Show review", onClick = onClick),
+        headlineContent = { Text(file.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        supportingContent = {
+            Text(
+                listOfNotNull(
+                    DisplayDates.short(file.importedAt.take(10)),
+                    file.accountId?.let(Labels::humanize),
+                    "${file.txnCount} txns",
+                ).joinToString(" · "),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        trailingContent = {
+            val (container, content) = when (status) {
+                "clean" -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+                "attention" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+                else -> MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            Text(
+                ImportLabels.reviewStatus(status),
+                style = MaterialTheme.typography.labelMedium,
+                color = content,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(container).padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        },
+    )
+}
+
+@Composable
+private fun MaintenancePanel(state: MaintenanceState?, onRun: (Maintenance) -> Unit) {
+    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Maintenance.entries.forEach { job ->
+            val running = state?.job == job && state.running
+            OutlinedButton(onClick = { onRun(job) }, enabled = state?.running != true, modifier = Modifier.fillMaxWidth()) {
+                if (running) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(job.label)
+            }
+        }
+        if (state != null && !state.running) {
+            when {
+                state.error != null -> Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                state.changes.isEmpty() -> Text("${state.job.label}: nothing changed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else -> Column {
+                    Text(state.job.label, style = MaterialTheme.typography.labelLarge)
+                    state.changes.forEach { (label, value) ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                            Text(value, style = MaterialTheme.typography.bodySmall.tabular())
+                        }
+                    }
+                }
             }
         }
     }
@@ -272,34 +409,64 @@ private fun PreviewContent(preview: StagePreview, importing: Boolean, onConfirm:
 }
 
 @Composable
-private fun DoneContent(step: ImportStep.Done, onOpenActivity: () -> Unit, onReset: () -> Unit) {
+private fun DoneContent(step: ImportStep.Done, review: ReviewLoad, onOpenActivity: () -> Unit, onReset: () -> Unit, actions: ImportActions) {
     val result = step.result
     val imported = result.status == "imported"
-    Column(
-        Modifier.fillMaxSize().padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-    ) {
-        Icon(
-            if (imported) Icons.Outlined.TaskAlt else Icons.Outlined.Info,
-            null,
-            Modifier.size(48.dp),
-            tint = if (imported) FintoThemeTokens.money.positive else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            if (imported) "Imported ${result.txns} transactions" else "Nothing new to import",
-            style = MaterialTheme.typography.titleLarge,
-            textAlign = TextAlign.Center,
-        )
-        val period = listOfNotNull(result.periodStart, result.periodEnd).joinToString(" – ") { DisplayDates.medium(it) }
-        Text(
-            listOfNotNull(step.preview.filename, period.ifEmpty { null }, result.reason).joinToString("\n"),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Button(onClick = onOpenActivity) { Text("Open activity") }
-        OutlinedButton(onClick = onReset) { Text("Import another") }
+    val changes = ImportLabels.changes(step.reconcile)
+    LazyColumn(contentPadding = PaddingValues(vertical = 24.dp)) {
+        item("result") {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    if (imported) Icons.Outlined.TaskAlt else Icons.Outlined.Info,
+                    null,
+                    Modifier.size(48.dp),
+                    tint = if (imported) FintoThemeTokens.money.positive else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    if (imported) "Imported ${result.txns} transactions" else "Nothing new to import",
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center,
+                )
+                val period = listOfNotNull(result.periodStart, result.periodEnd).joinToString(" – ") { DisplayDates.medium(it) }
+                Text(
+                    listOfNotNull(step.preview.filename, period.ifEmpty { null }, result.reason).joinToString("\n"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
+                    OutlinedButton(onClick = onReset) { Text("Import another") }
+                    Button(onClick = onOpenActivity) { Text("Open rows") }
+                }
+            }
+        }
+        if (changes.isNotEmpty()) {
+            item("reconcile-header") { SectionHeader("Reconcile") }
+            item("reconcile") {
+                StatGrid {
+                    changes.forEach { change ->
+                        StatTile(
+                            change.label,
+                            count(change.value),
+                            Modifier.weight(1f),
+                            valueColor = if (change.notable) MaterialTheme.colorScheme.tertiary else androidx.compose.ui.graphics.Color.Unspecified,
+                            onClick = if (change.notable) actions.onOpenMatching else null,
+                        )
+                    }
+                }
+            }
+        }
+        if (review != ReviewLoad.Idle) {
+            item("review-header") { SectionHeader("Review") }
+            item("review") {
+                val statement = result.statementFileId
+                ReviewLoadPanel(review, actions, onRetry = { statement?.let(actions.onRetryReview) })
+            }
+        }
     }
 }
 
