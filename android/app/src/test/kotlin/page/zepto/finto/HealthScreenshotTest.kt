@@ -34,7 +34,7 @@ class HealthScreenshotTest {
     val compose = createComposeRule()
 
     private fun capture(name: String, dark: Boolean = false, content: @Composable () -> Unit) =
-        compose.captureScreen(name, dark, TopLevelDestination.More, content)
+        compose.captureScreen(name, dark, TopLevelDestination.More, content = content)
 
     @Test
     fun reviewDuplicates() = capture("review-duplicates") { Review(HealthSample.review(ReviewQueue.Duplicates)) }

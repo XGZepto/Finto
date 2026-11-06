@@ -38,7 +38,7 @@ class RecurringScreenshotTest {
     val compose = createComposeRule()
 
     private fun capture(name: String, dark: Boolean = false, content: @Composable () -> Unit) =
-        compose.captureScreen(name, dark, TopLevelDestination.More, content)
+        compose.captureScreen(name, dark, TopLevelDestination.More, content = content)
 
     private val today = LocalDate.parse("2026-11-06")
     private var next = 0

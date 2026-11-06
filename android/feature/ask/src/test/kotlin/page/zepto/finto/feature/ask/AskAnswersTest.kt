@@ -98,7 +98,7 @@ class AskAnswersTest {
             LedgerFilter(
                 from = "2026-01-01", to = "2026-10-31", categories = listOf("groceries"), accounts = listOf("amex"), kinds = listOf("purchase"),
                 currency = "HKD", query = "citysuper", minAmount = -500_000, maxAmount = -100_000,
-                includeTransfers = true, uncategorisedOnly = true,
+                includeTransfers = true, uncategorisedOnly = true, installmentsOnly = true,
             ),
             parsed,
         )

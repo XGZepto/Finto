@@ -40,7 +40,7 @@ class InvestmentsScreenshotTest {
     val compose = createComposeRule()
 
     private fun capture(name: String, dark: Boolean = false, content: @Composable () -> Unit) =
-        compose.captureScreen(name, dark, TopLevelDestination.More, content)
+        compose.captureScreen(name, dark, TopLevelDestination.More, content = content)
 
     private fun hkd(amount: Long) = Money(amount, "HKD")
 
