@@ -37,6 +37,7 @@ import page.zepto.finto.core.model.StatementFreshness
 import page.zepto.finto.core.model.SummaryResponse
 import page.zepto.finto.core.model.Txn
 import page.zepto.finto.core.model.TxnPage
+import page.zepto.finto.core.model.PreferencesPatch
 import page.zepto.finto.core.model.User
 
 class FakeSessionRepository(user: User = TestData.user) : SessionRepository {
@@ -54,6 +55,21 @@ class FakeSessionRepository(user: User = TestData.user) : SessionRepository {
 
     override suspend fun signOut() {
         mutableState.value = SessionState.SignedOut()
+    }
+
+    val preferencePatches = mutableListOf<PreferencesPatch>()
+
+    override suspend fun updatePreferences(patch: PreferencesPatch): Result<User> {
+        preferencePatches += patch
+        val current = mutableState.value as SessionState.SignedIn
+        val user = current.user.copy(
+            preferences = current.user.preferences.copy(
+                theme = patch.theme ?: current.user.preferences.theme,
+                language = patch.language ?: current.user.preferences.language,
+            ),
+        )
+        mutableState.value = current.copy(user = user)
+        return Result.success(user)
     }
 
     override suspend fun setBaseCurrency(currency: String): Result<User> {

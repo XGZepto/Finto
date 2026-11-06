@@ -10,7 +10,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
+import androidx.compose.runtime.CompositionLocalProvider
 import page.zepto.finto.core.designsystem.theme.FintoTheme
+import page.zepto.finto.core.designsystem.theme.LocalFintoLanguage
+import page.zepto.finto.core.model.Translations
+import page.zepto.finto.core.designsystem.theme.tr
 import page.zepto.finto.ui.TopLevelDestination
 
 /**
@@ -25,28 +29,34 @@ fun ComposeContentTestRule.captureScreen(
     name: String,
     dark: Boolean = false,
     tab: TopLevelDestination? = null,
+    language: String = Translations.ENGLISH,
     content: @Composable () -> Unit,
 ) {
     setContent {
-        FintoTheme(darkTheme = dark, dynamicColor = false) {
-            if (tab == null) {
-                Surface(Modifier.fillMaxSize()) { content() }
-            } else {
-                NavigationSuiteScaffold(
-                    navigationSuiteItems = {
-                        TopLevelDestination.entries.forEach { destination ->
-                            item(
-                                selected = destination == tab,
-                                onClick = {},
-                                icon = { Icon(if (destination == tab) destination.selectedIcon else destination.icon, null) },
-                                label = { Text(destination.label) },
-                            )
-                        }
-                    },
-                ) { content() }
-            }
-        }
+        CompositionLocalProvider(LocalFintoLanguage provides language) { Framed(dark, tab, content) }
     }
     waitForIdle()
     onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
+}
+
+@Composable
+private fun Framed(dark: Boolean, tab: TopLevelDestination?, content: @Composable () -> Unit) {
+    FintoTheme(darkTheme = dark, dynamicColor = false) {
+        if (tab == null) {
+            Surface(Modifier.fillMaxSize()) { content() }
+        } else {
+            NavigationSuiteScaffold(
+                navigationSuiteItems = {
+                    TopLevelDestination.entries.forEach { destination ->
+                        item(
+                            selected = destination == tab,
+                            onClick = {},
+                            icon = { Icon(if (destination == tab) destination.selectedIcon else destination.icon, null) },
+                            label = { Text(tr(destination.label)) },
+                        )
+                    }
+                },
+            ) { content() }
+        }
+    }
 }

@@ -11,6 +11,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import page.zepto.finto.core.data.ApiErrors
+import page.zepto.finto.core.data.repository.AdminRepository
+import page.zepto.finto.core.data.suspendRunCatching
+import page.zepto.finto.core.model.ApiKey
+import page.zepto.finto.core.model.PreferencesPatch
+import page.zepto.finto.core.model.ReportingCurrencies
+import page.zepto.finto.core.model.Translations
 import page.zepto.finto.core.data.repository.SessionRepository
 import page.zepto.finto.core.data.repository.SessionState
 import page.zepto.finto.core.data.repository.SettingsRepository
@@ -25,14 +31,21 @@ data class SettingsUiState(
     val currency: String = "HKD",
     val themeMode: ThemeMode = ThemeMode.System,
     val dynamicColor: Boolean = true,
+    val language: String = Translations.ENGLISH,
     val savingCurrency: Boolean = false,
     val error: String? = null,
+    val apiKeys: List<ApiKey> = emptyList(),
+    val apiKeysLoading: Boolean = true,
+    /** A key just created: its secret is shown once, then never again. */
+    val newKey: String? = null,
+    val apiError: String? = null,
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val session: SessionRepository,
     private val settings: SettingsRepository,
+    private val admin: AdminRepository,
 ) : ViewModel() {
 
     private val transient = MutableStateFlow(SettingsUiState())
@@ -44,6 +57,7 @@ class SettingsViewModel @Inject constructor(
             email = signedIn?.user?.email.orEmpty(),
             server = signedIn?.server?.removePrefix("https://")?.trimEnd('/').orEmpty(),
             currency = signedIn?.user?.baseCurrency ?: local.currency,
+            language = signedIn?.user?.preferences?.language ?: Translations.ENGLISH,
             themeMode = app.themeMode,
             dynamicColor = app.dynamicColor,
         )
@@ -58,8 +72,55 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    init {
+        loadKeys()
+    }
+
+    /** Applies at once on this phone and saves to the account, so the web follows. */
     fun setThemeMode(mode: ThemeMode) {
-        viewModelScope.launch { settings.setThemeMode(mode) }
+        viewModelScope.launch {
+            settings.setThemeMode(mode)
+            session.updatePreferences(PreferencesPatch(theme = mode.name.lowercase()))
+        }
+    }
+
+    fun setLanguage(language: String) {
+        viewModelScope.launch {
+            session.updatePreferences(PreferencesPatch(language = language))
+                .onFailure { error -> transient.update { it.copy(error = ApiErrors.message(error)) } }
+        }
+    }
+
+    private fun loadKeys() {
+        viewModelScope.launch {
+            suspendRunCatching { admin.apiKeys() }
+                .onSuccess { keys -> transient.update { it.copy(apiKeys = keys, apiKeysLoading = false) } }
+                .onFailure { error -> transient.update { it.copy(apiKeysLoading = false, apiError = ApiErrors.message(error)) } }
+        }
+    }
+
+    fun createApiKey() {
+        transient.update { it.copy(apiError = null) }
+        viewModelScope.launch {
+            suspendRunCatching { admin.createApiKey(API_KEY_NAME) }
+                .onSuccess { key ->
+                    transient.update { state -> state.copy(newKey = key.key, apiKeys = listOf(key.copy(key = null)) + state.apiKeys) }
+                }
+                .onFailure { error -> transient.update { it.copy(apiError = ApiErrors.message(error)) } }
+        }
+    }
+
+    fun dismissNewKey() {
+        transient.update { it.copy(newKey = null) }
+    }
+
+    fun revokeApiKey(id: String) {
+        val before = transient.value.apiKeys
+        transient.update { state -> state.copy(apiKeys = state.apiKeys.filterNot { it.id == id }, apiError = null) }
+        viewModelScope.launch {
+            suspendRunCatching { admin.revokeApiKey(id) }
+                .onFailure { error -> transient.update { it.copy(apiKeys = before, apiError = ApiErrors.message(error)) } }
+        }
     }
 
     fun setDynamicColor(enabled: Boolean) {
@@ -72,6 +133,9 @@ class SettingsViewModel @Inject constructor(
 
     companion object {
         /** The reporting currencies the web app offers. */
-        val CURRENCIES = listOf("USD", "HKD", "GBP", "EUR", "JPY", "CNY", "SGD", "AUD", "CAD")
+        val CURRENCIES = ReportingCurrencies
+
+        /** The name the web gives keys it generates. */
+        const val API_KEY_NAME = "Agent access"
     }
 }

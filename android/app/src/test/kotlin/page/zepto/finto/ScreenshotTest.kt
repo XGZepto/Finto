@@ -83,6 +83,8 @@ import page.zepto.finto.feature.transactions.EditorState
 import page.zepto.finto.core.model.CategorySuggestion
 import page.zepto.finto.feature.transactions.TransactionDetail
 import page.zepto.finto.ui.MoreScreen
+import page.zepto.finto.core.model.ApiKey
+import page.zepto.finto.core.model.Translations
 import page.zepto.finto.ui.TopLevelDestination
 import java.time.LocalDate
 import java.time.YearMonth
@@ -100,7 +102,7 @@ class ScreenshotTest {
     val compose = createComposeRule()
 
     private fun capture(name: String, dark: Boolean = false, tab: TopLevelDestination? = null, content: @Composable () -> Unit) =
-        compose.captureScreen(name, dark, tab, content)
+        compose.captureScreen(name, dark, tab, content = content)
 
     @Test
     fun more() = capture("more", tab = TopLevelDestination.More) { MoreScreen(onOpen = {}) }
@@ -208,11 +210,19 @@ class ScreenshotTest {
     @Test
     fun settings() = capture("settings", dark = true, tab = TopLevelDestination.More) {
         SettingsScreen(
-            state = SettingsUiState(username = "owner", email = "owner@example.com", server = "finto.zepto.page", currency = "HKD"),
+            state = SettingsUiState(
+                username = "owner", email = "owner@example.com", server = "finto.zepto.page", currency = "HKD",
+                apiKeysLoading = false,
+                apiKeys = listOf(ApiKey("k1", "Agent access", "fk_7Qx2", createdAt = "2026-10-01T09:00:00Z", lastUsedAt = "2026-11-05T22:14:00Z")),
+            ),
             appVersion = "0.1.0",
             onCurrencyChange = {}, onThemeModeChange = {}, onDynamicColorChange = {}, onSignOut = {},
         )
     }
+
+    @Test
+    fun moreInTraditionalChinese() =
+        compose.captureScreen("more-zh-hant", tab = TopLevelDestination.More, language = Translations.TRADITIONAL_CHINESE) { MoreScreen(onOpen = {}) }
 
     @Composable
     private fun Summary() = SummaryScreen(state = Sample.summary, onRangeChange = {}, onRefresh = {}, onOpenBucket = {})

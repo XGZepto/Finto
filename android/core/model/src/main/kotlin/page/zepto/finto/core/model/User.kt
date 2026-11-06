@@ -31,4 +31,6 @@ data class OkResponse(val ok: Boolean = true)
 data class PreferencesPatch(
     val baseCurrency: String? = null,
     val theme: String? = null,
+    /** `en` or `zh-Hant`. */
+    val language: String? = null,
 )

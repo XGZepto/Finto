@@ -41,6 +41,9 @@ interface SessionRepository {
     suspend fun signOut()
 
     suspend fun setBaseCurrency(currency: String): Result<User>
+
+    /** Saves theme or language to the account, as the web's settings do. */
+    suspend fun updatePreferences(patch: PreferencesPatch): Result<User> = Result.failure(UnsupportedOperationException())
 }
 
 @Singleton
@@ -109,6 +112,7 @@ internal class DefaultSessionRepository @Inject constructor(
                 settings.setServer(url.toString())
                 settings.setLastIdentifier(identifier.trim())
                 settings.setCachedUser(FintoJson.encodeToString(User.serializer(), user))
+                adoptTheme(user)
                 mutableState.value = SessionState.SignedIn(user, url.toString())
             }
     }
@@ -129,6 +133,25 @@ internal class DefaultSessionRepository @Inject constructor(
                 val current = mutableState.value
                 if (current is SessionState.SignedIn) mutableState.value = current.copy(user = user)
             }
+
+    override suspend fun updatePreferences(patch: PreferencesPatch): Result<User> =
+        suspendRunCatching { api.updatePreferences(patch) }
+            .onSuccess { user ->
+                settings.setCachedUser(FintoJson.encodeToString(User.serializer(), user))
+                val current = mutableState.value
+                if (current is SessionState.SignedIn) mutableState.value = current.copy(user = user)
+            }
+
+    /** The account's theme wins on sign-in, so the app looks the way the web does. */
+    private suspend fun adoptTheme(user: User) {
+        val mode = when (user.preferences.theme) {
+            "dark" -> ThemeMode.Dark
+            "light" -> ThemeMode.Light
+            "system" -> ThemeMode.System
+            else -> null
+        }
+        if (mode != null) settings.setThemeMode(mode)
+    }
 
     private suspend fun forget() {
         cookies.clear()

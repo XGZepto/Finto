@@ -30,6 +30,7 @@ import androidx.compose.foundation.clickable
 import kotlinx.serialization.Serializable
 import page.zepto.finto.core.designsystem.component.FintoTopBar
 import page.zepto.finto.core.designsystem.component.SectionHeader
+import page.zepto.finto.core.designsystem.theme.tr
 import page.zepto.finto.feature.ask.AskDestination
 import page.zepto.finto.feature.health.IntegrityDestination
 import page.zepto.finto.feature.health.ReviewDestination
@@ -81,17 +82,17 @@ fun MoreScreen(onOpen: (Any) -> Unit) {
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = { FintoTopBar("More", scrollBehavior = scrollBehavior) },
+        topBar = { FintoTopBar(tr("More"), scrollBehavior = scrollBehavior) },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 24.dp)) {
             MoreGroups.forEach { group ->
                 item(key = "header-${group.title}") {
-                    if (group.title != null) SectionHeader(group.title) else androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 16.dp))
+                    if (group.title != null) SectionHeader(tr(group.title)) else androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 16.dp))
                 }
                 group.entries.forEach { entry ->
                     item(key = entry.label) {
                         ListItem(
-                            headlineContent = { Text(entry.label) },
+                            headlineContent = { Text(tr(entry.label)) },
                             leadingContent = { Icon(entry.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                             modifier = Modifier.clickable { onOpen(entry.route) },
                         )

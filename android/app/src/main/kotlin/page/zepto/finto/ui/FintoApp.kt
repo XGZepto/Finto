@@ -27,7 +27,11 @@ import androidx.navigation.compose.rememberNavController
 import page.zepto.finto.core.data.IncomingFiles
 import page.zepto.finto.core.data.repository.SessionState
 import androidx.navigation.compose.composable
+import androidx.compose.runtime.CompositionLocalProvider
 import page.zepto.finto.core.designsystem.theme.FintoMotion
+import page.zepto.finto.core.designsystem.theme.LocalFintoLanguage
+import page.zepto.finto.core.designsystem.theme.tr
+import page.zepto.finto.core.model.Translations
 import page.zepto.finto.core.model.LedgerFilter
 import page.zepto.finto.core.model.OpenLedger
 import page.zepto.finto.feature.health.ReviewDestination
@@ -56,7 +60,11 @@ fun FintoApp(session: SessionState, appVersion: String, incomingFiles: IncomingF
         // The splash screen covers this; draw only the background behind it.
         SessionState.Restoring -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
         is SessionState.SignedOut -> LoginRoute(notice = session.notice)
-        is SessionState.SignedIn -> FintoShell(appVersion, incomingFiles)
+        is SessionState.SignedIn -> CompositionLocalProvider(
+            LocalFintoLanguage provides (session.user.preferences.language ?: Translations.ENGLISH),
+        ) {
+            FintoShell(appVersion, incomingFiles)
+        }
     }
 }
 
@@ -95,7 +103,7 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
                     selected = selected,
                     onClick = { navController.navigateToTopLevel(destination) },
                     icon = { Icon(if (selected) destination.selectedIcon else destination.icon, contentDescription = null) },
-                    label = { Text(destination.label) },
+                    label = { Text(tr(destination.label)) },
                 )
             }
         },
