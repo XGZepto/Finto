@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.4.41 — 2026-11-06
+
+- Ask can fix the ledger. Asked to correct rows ("these are card bill
+  payments"), it finds them and proposes a change: which rows, what each
+  field becomes, and how spending moves. Nothing changes until you tap
+  Apply, and an applied change can be undone.
+- A proposal snapshots the rows it matched. Applying writes your own
+  (manual) edit, as the blotter does, so a later model pass never overrides
+  it, and leaves alone any row edited since it was proposed. Undo puts back
+  the values and their provenance unless a row was edited again.
+- Corrections can set kind (so a card bill payment becomes `cc_payment` and
+  leaves spending), category, subcategory, merchant, review state and tags.
+- `POST /api/changes/{id}/apply`, `/undo` and `/dismiss`; proposals and
+  what they replaced are recorded in the agent audit log.
+
 ## 0.4.40 — 2026-11-06
 
 - Removed the Integrity page. Its checks run in the import review and the

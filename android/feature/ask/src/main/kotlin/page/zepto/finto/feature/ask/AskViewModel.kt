@@ -13,11 +13,13 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import page.zepto.finto.core.data.ApiErrors
+import page.zepto.finto.core.data.suspendRunCatching
 import page.zepto.finto.core.data.repository.AskRepository
 import page.zepto.finto.core.data.repository.LedgerRepository
 import page.zepto.finto.core.data.staleWhileRevalidate
 import page.zepto.finto.core.model.AskEvent
 import page.zepto.finto.core.model.AskTurnContext
+import page.zepto.finto.core.model.ChangeProposal
 import page.zepto.finto.core.model.QueryResult
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
@@ -27,6 +29,10 @@ data class AskUiState(
     /** Turns whose grouped rows are shown in full rather than the top few. */
     val expanded: Set<Long> = emptySet(),
     val accountNames: Map<String, String> = emptyMap(),
+    /** Proposals with an apply, undo or dismiss in flight. */
+    val changeBusy: Set<String> = emptySet(),
+    /** The last error for a proposal's action, by proposal id. */
+    val changeErrors: Map<String, String> = emptyMap(),
 ) {
     val asking: Boolean get() = turns.any { it.state == TurnState.Asking }
 }
@@ -34,6 +40,9 @@ data class AskUiState(
 /** One-off things the screen does in response, such as a haptic tick when an answer lands. */
 sealed interface AskEffect {
     data class Finished(val ok: Boolean) : AskEffect
+
+    /** An apply, undo or dismiss came back. */
+    data class ChangeSettled(val ok: Boolean) : AskEffect
 }
 
 @HiltViewModel
@@ -108,6 +117,32 @@ class AskViewModel @Inject constructor(
 
     fun toggleRows(turnId: Long) = update { state ->
         state.copy(expanded = if (turnId in state.expanded) state.expanded - turnId else state.expanded + turnId)
+    }
+
+    /** Applies a proposed correction as the user's own edit. */
+    fun applyChange(turnId: Long, changeId: String) = act(turnId, changeId) { repository.applyChange(it) }
+
+    fun undoChange(turnId: Long, changeId: String) = act(turnId, changeId) { repository.undoChange(it) }
+
+    fun dismissChange(turnId: Long, changeId: String) = act(turnId, changeId) { repository.dismissChange(it) }
+
+    private fun act(turnId: Long, changeId: String, call: suspend (String) -> ChangeProposal) {
+        if (changeId in mutableState.value.changeBusy) return
+        update { it.copy(changeBusy = it.changeBusy + changeId, changeErrors = it.changeErrors - changeId) }
+        viewModelScope.launch {
+            suspendRunCatching { call(changeId) }
+                .onSuccess { updated ->
+                    patch(turnId) { turn ->
+                        turn.copy(data = turn.data.copy(proposals = AskAnswers.mergeProposals(turn.data.proposals, listOf(updated))))
+                    }
+                    update { it.copy(changeBusy = it.changeBusy - changeId) }
+                    effectChannel.trySend(AskEffect.ChangeSettled(ok = true))
+                }
+                .onFailure { error ->
+                    update { it.copy(changeBusy = it.changeBusy - changeId, changeErrors = it.changeErrors + (changeId to ApiErrors.message(error))) }
+                    effectChannel.trySend(AskEffect.ChangeSettled(ok = false))
+                }
+        }
     }
 
     private fun apply(id: Long, event: AskEvent) {

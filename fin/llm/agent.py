@@ -1,4 +1,9 @@
-"""Read-only ledger analysis with allowlisted model tools."""
+"""Ledger analysis with allowlisted model tools.
+
+The tools read. The one that touches the ledger, ``propose_changes``, only
+proposes: it stores a correction for the user to review and apply in the app
+(see ``fin.ledger_changes``).
+"""
 
 from __future__ import annotations
 
@@ -12,8 +17,9 @@ from . import cache
 from .provider import LLMProvider, LLMUnavailable
 from .query import VALID_GROUP_BY, build_context, sanitise
 
-PROMPT_VERSION = "agent-v4"
+PROMPT_VERSION = "agent-v5"
 MAX_TOOL_CALLS = 8
+MAX_PROPOSALS = 3
 
 SYSTEM = """You answer questions about the user's Finto ledger.
 
@@ -37,7 +43,22 @@ data cannot answer the question, say precisely what is missing.
 
 Earlier turns of the conversation may be given for context. Resolve follow-ups
 such as "and in September?" against them, but always recompute figures with
-the tools."""
+the tools.
+
+You cannot change the ledger yourself, but you can propose a correction. When
+the user asks to fix, recategorise, relabel, retag or otherwise correct rows,
+find them with the read tools, then call propose_changes with their ids, or
+with a filter that matches exactly those rows. The app shows the proposal with
+an Apply button and nothing changes until the user applies it. Say in one or
+two sentences what it will do and how it moves spending; never say it has been
+applied. Propose only what the user asked for or plainly confirmed.
+
+How the ledger classifies movement: paying a credit card bill is kind
+cc_payment, category transfers, subcategory card_payment; moving money between
+the user's own accounts is kind transfer, category transfers, subcategory
+internal; exchanging currency between their own pockets is kind fx_conversion,
+category transfers, subcategory fx. Rows of kind cc_payment or fx_conversion,
+or in category transfers, are not spending."""
 
 
 #: The ledger filter every tool takes. Spelled out so the model uses the real
@@ -60,6 +81,23 @@ FILTER_SCHEMA: dict[str, Any] = {
         "includeTransfers": {"type": "boolean"},
         "uncategorisedOnly": {"type": "boolean"},
         "installmentsOnly": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
+#: What a proposal may set. Mirrors fin.ledger_changes.
+CHANGE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": "Fields to set on every targeted row. Omit a field to leave it.",
+    "properties": {
+        "kind": {"type": "string", "enum": [
+            "purchase", "refund", "fee", "interest", "reward", "cc_payment", "transfer",
+            "atm", "fx_conversion", "income", "adjustment"]},
+        "category": {"type": "string", "description": "A category exactly as in the context."},
+        "subcategory": {"type": "string",
+                        "description": "A subcategory of that category; empty string clears it."},
+        "merchant": {"type": "string", "description": "Clean merchant name; empty string clears it."},
+        "review_state": {"type": "string", "enum": ["unreviewed", "confirmed", "flagged"]},
     },
     "additionalProperties": False,
 }
@@ -116,6 +154,26 @@ TOOLS: list[dict[str, Any]] = [
                 "as_of": {"type": "string", "format": "date"},
                 "reporting_currency": {"type": "string"},
             },
+        },
+    },
+    {
+        "name": "propose_changes",
+        "description": "Propose a correction to ledger rows for the user to review and "
+                       "apply. Nothing changes until they apply it. Target rows by ids "
+                       "from search_transactions or by a filter that matches exactly them.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string",
+                          "description": "What the change does, under 80 characters, e.g. "
+                                         "'Mark 13 HSBC card bill payments as card payments'."},
+                "ids": {"type": "array", "items": {"type": "string"}, "maxItems": 500},
+                "filter": FILTER_SCHEMA,
+                "set": CHANGE_SCHEMA,
+                "add_tags": {"type": "array", "items": {"type": "string"}},
+                "remove_tags": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["title"],
         },
     },
     {
@@ -183,10 +241,15 @@ def answer_question(
     def execute(name: str, arguments: dict[str, Any]) -> Any:
         if len(calls) >= MAX_TOOL_CALLS:
             raise ValueError("tool call limit reached")
-        result = _execute_tool(
-            conn, context, name, arguments,
-            default_currency=target,
-        )
+        if name == "propose_changes":
+            if sum(1 for call in calls if call["name"] == name) >= MAX_PROPOSALS:
+                raise ValueError("proposal limit reached for this answer")
+            result = _propose(conn, context, arguments, question)
+        else:
+            result = _execute_tool(
+                conn, context, name, arguments,
+                default_currency=target,
+            )
         calls.append({"name": name, "input": arguments, "result": result})
         if emit:
             partial: dict[str, Any] = {}
@@ -204,12 +267,12 @@ def answer_question(
         if emit:
             response = provider.stream_with_tools(
                 system, question_prompt, TOOLS, execute, relay,
-                max_turns=3, max_tokens=16000,
+                max_turns=4, max_tokens=16000,
             )
         else:
             response = provider.complete_with_tools(
                 system, question_prompt, TOOLS, execute,
-                max_turns=3, max_tokens=16000,
+                max_turns=4, max_tokens=16000,
             )
     except LLMUnavailable as exc:
         return {"ok": False, "error": str(exc), "question": question}
@@ -229,6 +292,13 @@ def answer_question(
         "cached": False,
     }
     _attach_primary_result(result, calls, context)
+    proposals = [call["result"] for call in calls if call["name"] == "propose_changes"]
+    if proposals:
+        result["proposals"] = proposals
+        # A proposal is one-off: it is applied or dismissed, so an answer that
+        # carries one is never served again from the cache.
+        conn.commit()
+        return result
 
     cache.record(
         conn,
@@ -266,6 +336,8 @@ def tool_label(name: str, arguments: dict[str, Any]) -> str:
         return "Reading balances"
     if name == "money_flows":
         return f"Tracing money between accounts{suffix}"
+    if name == "propose_changes":
+        return f"Preparing a change · {arguments.get('title')}" if arguments.get("title") else "Preparing a change"
     return name.replace("_", " ").capitalize()
 
 
@@ -363,6 +435,28 @@ def _execute_tool(
     return reporting.flows(conn, filters=filters, to_currency=target or "USD")
 
 
+def _propose(conn, context: dict[str, Any], arguments: dict[str, Any], question: str) -> dict[str, Any]:
+    """Store a correction for the user to apply; the model sees its preview."""
+    from ..ledger_changes import ChangeError, propose
+
+    if not isinstance(arguments, dict):
+        raise TypeError("tool arguments must be an object")
+    filters = _filter(arguments["filter"], context) if arguments.get("filter") else None
+    try:
+        return propose(
+            conn,
+            title=arguments.get("title", ""),
+            values=arguments.get("set") or {},
+            ids=arguments.get("ids"),
+            filters=filters,
+            add_tags=arguments.get("add_tags"),
+            remove_tags=arguments.get("remove_tags"),
+            question=question,
+        )
+    except ChangeError as error:
+        raise ValueError(str(error)) from error
+
+
 def _filter(value: Any, context: dict[str, Any]) -> dict[str, Any]:
     """The model's filter, or an error it can correct.
 
@@ -406,5 +500,8 @@ def _attach_primary_result(
         elif name == "search_transactions":
             payload["transactions"] = result
             payload["filter"] = _filter(call["input"].get("filter"), context)
+        elif name == "propose_changes":
+            payload.setdefault("proposals", []).append(result)
+            continue
         if payload.get("filter") is not None:
             break

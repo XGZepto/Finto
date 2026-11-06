@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
+import page.zepto.finto.core.model.ChangeProposal
 import page.zepto.finto.core.model.AskStep
 import page.zepto.finto.core.model.DisplayDates
 import page.zepto.finto.core.model.Labels
@@ -49,7 +50,17 @@ object AskAnswers {
         rows = next.rows ?: base.rows,
         transactions = next.transactions ?: base.transactions,
         filter = next.filter ?: base.filter,
+        proposals = mergeProposals(base.proposals, next.proposals),
     )
+
+    /** Proposals arrive one per streamed step; keep each once, the latest copy winning. */
+    fun mergeProposals(current: List<ChangeProposal>?, incoming: List<ChangeProposal>?): List<ChangeProposal>? {
+        if (incoming.isNullOrEmpty()) return current
+        val byId = LinkedHashMap<String, ChangeProposal>()
+        current.orEmpty().forEach { byId[it.id] = it }
+        incoming.forEach { byId[it.id] = it }
+        return byId.values.toList()
+    }
 
     /** A step replaces the one with its id, in place, or joins the end. */
     fun upsert(steps: List<AskStep>, step: AskStep): List<AskStep> {

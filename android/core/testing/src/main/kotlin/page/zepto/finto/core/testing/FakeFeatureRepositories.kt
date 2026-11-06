@@ -13,6 +13,7 @@ import page.zepto.finto.core.data.repository.StagedFile
 import page.zepto.finto.core.model.ApiKey
 import page.zepto.finto.core.model.AskEvent
 import page.zepto.finto.core.model.AskTurnContext
+import page.zepto.finto.core.model.ChangeProposal
 import page.zepto.finto.core.model.ImportHistory
 import page.zepto.finto.core.model.ImportReview
 import page.zepto.finto.core.model.InvestmentActivity
@@ -80,6 +81,23 @@ class FakeInvestmentsRepository : InvestmentsRepository {
 /** Replays [events] for every question; records what was asked. */
 class FakeAskRepository(var events: (question: String) -> List<AskEvent> = { emptyList() }) : AskRepository {
     val asked = mutableListOf<Pair<String, List<AskTurnContext>>>()
+
+    /** What each change action answers; by default the proposal moves to the matching status. */
+    var changeResult: (action: String, id: String) -> ChangeProposal = { action, id ->
+        ChangeProposal(id = id, status = when (action) { "apply" -> "applied"; "undo" -> "undone"; else -> "dismissed" })
+    }
+    var changeFailure: Throwable? = null
+    val changeActions = mutableListOf<Pair<String, String>>()
+
+    private fun change(action: String, id: String): ChangeProposal {
+        changeActions += action to id
+        changeFailure?.let { throw it }
+        return changeResult(action, id)
+    }
+
+    override suspend fun applyChange(id: String) = change("apply", id)
+    override suspend fun undoChange(id: String) = change("undo", id)
+    override suspend fun dismissChange(id: String) = change("dismiss", id)
 
     override fun ask(question: String, history: List<AskTurnContext>): Flow<AskEvent> {
         asked += question to history

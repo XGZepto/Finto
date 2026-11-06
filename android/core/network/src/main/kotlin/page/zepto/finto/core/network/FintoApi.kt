@@ -12,6 +12,7 @@ import page.zepto.finto.core.model.ApiKeyRequest
 import page.zepto.finto.core.model.ApiKeysResponse
 import page.zepto.finto.core.model.AskRequest
 import page.zepto.finto.core.model.CardsResponse
+import page.zepto.finto.core.model.ChangeProposal
 import page.zepto.finto.core.model.Composition
 import page.zepto.finto.core.model.ConfirmResponse
 import page.zepto.finto.core.model.Coverage
@@ -315,6 +316,17 @@ interface FintoApi {
 
     @POST("api/query")
     suspend fun ask(@Body request: AskRequest): QueryResult
+
+    // --- Corrections Ask proposed -----------------------------------------------
+
+    @POST("api/changes/{id}/apply")
+    suspend fun applyChange(@Path("id") id: String, @Body empty: JsonObject = JsonObject(emptyMap())): ChangeProposal
+
+    @POST("api/changes/{id}/undo")
+    suspend fun undoChange(@Path("id") id: String, @Body empty: JsonObject = JsonObject(emptyMap())): ChangeProposal
+
+    @POST("api/changes/{id}/dismiss")
+    suspend fun dismissChange(@Path("id") id: String, @Body empty: JsonObject = JsonObject(emptyMap())): ChangeProposal
 }
 
 object CacheControls {

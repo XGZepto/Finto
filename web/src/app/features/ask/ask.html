@@ -73,6 +73,58 @@
         </div>
       }
 
+      <!-- A correction Ask proposed: nothing changes until the user applies it. -->
+      @for (p of t.data.proposals ?? []; track p.id) {
+        <section class="proposal" [attr.data-status]="p.status" aria-label="Proposed change">
+          <header>
+            <span class="eyebrow">{{ p.status === 'proposed' ? 'Proposed change' : p.status === 'applied' ? 'Applied' : p.status === 'undone' ? 'Undone' : 'Dismissed' }}</span>
+            <strong>{{ p.title }}</strong>
+            <span class="set">{{ describeChange(p) }}</span>
+          </header>
+          <p class="effect">
+            <span>{{ p.rows }} row{{ p.rows === 1 ? '' : 's' }}</span>
+            @for (total of p.totals; track total.currency) { <span class="mono">{{ total | money }}</span> }
+            @for (s of p.spending; track s.currency) {
+              <span>spending <b class="mono" [class.pos]="s.change < 0">{{ s.change < 0 ? '−' : '+' }}{{ { amount: s.change < 0 ? -s.change : s.change, currency: s.currency } | money }}</b></span>
+            }
+            @if (p.unchanged) { <span>{{ p.unchanged }} already right</span> }
+          </p>
+          @if (p.sample.length) {
+            <ul class="proposal-rows">
+              @for (row of p.sample; track row.id) {
+                <li>
+                  <span class="name"><small class="mono">{{ row.date | shortDate }}</small>{{ row.description }}</span>
+                  <span class="mono" [class.pos]="row.amount.amount > 0">{{ row.amount | money }}</span>
+                  <small class="move">{{ row.account_name }} · {{ describeRowChange(row.before, row.after) }}</small>
+                </li>
+              }
+              @if (p.rows > p.sample.length) {
+                <li class="more">and {{ p.rows - p.sample.length }} more</li>
+              }
+            </ul>
+          }
+          <div class="proposal-actions">
+            @switch (p.status) {
+              @case ('proposed') {
+                <button class="primary" type="button" (click)="applyChange(t, p)" [disabled]="busy(p) || !p.rows">
+                  {{ busy(p) ? 'Applying…' : 'Apply' }}
+                </button>
+                <button class="ghost" type="button" (click)="dismissChange(t, p)" [disabled]="busy(p)">Dismiss</button>
+              }
+              @case ('applied') {
+                <span class="outcome">Changed {{ p.applied }} row{{ p.applied === 1 ? '' : 's' }}@if (p.skipped) { · {{ p.skipped }} edited since, left alone }</span>
+                <button class="bare" type="button" (click)="undoChange(t, p)" [disabled]="busy(p)">{{ busy(p) ? 'Undoing…' : 'Undo' }}</button>
+              }
+              @case ('undone') {
+                <span class="outcome">Put back {{ p.restored }} row{{ p.restored === 1 ? '' : 's' }}@if (p.skipped) { · {{ p.skipped }} edited since, kept }</span>
+              }
+              @case ('dismissed') { <span class="outcome">Nothing changed</span> }
+            }
+          </div>
+          @if (changeError(p)) { <p class="banner error small">{{ changeError(p) }}</p> }
+        </section>
+      }
+
       <!-- Figures, as soon as a step returns them: they never wait for the prose. -->
       @if (t.data.totals?.length) {
         <div class="figures">

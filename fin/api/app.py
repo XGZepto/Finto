@@ -34,6 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .deps import get_conn as api_get_conn
+from .routers import changes as change_routes
 from .routers import (
     accounts,
     imports,
@@ -49,7 +50,7 @@ from .routers import (
 app = FastAPI(
     title="Finto",
     description="Personal finance ledger",
-    version="0.4.40",
+    version="0.4.41",
 )
 
 
@@ -521,7 +522,7 @@ async def private_route_cache(request: Request, call_next):
     return response
 
 for router in (transactions, summary, accounts, imports, review, integrity,
-               installments, investments, query):
+               installments, investments, query, change_routes):
     app.include_router(router.router, prefix="/api")
 
 

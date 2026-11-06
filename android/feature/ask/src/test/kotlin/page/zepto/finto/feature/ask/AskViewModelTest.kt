@@ -17,6 +17,8 @@ import page.zepto.finto.core.data.repository.AskRepository
 import page.zepto.finto.core.model.AskEvent
 import page.zepto.finto.core.model.AskStep
 import page.zepto.finto.core.model.AskTurnContext
+import page.zepto.finto.core.model.ChangeProposal
+import page.zepto.finto.core.model.FintoJson
 import page.zepto.finto.core.model.Money
 import page.zepto.finto.core.model.QueryResult
 import page.zepto.finto.core.model.TotalRow
@@ -208,6 +210,79 @@ class AskViewModelTest {
     }
 
     /** Fails before or after one step. */
+    private val proposal = ChangeProposal(id = "c1", title = "Mark 2 HSBC card bill payments as card payments", rows = 2)
+
+    private fun proposing(repository: FakeAskRepository) = repository.apply {
+        events = { question ->
+            listOf(
+                AskEvent.Data(QueryResult(proposals = listOf(proposal))),
+                AskEvent.Done(QueryResult(ok = true, question = question, answer = "Proposed.", proposals = listOf(proposal))),
+            )
+        }
+    }
+
+    @Test
+    fun applyingAProposalUpdatesItInPlaceAndUndoReversesIt() = runTest {
+        val repository = proposing(FakeAskRepository())
+        val viewModel = viewModel(repository)
+        viewModel.ask("fix the HSBC rows")
+        val turn = viewModel.state.value.turns.single()
+        assertEquals(listOf("proposed"), turn.data.proposals?.map { it.status })
+
+        viewModel.effects.test {
+            assertEquals(AskEffect.Finished(ok = true), awaitItem())
+            viewModel.applyChange(turn.id, "c1")
+            assertEquals(AskEffect.ChangeSettled(ok = true), awaitItem())
+            assertEquals("applied", viewModel.state.value.turns.single().data.proposals?.single()?.status)
+            viewModel.undoChange(turn.id, "c1")
+            assertEquals(AskEffect.ChangeSettled(ok = true), awaitItem())
+        }
+        assertEquals("undone", viewModel.state.value.turns.single().data.proposals?.single()?.status)
+        assertEquals(listOf("apply" to "c1", "undo" to "c1"), repository.changeActions)
+        assertTrue(viewModel.state.value.changeBusy.isEmpty())
+    }
+
+    @Test
+    fun aFailedApplyKeepsTheProposalAndSaysWhy() {
+        val repository = proposing(FakeAskRepository()).apply { changeFailure = IOException("offline") }
+        val viewModel = viewModel(repository)
+        viewModel.ask("fix the HSBC rows")
+        val turn = viewModel.state.value.turns.single()
+        viewModel.applyChange(turn.id, "c1")
+        assertEquals("proposed", viewModel.state.value.turns.single().data.proposals?.single()?.status)
+        assertTrue(viewModel.state.value.changeErrors.containsKey("c1"))
+    }
+
+    @Test
+    fun streamedProposalsAreKeptOnce() {
+        val merged = AskAnswers.merge(
+            QueryResult(proposals = listOf(proposal)),
+            QueryResult(proposals = listOf(proposal.copy(status = "applied"), proposal.copy(id = "c2"))),
+        )
+        assertEquals(listOf("c1" to "applied", "c2" to "proposed"), merged.proposals?.map { it.id to it.status })
+        assertEquals(listOf(proposal), AskAnswers.merge(QueryResult(proposals = listOf(proposal)), QueryResult()).proposals)
+    }
+
+    @Test
+    fun proposalsReadAsTheServerSendsThem() {
+        val json = """{"ok":true,"question":"q","proposals":[{"id":"c1","status":"proposed","title":"Card payments",
+            "set":{"kind":"cc_payment","category":"transfers","subcategory":"card_payment"},"add_tags":["bill"],
+            "remove_tags":[],"rows":2,"unchanged":0,"totals":[{"currency":"HKD","amount":-2999410}],
+            "spending":[{"currency":"HKD","change":-2999410}],"sample":[{"id":"t1","date":"2026-10-03",
+            "description":"HSBC CREDIT CARDS","account_id":"mox_credit","account_name":"Mox Credit",
+            "amount":{"amount":-2839194,"currency":"HKD"},
+            "before":{"kind":"purchase","category":"fees","subcategory":null,"merchant":null,"review_state":"unreviewed","tags":[]},
+            "after":{"kind":"cc_payment","category":"transfers","subcategory":"card_payment","merchant":null,"review_state":"unreviewed","tags":["bill"]}}],
+            "applied":null,"skipped":null,"restored":null,"created_at":"2026-11-06T05:50:00Z"}]}"""
+        val result = FintoJson.decodeFromString(QueryResult.serializer(), json)
+        val p = result.proposals!!.single()
+        assertEquals("cc_payment", p.set.kind)
+        assertEquals(-2_999_410, p.spending.single().change)
+        val row = p.sample.single()
+        assertEquals("Purchase → Card payment · Fees → Transfers › Card payment · +bill", ProposalText.row(row.before, row.after))
+        assertEquals("Card payment · Transfers › Card payment · +bill", ProposalText.change(p))
+    }
+
     private class Throwing(private val afterFirst: Boolean) : AskRepository {
         override fun ask(question: String, history: List<AskTurnContext>): Flow<AskEvent> = flow {
             if (afterFirst) emit(AskEvent.Step(AskStep(id = "s1", label = "Reading")))
