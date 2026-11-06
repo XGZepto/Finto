@@ -24,6 +24,7 @@ from typing import Any
 
 from . import reporting
 from .reporting import MOVEMENT_KINDS
+from .taxonomy import canonical_key
 
 ACTION = "ledger_change"
 MAX_ROWS = 500
@@ -45,6 +46,10 @@ class ChangeError(ValueError):
     """A proposal or action the caller can correct; the message says how."""
 
 
+class ChangeNotFound(Exception):
+    """No change with that id belongs to the signed-in user."""
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -59,6 +64,21 @@ def current_user(conn) -> str:
 def counts_as_spending(kind: str | None, category: str | None) -> bool:
     """The `spendingOnly` rule from reporting, for one row."""
     return (kind or "") not in MOVEMENT_KINDS and (category or "") != "transfers"
+
+
+def spend_of(amount: int, fields: dict[str, Any], refund_of_id: str | None) -> int:
+    """What one row adds to spending, as `reporting.totals` counts it with `spendingOnly`.
+
+    Outflows count as spend; a refund (a positive row tied to a purchase, or
+    of kind refund) takes spend back.
+    """
+    if not counts_as_spending(fields.get("kind"), fields.get("category")):
+        return 0
+    if amount < 0:
+        return -amount
+    if amount > 0 and (refund_of_id or fields.get("kind") == "refund"):
+        return -amount
+    return 0
 
 
 # --------------------------------------------------------------------------
@@ -93,8 +113,6 @@ def normalise_set(conn, values: Any) -> dict[str, Any]:
         if not category or not category_exists(conn, category):
             raise ChangeError(f"category {category!r} is not in the taxonomy")
         out["category"] = category
-        # As the blotter does: a new category clears a subcategory it did not name.
-        out.setdefault("subcategory", None)
     if "subcategory" in values:
         sub = str(values["subcategory"] or "").strip() or None
         out["subcategory"] = sub
@@ -105,23 +123,33 @@ def normalise_set(conn, values: Any) -> dict[str, Any]:
     return out
 
 
-def _clean_tags(values: Any) -> list[str]:
+def _clean_tags(conn, values: Any) -> list[str]:
+    """Tags as the ledger spells them: an existing tag keeps its spelling."""
     if not values:
         return []
     if not isinstance(values, list):
         raise ChangeError("tags must be a list")
-    return sorted({str(tag).strip()[:60] for tag in values if str(tag).strip()})
+    wanted = {" ".join(str(tag).split())[:60] for tag in values if str(tag).strip()}
+    known = {
+        row["slug"]: row["display_name"]
+        for row in conn.execute(
+            "SELECT slug, display_name FROM tag_definition WHERE user_id=%s", (current_user(conn),),
+        ).fetchall()
+    }
+    return sorted({known.get(canonical_key(tag), tag) for tag in wanted})
 
 
-def _rows(conn, ids: list[str]) -> list[dict[str, Any]]:
+def _rows(conn, ids: list[str], *, lock: bool = False) -> list[dict[str, Any]]:
+    """The rows' current fields; with ``lock``, held until commit so no edit lands in between."""
     if not ids:
         return []
     found = conn.execute(
         "SELECT t.id, t.txn_date, t.description_raw, t.merchant, t.kind, t.category, "
         "t.subcategory, t.review_state, t.amount_booked, t.currency_booked, t.account_id, "
-        "a.display_name AS account_name, a.user_id AS owner, "
+        "t.refund_of_id, a.display_name AS account_name, a.user_id AS owner, "
         "finto_txn_access(t.id, 'editor') AS editable "
-        "FROM txn t JOIN account a ON a.id=t.account_id WHERE t.id = ANY(%s)",
+        "FROM txn t JOIN account a ON a.id=t.account_id WHERE t.id = ANY(%s)"
+        + (" ORDER BY t.id FOR UPDATE OF t" if lock else ""),
         (ids,),
     ).fetchall()
     tags: dict[str, list[str]] = {}
@@ -134,9 +162,15 @@ def _rows(conn, ids: list[str]) -> list[dict[str, Any]]:
 
 
 def _after(row: dict[str, Any], values: dict[str, Any], add: list[str], remove: list[str]) -> dict[str, Any]:
-    after = {field: values.get(field, row[field]) if field in values else row[field] for field in FIELDS}
-    tags = [t for t in row["tags"] if t not in remove]
-    tags += [t for t in add if t not in tags]
+    after = {field: values[field] if field in values else row[field] for field in FIELDS}
+    # As the blotter does: moving a row to another category drops a subcategory
+    # the change did not name; re-stating its own category keeps it.
+    if "category" in values and "subcategory" not in values and values["category"] != row["category"]:
+        after["subcategory"] = None
+    gone = {canonical_key(tag) for tag in remove}
+    tags = [t for t in row["tags"] if canonical_key(t) not in gone]
+    present = {canonical_key(t) for t in tags}
+    tags += [t for t in add if canonical_key(t) not in present]
     after["tags"] = sorted(tags)
     return after
 
@@ -175,16 +209,19 @@ def propose(
 ) -> dict[str, Any]:
     """Snapshot the rows and the change, store it, and return its preview."""
     clean = normalise_set(conn, values or {})
-    add, remove = _clean_tags(add_tags), _clean_tags(remove_tags)
+    add, remove = _clean_tags(conn, add_tags), _clean_tags(conn, remove_tags)
     if not clean and not add and not remove:
         raise ChangeError("nothing to change: set a field or add or remove a tag")
     title = " ".join(str(title or "").split())[:120]
     if not title:
         raise ChangeError("give the change a short title")
 
-    rows = _rows(conn, _target_ids(conn, ids, filters))
-    if not rows:
+    matched = _rows(conn, _target_ids(conn, ids, filters))
+    if not matched:
         raise ChangeError("no rows match; check the ids or the filter")
+    rows = [row for row in matched if row["editable"]]
+    if not rows:
+        raise ChangeError("these rows are shared with the user for viewing only; they cannot be changed")
 
     entries = []
     for row in rows:
@@ -196,6 +233,7 @@ def propose(
             "account_id": row["account_id"],
             "account_name": row["account_name"],
             "amount": reporting.money(row["amount_booked"], row["currency_booked"]),
+            "refund_of_id": row["refund_of_id"],
             "before": before,
             "after": after,
             "changes": before != after,
@@ -228,12 +266,11 @@ def public(change_id: str, record: dict[str, Any]) -> dict[str, Any]:
         amount = entry["amount"]["amount"]
         currency = entry["amount"]["currency"]
         totals[currency] = totals.get(currency, 0) + amount
-        if amount < 0:
-            was = counts_as_spending(entry["before"]["kind"], entry["before"]["category"])
-            will = counts_as_spending(entry["after"]["kind"], entry["after"]["category"])
-            if was != will:
-                # Spending is reported as a positive outflow.
-                spending[currency] = spending.get(currency, 0) + (abs(amount) if will else -abs(amount))
+        refund = entry.get("refund_of_id")
+        moved = spend_of(amount, entry["after"], refund) - spend_of(amount, entry["before"], refund)
+        if moved:
+            # Spending is a positive outflow: a negative change lowers it.
+            spending[currency] = spending.get(currency, 0) + moved
     return {
         "id": change_id,
         "status": record["status"],
@@ -244,7 +281,7 @@ def public(change_id: str, record: dict[str, Any]) -> dict[str, Any]:
         "rows": len(changing),
         "unchanged": len(record["rows"]) - len(changing),
         "totals": [{"currency": c, "amount": a} for c, a in sorted(totals.items())],
-        "spending": [{"currency": c, "change": a} for c, a in sorted(spending.items())],
+        "spending": [{"currency": c, "change": a} for c, a in sorted(spending.items()) if a],
         "sample": [
             {key: entry[key] for key in ("id", "date", "description", "account_id", "account_name",
                                          "amount", "before", "after")}
@@ -270,7 +307,7 @@ def _load(conn, change_id: str) -> dict[str, Any]:
         (change_id, ACTION, current_user(conn)),
     ).fetchone()
     if row is None:
-        raise LookupError("no such change")
+        raise ChangeNotFound("no such change")
     result = row["result"]
     return result if isinstance(result, dict) else json.loads(result)
 
@@ -295,8 +332,9 @@ def _annotations(conn, txn_id: str) -> dict[str, Any]:
     return {row["field"]: dict(row) for row in rows}
 
 
-def _write_fields(conn, txn_id: str, values: dict[str, Any], *, owner: str) -> None:
-    """Write fields; a named merchant joins the account owner's merchant list, as the blotter does."""
+def _write_fields(conn, txn_id: str, values: dict[str, Any], *, owner: str, result: dict[str, Any]) -> None:
+    """Write fields; a named merchant joins the account owner's merchant list
+    with the row's resulting category, as a blotter edit does."""
     if not values:
         return
     sets = ", ".join(f"{field}=%s" for field in values)
@@ -307,7 +345,7 @@ def _write_fields(conn, txn_id: str, values: dict[str, Any], *, owner: str) -> N
     if values.get("merchant"):
         from .taxonomy import register_merchant
         register_merchant(conn, owner, values["merchant"], source="manual",
-                          category=values.get("category"), subcategory=values.get("subcategory"))
+                          category=result.get("category"), subcategory=result.get("subcategory"))
 
 
 def apply(conn, change_id: str) -> dict[str, Any]:
@@ -319,7 +357,7 @@ def apply(conn, change_id: str) -> dict[str, Any]:
         raise ChangeError(f"this change is {record['status']}")
     now = _now()
     entries = [entry for entry in record["rows"] if entry["changes"]]
-    current = {row["id"]: row for row in _rows(conn, [entry["id"] for entry in entries])}
+    current = {row["id"]: row for row in _rows(conn, [entry["id"] for entry in entries], lock=True)}
     applied, skipped = [], []
     for entry in entries:
         row = current.get(entry["id"])
@@ -331,7 +369,7 @@ def apply(conn, change_id: str) -> dict[str, Any]:
         before, after = entry["before"], entry["after"]
         entry["annotations"] = _annotations(conn, entry["id"])
         values = {field: after[field] for field in FIELDS if after[field] != before[field]}
-        _write_fields(conn, entry["id"], values, owner=row["owner"])
+        _write_fields(conn, entry["id"], values, owner=row["owner"], result=after)
         for field in ANNOTATED:
             if field in values:
                 conn.execute(
@@ -363,7 +401,7 @@ def undo(conn, change_id: str) -> dict[str, Any]:
         raise ChangeError(f"this change is {record['status']}")
     done = set(record.get("applied_ids") or [])
     entries = [entry for entry in record["rows"] if entry["id"] in done]
-    current = {row["id"]: row for row in _rows(conn, [entry["id"] for entry in entries])}
+    current = {row["id"]: row for row in _rows(conn, [entry["id"] for entry in entries], lock=True)}
     restored, kept = 0, 0
     for entry in entries:
         row = current.get(entry["id"])
@@ -373,7 +411,7 @@ def undo(conn, change_id: str) -> dict[str, Any]:
             continue
         before, after = entry["before"], entry["after"]
         values = {field: before[field] for field in FIELDS if after[field] != before[field]}
-        _write_fields(conn, entry["id"], values, owner=row["owner"])
+        _write_fields(conn, entry["id"], values, owner=row["owner"], result=before)
         previous = entry.get("annotations") or {}
         for field in ANNOTATED:
             if field not in values:
@@ -381,9 +419,11 @@ def undo(conn, change_id: str) -> dict[str, Any]:
             conn.execute("DELETE FROM txn_annotation WHERE txn_id=%s AND field=%s", (entry["id"], field))
             old = previous.get(field)
             if old:
+                # The model decision it cited may have been purged since; keep
+                # the provenance and drop only the dangling reference.
                 conn.execute(
                     "INSERT INTO txn_annotation (txn_id, field, value, source, confidence, decision_id, created_at) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                    "VALUES (%s,%s,%s,%s,%s,(SELECT id FROM llm_decision WHERE id=%s),%s)",
                     (entry["id"], field, old["value"], old["source"], old["confidence"],
                      old["decision_id"], old["created_at"]),
                 )

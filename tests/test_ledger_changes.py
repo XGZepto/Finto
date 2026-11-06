@@ -175,8 +175,64 @@ def test_another_users_change_is_not_found(ledger):
     preview = changes.propose(ledger, title="Card payments", values=CARD_FIX,
                               filters={"q": "HSBC CREDIT CARDS"})
     ledger.execute("SELECT set_config('finto.user_id', 'someone-else', false)")
-    with pytest.raises(LookupError):
+    with pytest.raises(changes.ChangeNotFound):
         changes.apply(ledger, preview["id"])
+
+
+def test_the_spending_effect_counts_refunds_as_reporting_does(ledger):
+    from fin.db import insert_txns
+    insert_txns(ledger, [Txn(account_id="amex_hk_main", txn_date=date(2026, 10, 12),
+                             booked=Money(amount=20_000, currency="HKD"), description_raw="SHOP REFUND",
+                             kind="refund", category="shopping", statement_file_id="sf")])
+    before = _spend(ledger)
+    preview = changes.propose(ledger, title="Not a refund", values={"kind": "income"},
+                              ids=_ids(ledger, "SHOP REFUND"))
+    # A refund takes spend back; as income it no longer does, so spend rises.
+    assert preview["spending"] == [{"currency": "HKD", "change": 20_000}]
+    changes.apply(ledger, preview["id"])
+    assert _spend(ledger) == before + 20_000
+
+
+def test_restating_a_rows_category_keeps_its_subcategory(ledger):
+    noodle = _ids(ledger, "NOODLE HOUSE")
+    ledger.execute("UPDATE txn SET subcategory='restaurants' WHERE id=%s", (noodle[0],))
+    preview = changes.propose(ledger, title="Dining", values={"category": "dining"}, ids=noodle)
+    assert preview["rows"] == 0 and preview["unchanged"] == 1
+    moved = changes.propose(ledger, title="Groceries", values={"category": "groceries"}, ids=noodle)
+    assert moved["sample"][0]["after"]["subcategory"] is None
+
+
+def test_tags_keep_the_ledgers_spelling_through_undo(ledger):
+    from fin import db as dbm
+    first = _ids(ledger, "HSBC CREDIT CARDS")[0]
+    noodle = _ids(ledger, "NOODLE HOUSE")[0]
+    dbm.add_tag(ledger, noodle, "Travel")
+    preview = changes.propose(ledger, title="Tag", values={}, ids=[first], add_tags=["travel"])
+    assert preview["add_tags"] == ["Travel"]
+    changes.apply(ledger, preview["id"])
+    tags = lambda: [r["tag"] for r in ledger.execute("SELECT tag FROM txn_tag WHERE txn_id=%s", (first,)).fetchall()]
+    assert tags() == ["Travel"]
+    assert changes.undo(ledger, preview["id"])["restored"] == 1
+    assert tags() == []
+    removal = changes.propose(ledger, title="Untag", values={}, ids=[noodle], remove_tags=["TRAVEL"])
+    assert removal["rows"] == 1
+
+
+def test_undo_survives_a_purged_model_decision(ledger):
+    first = _ids(ledger, "HSBC CREDIT CARDS")[0]
+    ledger.execute(
+        "INSERT INTO llm_decision (id, task, input_hash, input_summary, output, model, prompt_version, created_at) "
+        "VALUES ('d1','categorize','h','x','{}','m','v','2026-11-01')")
+    ledger.execute(
+        "INSERT INTO txn_annotation (txn_id, field, value, source, confidence, decision_id, created_at) "
+        "VALUES (%s,'category','fees','llm',0.7,'d1','2026-11-01')", (first,))
+    preview = changes.propose(ledger, title="Card payments", values=CARD_FIX, ids=[first])
+    changes.apply(ledger, preview["id"])
+    ledger.execute("DELETE FROM llm_decision WHERE id='d1'")
+    assert changes.undo(ledger, preview["id"])["restored"] == 1
+    restored = ledger.execute(
+        "SELECT source, decision_id FROM txn_annotation WHERE txn_id=%s AND field='category'", (first,)).fetchone()
+    assert dict(restored) == {"source": "llm", "decision_id": None}
 
 
 class _FixingProvider(LLMProvider):

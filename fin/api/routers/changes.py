@@ -16,7 +16,7 @@ router = APIRouter(tags=["changes"])
 def _act(conn, action: Callable[[Any, str], dict], change_id: str) -> dict:
     try:
         result = action(conn, change_id)
-    except LookupError as error:
+    except changes.ChangeNotFound as error:
         conn.rollback()
         raise HTTPException(404, str(error)) from error
     except changes.ChangeError as error:

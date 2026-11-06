@@ -53,12 +53,25 @@ object AskAnswers {
         proposals = mergeProposals(base.proposals, next.proposals),
     )
 
-    /** Proposals arrive one per streamed step; keep each once, the latest copy winning. */
+    private fun stage(status: String) = when (status) {
+        "proposed" -> 0
+        "undone" -> 2
+        else -> 1
+    }
+
+    /**
+     * Proposals arrive one per streamed step and again with the finished answer;
+     * keep each once. A copy never moves a proposal back: one applied while the
+     * answer was still streaming stays applied when the final copy says "proposed".
+     */
     fun mergeProposals(current: List<ChangeProposal>?, incoming: List<ChangeProposal>?): List<ChangeProposal>? {
         if (incoming.isNullOrEmpty()) return current
         val byId = LinkedHashMap<String, ChangeProposal>()
         current.orEmpty().forEach { byId[it.id] = it }
-        incoming.forEach { byId[it.id] = it }
+        incoming.forEach { p ->
+            val held = byId[p.id]
+            if (held == null || stage(p.status) >= stage(held.status)) byId[p.id] = p
+        }
         return byId.values.toList()
     }
 

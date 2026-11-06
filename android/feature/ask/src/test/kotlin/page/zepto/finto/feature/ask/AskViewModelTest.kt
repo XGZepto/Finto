@@ -261,6 +261,9 @@ class AskViewModelTest {
         )
         assertEquals(listOf("c1" to "applied", "c2" to "proposed"), merged.proposals?.map { it.id to it.status })
         assertEquals(listOf(proposal), AskAnswers.merge(QueryResult(proposals = listOf(proposal)), QueryResult()).proposals)
+        // The finished answer's copy says "proposed"; one already applied stays applied.
+        val applied = proposal.copy(status = "applied")
+        assertEquals("applied", AskAnswers.mergeProposals(listOf(applied), listOf(proposal))?.single()?.status)
     }
 
     @Test

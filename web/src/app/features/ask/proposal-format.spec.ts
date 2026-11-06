@@ -34,5 +34,8 @@ describe('proposal format', () => {
     const merged = mergeProposals([first], [second, { ...first, status: 'applied' }]);
     assert.deepEqual(merged?.map((p) => [p.id, p.status]), [['c1', 'applied'], ['c2', 'proposed']]);
     assert.deepEqual(mergeProposals([first], undefined), [first]);
+    // The finished answer's copy says "proposed"; one already applied stays applied.
+    const applied = { ...first, status: 'applied' as const };
+    assert.equal(mergeProposals([applied], [first])?.[0].status, 'applied');
   });
 });

@@ -173,7 +173,9 @@ export class AskPage {
       state: failed ? 'error' : 'done',
       error: failed ? (result?.error ?? error ?? 'Ask could not finish.') : undefined,
       text: result?.ok ? (result.answer ?? t.text) : t.text,
-      data: result?.ok ? { ...t.data, ...result } : t.data,
+      data: result?.ok
+        ? { ...t.data, ...result, proposals: mergeProposals(t.data.proposals, result.proposals) }
+        : t.data,
       steps: t.steps.map((s) => s.state === 'running' ? { ...s, state: 'done' } : s),
       seconds: (Date.now() - t.startedAt) / 1000,
     }));

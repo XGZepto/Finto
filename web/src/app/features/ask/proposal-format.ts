@@ -49,13 +49,22 @@ export function describeRowChange(before: ChangeFields, after: ChangeFields): st
   return moves.join(' · ');
 }
 
-/** Proposals arrive one per streamed step; keep each once, latest copy winning. */
+const STAGE: Record<ChangeProposal['status'], number> = { proposed: 0, applied: 1, dismissed: 1, undone: 2 };
+
+/**
+ * Proposals arrive one per streamed step and again with the finished answer;
+ * keep each once. A copy never moves a proposal back: one applied while the
+ * answer was still streaming stays applied when the final copy says "proposed".
+ */
 export function mergeProposals(
   current: ChangeProposal[] | undefined,
   incoming: ChangeProposal[] | undefined,
 ): ChangeProposal[] | undefined {
   if (!incoming?.length) return current;
   const byId = new Map((current ?? []).map((p) => [p.id, p]));
-  for (const p of incoming) byId.set(p.id, p);
+  for (const p of incoming) {
+    const held = byId.get(p.id);
+    if (!held || STAGE[p.status] >= STAGE[held.status]) byId.set(p.id, p);
+  }
   return [...byId.values()];
 }

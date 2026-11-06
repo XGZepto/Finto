@@ -443,7 +443,7 @@ def _propose(conn, context: dict[str, Any], arguments: dict[str, Any], question:
         raise TypeError("tool arguments must be an object")
     filters = _filter(arguments["filter"], context) if arguments.get("filter") else None
     try:
-        return propose(
+        preview = propose(
             conn,
             title=arguments.get("title", ""),
             values=arguments.get("set") or {},
@@ -455,6 +455,10 @@ def _propose(conn, context: dict[str, Any], arguments: dict[str, Any], question:
         )
     except ChangeError as error:
         raise ValueError(str(error)) from error
+    # Committed now, not when the answer ends: the card appears mid-stream and
+    # can be applied at once, and a later failure does not take it with it.
+    conn.commit()
+    return preview
 
 
 def _filter(value: Any, context: dict[str, Any]) -> dict[str, Any]:
