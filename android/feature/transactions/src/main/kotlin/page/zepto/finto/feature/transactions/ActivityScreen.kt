@@ -60,10 +60,14 @@ import page.zepto.finto.core.designsystem.component.ErrorState
 import page.zepto.finto.core.designsystem.component.LoadingState
 import page.zepto.finto.core.designsystem.component.MessageState
 import page.zepto.finto.core.model.DisplayDates
+import page.zepto.finto.core.model.OpenLedger
 
 @Composable
 fun ActivityRoute(
     onBack: () -> Unit,
+    onOpenLedger: OpenLedger = { _, _ -> },
+    onOpenAccount: (String) -> Unit = {},
+    onOpenInstallment: (String) -> Unit = {},
     viewModel: ActivityViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -78,7 +82,37 @@ fun ActivityRoute(
         onAccountChange = viewModel::onAccountChange,
         onOpen = { viewModel.open(it.txn) },
     )
-    detail?.let { TransactionDetailSheet(it, onDismiss = viewModel::closeDetail) }
+    val editor by viewModel.editor.collectAsStateWithLifecycle()
+    detail?.let {
+        TransactionDetailSheet(
+            it,
+            editor,
+            DetailActions(
+                onDismiss = viewModel::closeDetail,
+                onOpenLedger = { filter, title ->
+                    viewModel.closeDetail()
+                    onOpenLedger(filter, title)
+                },
+                onOpenAccount = { id ->
+                    viewModel.closeDetail()
+                    onOpenAccount(id)
+                },
+                onOpenInstallment = { id ->
+                    viewModel.closeDetail()
+                    onOpenInstallment(id)
+                },
+                onOpenLinked = viewModel::openLinked,
+                onCategorise = viewModel::startCategorising,
+                onAcceptSuggestion = viewModel::acceptSuggestion,
+                onSetCategory = viewModel::setCategory,
+                onSetMerchant = viewModel::setMerchant,
+                onSetNotes = viewModel::setNotes,
+                onAddTag = viewModel::addTag,
+                onRemoveTag = viewModel::removeTag,
+                onSetReviewState = viewModel::setReviewState,
+            ),
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

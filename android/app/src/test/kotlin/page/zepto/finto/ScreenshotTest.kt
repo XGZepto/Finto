@@ -67,6 +67,8 @@ import page.zepto.finto.feature.transactions.ActivityItem
 import page.zepto.finto.feature.transactions.ActivityScreen
 import page.zepto.finto.feature.transactions.ActivityUiState
 import page.zepto.finto.feature.transactions.DetailState
+import page.zepto.finto.feature.transactions.EditorState
+import page.zepto.finto.core.model.CategorySuggestion
 import page.zepto.finto.feature.transactions.TransactionDetail
 import page.zepto.finto.ui.MoreScreen
 import page.zepto.finto.ui.TopLevelDestination
@@ -115,6 +117,18 @@ class ScreenshotTest {
     @Test
     fun transactionDetail() = capture("transaction-detail") {
         TransactionDetail(DetailState.Loaded(Sample.coffee, Sample.coffee))
+    }
+
+    @Test
+    fun categoryPicker() = capture("category-picker") {
+        TransactionDetail(
+            DetailState.Loaded(Sample.coffee, Sample.coffee),
+            editor = EditorState(
+                categories = listOf("dining", "groceries", "transport", "shopping", "travel", "health", "bills", "entertainment", "fees", "income", "gifts"),
+                suggestion = CategorySuggestion("dining", "coffee", "Blue Bottle Coffee", confidence = 0.92),
+            ),
+            startInPicker = true,
+        )
     }
 
     @Test

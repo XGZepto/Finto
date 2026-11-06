@@ -36,6 +36,7 @@ import page.zepto.finto.feature.ask.askScreens
 import page.zepto.finto.feature.health.healthScreens
 import page.zepto.finto.feature.imports.ImportDestination
 import page.zepto.finto.feature.investments.investmentsScreens
+import page.zepto.finto.feature.recurring.InstallmentDestination
 import page.zepto.finto.feature.recurring.recurringScreens
 import page.zepto.finto.feature.reports.reportsScreen
 import page.zepto.finto.feature.reports.timelineScreen
@@ -116,7 +117,12 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
                     navController.navigate(ImportDestination) { launchSingleTop = true }
                 },
             )
-            activityScreen(onBack = navController::popBackStack)
+            activityScreen(
+                onBack = navController::popBackStack,
+                onOpenLedger = openLedger,
+                onOpenAccount = openAccount,
+                onOpenInstallment = { id -> navController.navigate(InstallmentDestination(id)) },
+            )
             reportsScreen(onOpenLedger = openLedger)
             accountsScreen(
                 onOpenAccount = openAccount,
