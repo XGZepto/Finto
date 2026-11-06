@@ -120,6 +120,7 @@ class ActivityViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            route.txn?.let { openById(it) }
             suspendRunCatching { ledger.accounts() }.onSuccess { list ->
                 accounts.value = list.filter { it.closedOn == null || it.id in scope.accounts }.map(Account::toChoice)
             }
@@ -146,6 +147,11 @@ class ActivityViewModel @Inject constructor(
                 onFailure = { DetailState.Failed(txn, ApiErrors.message(it)) },
             )
         }
+    }
+
+    /** Opens a transaction known only by id: the sheet shows once it has loaded. */
+    private suspend fun openById(id: String) {
+        suspendRunCatching { ledger.transaction(id) }.onSuccess { full -> detailState.value = DetailState.Loaded(full, full) }
     }
 
     fun closeDetail() {

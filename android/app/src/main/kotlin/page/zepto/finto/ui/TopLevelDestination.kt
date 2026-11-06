@@ -16,6 +16,7 @@ import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.toRoute
+import page.zepto.finto.feature.accounts.AccountDetailDestination
 import page.zepto.finto.feature.accounts.AccountsDestination
 import page.zepto.finto.feature.ask.AskDestination
 import page.zepto.finto.feature.health.IntegrityDestination
@@ -51,7 +52,14 @@ enum class TopLevelDestination(
         Icons.AutoMirrored.Filled.ReceiptLong,
     ),
     Reports(ReportsDestination, ReportsDestination::class, "Reports", Icons.Outlined.BarChart, Icons.Filled.BarChart),
-    Accounts(AccountsDestination, AccountsDestination::class, "Accounts", Icons.Outlined.AccountBalance, Icons.Filled.AccountBalance),
+    Accounts(
+        AccountsDestination,
+        AccountsDestination::class,
+        "Accounts",
+        Icons.Outlined.AccountBalance,
+        Icons.Filled.AccountBalance,
+        children = setOf(AccountDetailDestination::class),
+    ),
     More(
         MoreDestination,
         MoreDestination::class,
@@ -85,3 +93,14 @@ fun NavBackStackEntry.isTabRoot(): Boolean {
     val root = TopLevelDestination.entries.firstOrNull { destination.hasRoute(it.routeClass) } ?: return false
     return root != TopLevelDestination.Activity || !toRoute<ActivityDestination>().isScoped
 }
+
+/**
+ * The tab a back stack belongs to: the nearest screen, from the top, that a tab
+ * owns. A drilled-into blotter belongs to whichever tab it was opened from.
+ */
+fun List<NavBackStackEntry>.selectedTab(): TopLevelDestination? =
+    asReversed().firstNotNullOfOrNull { entry ->
+        TopLevelDestination.entries.firstOrNull { tab ->
+            tab.owns(entry.destination) && (tab != TopLevelDestination.Activity || entry.isTabRoot())
+        }
+    }

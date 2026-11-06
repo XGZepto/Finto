@@ -14,7 +14,10 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.catch
 import page.zepto.finto.core.data.ApiErrors
+import page.zepto.finto.core.data.ReadPolicy
+import page.zepto.finto.core.data.staleWhileRevalidate
 import page.zepto.finto.core.data.repository.LedgerRepository
 import page.zepto.finto.core.data.repository.SessionRepository
 import page.zepto.finto.core.data.repository.SessionState
@@ -50,6 +53,8 @@ data class Hero(
     val previous: Money?,
     val income: Money,
 ) {
+    val net: Money get() = Money(income.amount - spent.amount, spent.currency)
+
     /** Change against the same days of the month before, in percent. */
     val change: Double?
         get() = previous?.takeIf { it.amount != 0L }?.let { (spent.amount - it.amount) * 100.0 / it.amount }
@@ -58,12 +63,18 @@ data class Hero(
         get() = income.amount.takeIf { it > 0 }?.let { (it - spent.amount) * 100.0 / it }
 }
 
+/** What the ranking can be split by, as on the web. */
+val SummaryDimensions = listOf(
+    "category", "subcategory", "tag", "merchant", "account", "institution", "card", "cardholder", "kind", "currency",
+)
+
 data class SummaryUiState(
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val error: String? = null,
     val currency: String = "HKD",
     val range: SummaryRange = SummaryRange.Year,
+    val groupBy: String = "category",
     val windowStart: String = "",
     val hero: Hero? = null,
     val ranked: List<RankedBucket> = emptyList(),
@@ -77,7 +88,7 @@ data class SummaryUiState(
 @HiltViewModel
 class SummaryViewModel @Inject constructor(
     private val ledger: LedgerRepository,
-    session: SessionRepository,
+    private val session: SessionRepository,
 ) : ViewModel() {
 
     private val clock: Clock = Clock.systemDefaultZone()
@@ -104,44 +115,64 @@ class SummaryViewModel @Inject constructor(
         load()
     }
 
+    fun setGroupBy(dimension: String) {
+        if (dimension == mutableState.value.groupBy) return
+        mutableState.update { it.copy(groupBy = dimension, ranked = emptyList()) }
+        load()
+    }
+
+    /** The reporting currency is the user's preference, as on the web; Settings shows the same value. */
+    fun setCurrency(currency: String) {
+        if (currency == mutableState.value.currency) return
+        viewModelScope.launch {
+            session.setBaseCurrency(currency).onFailure { error ->
+                mutableState.update { it.copy(error = ApiErrors.message(error)) }
+            }
+        }
+    }
+
     fun refresh() = load(refreshing = true)
 
+    /**
+     * Paints the last copy from the HTTP cache at once, then the server's.
+     * A failed refresh keeps what is on screen and says so.
+     */
     private fun load(refreshing: Boolean = false) {
         loadJob?.cancel()
         mutableState.update { it.copy(loading = !refreshing && it.hero == null, refreshing = refreshing, error = null) }
         loadJob = viewModelScope.launch {
-            val currency = mutableState.value.currency
-            val range = mutableState.value.range
-            suspendRunCatching { fetch(currency, range) }
-                .onSuccess { loaded -> mutableState.value = loaded.copy(loading = false, refreshing = false) }
-                .onFailure { error ->
-                    mutableState.update {
-                        it.copy(loading = false, refreshing = false, error = ApiErrors.message(error))
-                    }
+            val (currency, range, groupBy) = mutableState.value.let { Triple(it.currency, it.range, it.groupBy) }
+            staleWhileRevalidate(refreshing) { policy -> fetch(currency, range, groupBy, policy) }
+                .catch { error ->
+                    mutableState.update { it.copy(loading = false, refreshing = false, error = ApiErrors.message(error)) }
                 }
+                .collect { loaded -> mutableState.value = loaded.copy(loading = false, refreshing = refreshing) }
+            mutableState.update { it.copy(refreshing = false) }
         }
     }
 
-    private suspend fun fetch(currency: String, range: SummaryRange): SummaryUiState = coroutineScope {
+    private suspend fun fetch(currency: String, range: SummaryRange, groupBy: String, policy: ReadPolicy): SummaryUiState = coroutineScope {
         val today = LocalDate.now(clock)
         val start = HeroAnchor.windowStart(range.months, today).toString()
         // Spending only: a card payment the linker has not paired is still money changing pockets.
         val period = LedgerFilter(from = start, spendingOnly = true)
-        val categories = async { ledger.summary("category", period, currency) }
-        val months = async { ledger.summary("month", period, currency) }
+        val categories = async { ledger.summary(groupBy, period, currency, policy) }
+        val months = async { ledger.summary("month", period, currency, policy) }
         // `from` today returns no rows; the API reports ledger_through regardless of the dates.
         val probe = async {
             suspendRunCatching {
-                ledger.summary("kind", LedgerFilter(from = today.toString(), to = today.toString(), spendingOnly = true, maxAmount = -1))
+                ledger.summary("kind", LedgerFilter(from = today.toString(), to = today.toString(), spendingOnly = true, maxAmount = -1), policy = policy)
             }.getOrNull()
         }
-        val freshness = async { suspendRunCatching { ledger.statementFreshness() }.getOrNull() }
+        val freshness = async { suspendRunCatching { ledger.statementFreshness(policy) }.getOrNull() }
 
         val monthRows = months.await().rows
         val anchor = HeroAnchor.anchor(probe.await()?.ledgerThrough, monthRows, today)
         val (currentFilter, previousFilter) = HeroAnchor.comparison(anchor.date)
-        val current = async { ledger.summary("month", currentFilter, currency).normalised?.total }
-        val previous = async { suspendRunCatching { ledger.summary("month", previousFilter, currency).normalised?.total }.getOrNull() }
+        val current = async { ledger.summary("month", currentFilter, currency, policy).normalised?.total }
+        val previous = async {
+            suspendRunCatching { ledger.summary("month", previousFilter, currency, policy).normalised?.total }.getOrNull()
+        }
 
         val categoryRows = categories.await().rows
         val currentTotals = current.await()
@@ -149,6 +180,7 @@ class SummaryViewModel @Inject constructor(
             loading = false,
             currency = currency,
             range = range,
+            groupBy = groupBy,
             windowStart = start,
             hero = currentTotals?.let { totals ->
                 Hero(
@@ -163,7 +195,7 @@ class SummaryViewModel @Inject constructor(
             ranked = Spending.rank(categoryRows, currency),
             months = Spending.monthlyFlows(monthRows, currency),
             unconvertible = Spending.unconvertible(categoryRows),
-            stale = freshness.await()?.accounts?.filter { it.status == "stale" }.orEmpty(),
+            stale = freshness.await()?.accounts?.filter { it.status == "stale" }?.sortedByDescending { it.daysOverdue }.orEmpty(),
         )
     }
 }

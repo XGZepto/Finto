@@ -31,6 +31,7 @@ import page.zepto.finto.core.model.LoginRequest
 import page.zepto.finto.core.model.LoginResponse
 import page.zepto.finto.core.model.MpfBundlePreview
 import page.zepto.finto.core.model.MpfImportResult
+import page.zepto.finto.core.model.NetWorthSeries
 import page.zepto.finto.core.model.OkResponse
 import page.zepto.finto.core.model.PositionsResponse
 import page.zepto.finto.core.model.PreferencesPatch
@@ -158,6 +159,13 @@ interface FintoApi {
         @Query("convert_to") convertTo: String?,
         @Header("Cache-Control") cacheControl: String? = null,
     ): PositionsResponse
+
+    @GET("api/networth-series")
+    suspend fun netWorthSeries(
+        @Query("convert_to") convertTo: String,
+        @Query("months") months: Int = 12,
+        @Header("Cache-Control") cacheControl: String? = null,
+    ): NetWorthSeries
 
     @GET("api/flows")
     suspend fun flows(

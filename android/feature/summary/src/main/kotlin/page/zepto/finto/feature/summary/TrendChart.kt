@@ -1,6 +1,14 @@
 package page.zepto.finto.feature.summary
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalInspectionMode
+import page.zepto.finto.core.designsystem.theme.FintoMotion
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,7 +45,7 @@ import page.zepto.finto.core.model.MonthFlow
  * discrete statement period.
  */
 @Composable
-internal fun TrendChart(months: List<MonthFlow>, modifier: Modifier = Modifier) {
+internal fun TrendChart(months: List<MonthFlow>, modifier: Modifier = Modifier, onMonthClick: ((String) -> Unit)? = null) {
     val outColor = MaterialTheme.colorScheme.primary
     val inColor = FintoThemeTokens.money.positive
     val grid = MaterialTheme.colorScheme.outlineVariant
@@ -46,8 +54,17 @@ internal fun TrendChart(months: List<MonthFlow>, modifier: Modifier = Modifier) 
     val description = months.joinToString("; ") {
         "${DisplayDates.shortMonth(it.month)}: out ${MoneyFormat.formatWhole(it.spend)}, in ${MoneyFormat.formatWhole(it.income)}"
     }
+    val still = LocalInspectionMode.current
+    val grow = remember(months) { Animatable(if (still) 1f else 0f) }
+    LaunchedEffect(months) { grow.animateTo(1f, tween(FintoMotion.LONG + 150, easing = FintoMotion.EmphasizedDecelerate)) }
     Column(modifier.semantics { contentDescription = "Money out and in by month. $description" }) {
-        Canvas(Modifier.fillMaxWidth().height(160.dp)) {
+        val tap = if (onMonthClick == null || months.isEmpty()) Modifier else Modifier.pointerInput(months) {
+            detectTapGestures { offset ->
+                val index = (offset.x / (size.width / months.size)).toInt().coerceIn(0, months.lastIndex)
+                onMonthClick(months[index].month)
+            }
+        }
+        Canvas(Modifier.fillMaxWidth().height(160.dp).then(tap)) {
             val count = months.size.coerceAtLeast(1)
             val slot = size.width / count
             val barWidth = (slot * 0.32f).coerceAtMost(14.dp.toPx())
@@ -58,8 +75,8 @@ internal fun TrendChart(months: List<MonthFlow>, modifier: Modifier = Modifier) 
             }
             months.forEachIndexed { index, month ->
                 val center = slot * index + slot / 2
-                val outHeight = size.height * month.spend.amount / peak
-                val inHeight = size.height * month.income.amount / peak
+                val outHeight = size.height * month.spend.amount / peak * grow.value
+                val inHeight = size.height * month.income.amount / peak * grow.value
                 drawRoundRect(
                     color = outColor,
                     topLeft = Offset(center - barWidth - gap / 2, size.height - outHeight),

@@ -31,6 +31,7 @@ import page.zepto.finto.core.model.SuggestionResponse
 import page.zepto.finto.core.model.ConfirmResponse
 import page.zepto.finto.core.model.TransactionChanges
 import page.zepto.finto.core.model.LedgerFilter
+import page.zepto.finto.core.model.NetWorthSeries
 import page.zepto.finto.core.model.PositionsResponse
 import page.zepto.finto.core.model.StatementFreshness
 import page.zepto.finto.core.model.SummaryResponse
@@ -76,6 +77,7 @@ class FakeLedgerRepository(
     var cards: List<Card> = emptyList()
     var facets = Facets()
     var flows = Flows()
+    var netWorthSeries = NetWorthSeries("HKD")
     var compositions: (dimension: String) -> Composition = { Composition(it, "HKD") }
     var coverage = Coverage()
     var integrity = IntegrityReport()
@@ -100,6 +102,7 @@ class FakeLedgerRepository(
     override suspend fun cards(policy: ReadPolicy) = cards.also { check() }
     override suspend fun facets(policy: ReadPolicy) = facets.also { check() }
     override suspend fun flows(convertTo: String, policy: ReadPolicy) = flows.also { check() }
+    override suspend fun netWorthSeries(convertTo: String, policy: ReadPolicy) = netWorthSeries.also { check() }
     override suspend fun composition(dimension: String, convertTo: String, policy: ReadPolicy) = compositions(dimension).also { check() }
     override suspend fun coverage(policy: ReadPolicy) = coverage.also { check() }
     override suspend fun integrity(policy: ReadPolicy) = integrity.also { check() }

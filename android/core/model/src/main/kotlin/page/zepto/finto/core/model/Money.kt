@@ -37,3 +37,6 @@ data class ConvertedMoney(
 ) {
     fun asMoney(): Money = Money(amount, currency)
 }
+
+/** Currencies the server can report in, in the web app's order. */
+val ReportingCurrencies = listOf("USD", "HKD", "GBP", "EUR", "JPY", "CNY", "SGD", "AUD", "CAD")

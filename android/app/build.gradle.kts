@@ -46,6 +46,15 @@ android {
             )
             signingConfigs.findByName("release")?.let { signingConfig = it }
         }
+        // Release code (R8, not debuggable) signed with the debug key, to install
+        // beside the others and judge real speed: debug builds run interpreted Compose.
+        create("preview") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-preview"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
 
     buildFeatures {

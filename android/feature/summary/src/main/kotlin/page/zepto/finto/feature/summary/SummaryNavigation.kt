@@ -8,6 +8,6 @@ import page.zepto.finto.core.model.OpenLedger
 @Serializable
 data object SummaryDestination
 
-fun NavGraphBuilder.summaryScreen(onOpenLedger: OpenLedger) {
-    composable<SummaryDestination> { SummaryRoute(onOpenLedger = onOpenLedger) }
+fun NavGraphBuilder.summaryScreen(onOpenLedger: OpenLedger, onOpenImport: () -> Unit) {
+    composable<SummaryDestination> { SummaryRoute(onOpenLedger = onOpenLedger, onOpenImport = onOpenImport) }
 }

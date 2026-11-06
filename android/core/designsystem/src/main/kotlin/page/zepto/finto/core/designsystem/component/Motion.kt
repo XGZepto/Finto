@@ -9,7 +9,11 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -99,4 +103,27 @@ fun SkeletonBlock(modifier: Modifier = Modifier, height: Dp = 16.dp) {
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .shimmer(),
     )
+}
+
+/** Placeholder rows for a list's first load: a leading dot, two lines, a figure. */
+@Composable
+fun ListSkeleton(modifier: Modifier = Modifier, rows: Int = 6) {
+    androidx.compose.foundation.layout.Column(modifier) {
+        repeat(rows) {
+            androidx.compose.foundation.layout.Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                SkeletonBlock(Modifier.size(36.dp), height = 36.dp)
+                androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp))
+                androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+                    SkeletonBlock(Modifier.fillMaxWidth(0.6f), height = 14.dp)
+                    androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
+                    SkeletonBlock(Modifier.fillMaxWidth(0.35f), height = 12.dp)
+                }
+                androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp))
+                SkeletonBlock(Modifier.width(64.dp), height = 14.dp)
+            }
+        }
+    }
 }

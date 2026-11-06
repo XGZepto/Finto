@@ -62,6 +62,33 @@ data class Position(
 data class PositionsResponse(
     val positions: List<Position> = emptyList(),
     val normalised: PositionsNormalised? = null,
+    /** Net worth on the last day every account's statements cover; null when that is today. */
+    val complete: SettledPositions? = null,
+)
+
+/** Figures every statement has confirmed, as of [asOf]. */
+@Serializable
+data class SettledPositions(
+    val asOf: String,
+    /** Accounts whose statements stop on that day. */
+    val limitedBy: List<String> = emptyList(),
+    val netWorth: Money,
+    val byType: List<TypeBalance> = emptyList(),
+)
+
+@Serializable
+data class NetWorthSeries(
+    val to: String = "",
+    val points: List<NetWorthPoint> = emptyList(),
+)
+
+/** Month-end net worth; [complete] when every statement reaches that day. */
+@Serializable
+data class NetWorthPoint(
+    val bucket: String,
+    val asOf: String,
+    val balance: Money,
+    val complete: Boolean = true,
 )
 
 @Serializable

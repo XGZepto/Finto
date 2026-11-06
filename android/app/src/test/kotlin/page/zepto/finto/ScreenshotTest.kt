@@ -37,7 +37,20 @@ import page.zepto.finto.core.model.RankedBucket
 import page.zepto.finto.core.model.SampleRow
 import page.zepto.finto.core.model.StagePreview
 import page.zepto.finto.core.model.Txn
-import page.zepto.finto.feature.accounts.AccountGroup
+import page.zepto.finto.core.model.Account
+import page.zepto.finto.core.model.NetWorthPoint
+import page.zepto.finto.core.model.SummaryRow
+import page.zepto.finto.feature.accounts.AccountDetailActions
+import page.zepto.finto.feature.accounts.AccountDetailScreen
+import page.zepto.finto.feature.accounts.AccountDetailUiState
+import page.zepto.finto.feature.accounts.AccountFlow
+import page.zepto.finto.feature.accounts.AccountFlowRow
+import page.zepto.finto.feature.accounts.AccountRow
+import page.zepto.finto.feature.accounts.AccountsLogic
+import page.zepto.finto.feature.accounts.CardLineage
+import page.zepto.finto.feature.accounts.FlowNode
+import page.zepto.finto.feature.accounts.InternalTransfer
+import page.zepto.finto.feature.accounts.SettledWorth
 import page.zepto.finto.feature.accounts.AccountsScreen
 import page.zepto.finto.feature.accounts.AccountsUiState
 import page.zepto.finto.feature.auth.LoginScreen
@@ -106,7 +119,24 @@ class ScreenshotTest {
 
     @Test
     fun accounts() = capture("accounts", tab = TopLevelDestination.Accounts) {
-        AccountsScreen(state = Sample.accounts, onRefresh = {}, onOpenAccount = { _, _ -> })
+        AccountsScreen(state = Sample.accounts, onRefresh = {}, onOpenAccount = {})
+    }
+
+    @Test
+    fun accountDetail() = capture("account-detail", tab = TopLevelDestination.Accounts) {
+        AccountDetailScreen(state = Sample.accountDetail, actions = AccountDetailActions())
+    }
+
+    @Test
+    fun accountGroup() = capture("account-group", dark = true, tab = TopLevelDestination.Accounts) {
+        val group = Sample.accounts.groups.first { !it.single }
+        AccountDetailScreen(
+            state = Sample.accountDetail.copy(
+                title = group.name, subtitle = "HSBC · 2 subaccounts · 1 cards", scope = group.children.map { it.account.id },
+                account = null, row = null, group = group, lineages = emptyList(), flow = AccountFlow(emptyList(), emptyList()),
+            ),
+            actions = AccountDetailActions(),
+        )
     }
 
     @Test
@@ -127,7 +157,7 @@ class ScreenshotTest {
     }
 
     @Composable
-    private fun Summary() = SummaryScreen(state = Sample.summary, onRangeChange = {}, onRefresh = {}, onOpenCategory = {})
+    private fun Summary() = SummaryScreen(state = Sample.summary, onRangeChange = {}, onRefresh = {}, onOpenBucket = {})
 
     @Composable
     private fun Activity() {
@@ -167,7 +197,7 @@ private object Sample {
             val month = YearMonth.from(today).minusMonths(back.toLong())
             MonthFlow(month.toString(), hkd(1_500_000L + (back * 137_000L) % 900_000L), hkd(if (back % 3 == 0) 4_200_000 else 3_900_000))
         },
-        stale = listOf(FreshnessAccount("hsbc_hk_current", "HSBC Current", status = "stale", daysOverdue = 6)),
+        stale = listOf(FreshnessAccount("hsbc_hk_current", "HSBC Current", expectedOn = "2026-10-30", status = "stale", daysOverdue = 6)),
     )
 
     private fun txn(id: String, date: LocalDate, description: String, merchant: String?, amount: Long, account: String, category: String?, kind: String = "purchase") =
@@ -202,24 +232,65 @@ private object Sample {
             basis = basis, basisDate = today.minusDays(5).toString(),
         )
 
+    private fun account(id: String, name: String, type: String, institution: String, group: String? = null, closed: String? = null) =
+        Account(id, institution, name, type, "HKD", balanceGroup = group, maskedNumber = "••${id.length}04${id.length}", closedOn = closed)
+
+    private val rows = listOf(
+        AccountRow(account("hsbc_one_hkd", "One HKD", "checking", "hsbc", group = "hsbc_one"), listOf(position("hsbc_one_hkd", "One HKD", "checking", 12_402_100)), 1),
+        AccountRow(
+            account("hsbc_one_usd", "One USD", "multi_currency", "hsbc", group = "hsbc_one"),
+            listOf(position("hsbc_one_usd", "One USD", "multi_currency", 412_000, currency = "USD", converted = 3_205_000)),
+            0,
+        ),
+        AccountRow(account("hsbc_sav", "HSBC Savings", "savings", "hsbc"), listOf(position("hsbc_sav", "HSBC Savings", "savings", 30_120_000)), 0),
+        AccountRow(account("amex", "AMEX Platinum", "credit_card", "amex"), listOf(position("amex", "AMEX Platinum", "credit_card", -2_155_000)), 2),
+    )
+
     val accounts = AccountsUiState(
         loading = false,
         currency = "HKD",
-        netWorth = hkd(48_212_350),
-        groups = listOf(
-            AccountGroup("checking", listOf(position("hsbc", "HSBC Current", "checking", 12_402_100)), hkd(12_402_100)),
-            AccountGroup("savings", listOf(position("hsbc_sav", "HSBC Savings", "savings", 30_120_000)), hkd(30_120_000)),
-            AccountGroup(
-                "multi_currency",
-                listOf(
-                    position("wise", "Wise", "multi_currency", 640_250, basis = "movements"),
-                    position("wise", "Wise", "multi_currency", 412_000, currency = "USD", converted = 3_205_000, basis = "movements"),
-                ),
-                hkd(3_845_250),
-            ),
-            AccountGroup("credit_card", listOf(position("amex", "AMEX Platinum", "credit_card", -2_155_000)), hkd(-2_155_000)),
+        netWorth = hkd(43_572_100),
+        settled = SettledWorth(today.minusDays(6).toString(), hkd(41_820_400), listOf("AMEX Platinum")),
+        assets = hkd(43_975_400),
+        liabilities = hkd(-2_155_000),
+        series = (0 until 12).map { index ->
+            val month = YearMonth.from(today).minusMonths(11L - index)
+            NetWorthPoint(month.toString(), month.atEndOfMonth().toString(), hkd(36_000_000 + index * 480_000L + (index % 3) * 210_000L), complete = index < 11)
+        },
+        groups = AccountsLogic.groups(rows),
+        flows = listOf(
+            AccountFlowRow("hsbc_one_hkd", "One HKD", hkd(8_400_000), hkd(-6_120_000)),
+            AccountFlowRow("amex", "AMEX Platinum", hkd(2_100_000), hkd(-2_480_500)),
         ),
+        transfers = listOf(InternalTransfer("hsbc_one_hkd", "One HKD", "amex", "AMEX Platinum", hkd(2_100_000), 6)),
     )
+
+    val accountDetail = AccountDetailUiState(
+        loading = false,
+        currency = "HKD",
+        title = "AMEX Platinum",
+        subtitle = "AMEX · Credit Card · ••5004",
+        scope = listOf("amex"),
+        account = rows[3].account,
+        row = rows[3],
+        transactionCount = 214,
+        cardholders = 2,
+        topCategories = listOf(
+            row("dining", 924_000, 38), row("groceries", 431_000, 24), row("travel", 380_000, 4), row("shopping", 214_500, 11),
+        ),
+        months = (0 until 6).map { index -> row(YearMonth.from(today).minusMonths(5L - index).toString(), 180_000L + index * 41_000L, 30) },
+        byHolder = listOf(row("You", 1_710_000, 150), row("Sam", 380_500, 64)),
+        byKind = listOf(row("purchase", 2_090_500, 196), row("cc_payment", 0, 6), row("fee", 12_000, 2)),
+        lineages = listOf(CardLineage("You", false, listOf("1001", "1009"), true), CardLineage("Sam", true, listOf("2002"), false)),
+        flow = AccountFlow(
+            incoming = listOf(FlowNode("int-in-hsbc_one_hkd", "One HKD", "hsbc_one_hkd", 2_100_000, 6), FlowNode("ext-in-refunds", "Refunds", null, 42_000, 2)),
+            outgoing = listOf(FlowNode("ext-out-dining", "Dining", null, 924_000, 38), FlowNode("ext-out-groceries", "Groceries", null, 431_000, 24)),
+        ),
+        transfers = listOf(InternalTransfer("hsbc_one_hkd", "One HKD", "amex", "AMEX Platinum", hkd(2_100_000), 6)),
+        recent = activity.mapNotNull { (it as? ActivityItem.Row)?.txn }.take(5),
+    )
+
+    private fun row(bucket: String, spend: Long, count: Int) = SummaryRow(bucket, "HKD", count, hkd(-spend), hkd(spend), hkd(0))
 
     val staged = StagedFile("Mox_Credit_Nov2026.pdf", 308_565, "application/pdf", "/tmp/x.pdf")
 

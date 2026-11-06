@@ -20,11 +20,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import page.zepto.finto.core.data.IncomingFiles
 import page.zepto.finto.core.data.repository.SessionState
@@ -67,8 +65,8 @@ fun FintoApp(session: SessionState, appVersion: String, incomingFiles: IncomingF
 @Composable
 private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
     val navController = rememberNavController()
-    val backStack by navController.currentBackStackEntryAsState()
-    val current = backStack?.destination
+    val entries by navController.currentBackStack.collectAsStateWithLifecycle()
+    val selectedTab = entries.selectedTab()
     val layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(currentWindowAdaptiveInfo())
 
     val incoming by incomingFiles.file.collectAsStateWithLifecycle()
@@ -86,9 +84,7 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
         layoutType = layoutType,
         navigationSuiteItems = {
             TopLevelDestination.entries.forEach { destination ->
-                val selected = current?.hierarchy?.any { destination.owns(it) } == true &&
-                    // A drilled-into blotter belongs to the tab it was opened from, not Activity.
-                    (destination != TopLevelDestination.Activity || backStack?.isTabRoot() == true)
+                val selected = destination == selectedTab
                 item(
                     selected = selected,
                     onClick = { navController.navigateToTopLevel(destination) },
@@ -113,11 +109,24 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
             popEnterTransition = { if (initialState.isTabRoot()) FintoMotion.fadeThroughIn() else FintoMotion.sharedAxisIn(forward = false) },
             popExitTransition = { if (initialState.isTabRoot()) FintoMotion.fadeThroughOut() else FintoMotion.sharedAxisOut(forward = false) },
         ) {
-            summaryScreen(onOpenLedger = openLedger)
+            summaryScreen(
+                onOpenLedger = openLedger,
+                onOpenImport = {
+                    navController.navigateToTopLevel(TopLevelDestination.More)
+                    navController.navigate(ImportDestination) { launchSingleTop = true }
+                },
+            )
             activityScreen(onBack = navController::popBackStack)
             reportsScreen(onOpenLedger = openLedger)
-            accountsScreen(onOpenAccount = openAccount)
-            accountDetailScreen(onBack = navController::popBackStack, onOpenLedger = openLedger, onOpenAccount = openAccount)
+            accountsScreen(
+                onOpenAccount = openAccount,
+                onOpenGroup = { key -> navController.navigate(AccountDetailDestination(key, group = true)) },
+            )
+            accountDetailScreen(
+                navController,
+                onOpenLedger = openLedger,
+                onOpenTransaction = { filter, title, id -> navController.navigate(ActivityDestination.of(filter, title, txn = id)) },
+            )
             composable<MoreDestination> { MoreScreen(onOpen = { route -> navController.navigate(route) { launchSingleTop = true } }) }
             importScreen(
                 onBack = navController::popBackStack,
@@ -135,9 +144,9 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
 
 private fun NavHostController.navigateToTopLevel(destination: TopLevelDestination) {
     // Tapping the tab you are on returns to its root, as on the web.
-    if (currentBackStackEntry?.let { destination.owns(it.destination) && !it.isTabRoot() } == true) {
-        popBackStack(destination.route, inclusive = false)
-        return
+    val stack = currentBackStack.value
+    if (stack.selectedTab() == destination && stack.lastOrNull()?.isTabRoot() == false) {
+        if (popBackStack(destination.routeClass, inclusive = false)) return
     }
     navigate(destination.route) {
         popUpTo(graph.findStartDestination().id) { saveState = true }

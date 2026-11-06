@@ -17,6 +17,7 @@ import page.zepto.finto.core.model.InstallmentPlan
 import page.zepto.finto.core.model.InstallmentsResponse
 import page.zepto.finto.core.model.IntegrityReport
 import page.zepto.finto.core.model.LedgerFilter
+import page.zepto.finto.core.model.NetWorthSeries
 import page.zepto.finto.core.model.PositionsResponse
 import page.zepto.finto.core.model.StatementFreshness
 import page.zepto.finto.core.model.SuggestionResponse
@@ -38,6 +39,7 @@ interface LedgerRepository {
     suspend fun cards(policy: ReadPolicy = ReadPolicy.Default): List<Card> = emptyList()
     suspend fun facets(policy: ReadPolicy = ReadPolicy.Default): Facets = Facets()
     suspend fun flows(convertTo: String, policy: ReadPolicy = ReadPolicy.Default): Flows = Flows()
+    suspend fun netWorthSeries(convertTo: String, policy: ReadPolicy = ReadPolicy.Default): NetWorthSeries = NetWorthSeries(convertTo)
     suspend fun composition(dimension: String, convertTo: String, policy: ReadPolicy = ReadPolicy.Default): Composition =
         Composition(dimension, convertTo)
     suspend fun coverage(policy: ReadPolicy = ReadPolicy.Default): Coverage = Coverage()
@@ -93,6 +95,8 @@ internal class NetworkLedgerRepository @Inject constructor(
     override suspend fun cards(policy: ReadPolicy) = api.cards(policy.header).cards
     override suspend fun facets(policy: ReadPolicy) = api.facets(policy.header)
     override suspend fun flows(convertTo: String, policy: ReadPolicy) = api.flows(convertTo, policy.header)
+    override suspend fun netWorthSeries(convertTo: String, policy: ReadPolicy) =
+        api.netWorthSeries(convertTo, cacheControl = policy.header)
     override suspend fun composition(dimension: String, convertTo: String, policy: ReadPolicy) =
         api.composition(dimension, convertTo, cacheControl = policy.header)
     override suspend fun coverage(policy: ReadPolicy) = api.coverage(policy.header)

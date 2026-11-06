@@ -79,4 +79,33 @@ class SummaryViewModelTest {
         assertEquals("USD", viewModel.state.value.currency)
         assertEquals("USD", ledger.summaryCalls.last { it.first == "category" }.third)
     }
+
+    @Test
+    fun splittingByAnotherDimensionReloadsTheRanking() {
+        val viewModel = SummaryViewModel(ledger, FakeSessionRepository())
+        viewModel.setGroupBy("merchant")
+        assertEquals("merchant", viewModel.state.value.groupBy)
+        assertTrue(ledger.summaryCalls.any { it.first == "merchant" && it.second.spendingOnly })
+    }
+
+    @Test
+    fun choosingACurrencySavesItAsThePreference() {
+        val session = FakeSessionRepository()
+        val viewModel = SummaryViewModel(ledger, session)
+        viewModel.setCurrency("GBP")
+        assertEquals("GBP", viewModel.state.value.currency)
+        assertEquals("GBP", ledger.summaryCalls.last { it.first == "category" }.third)
+    }
+
+    @Test
+    fun aFailedRefreshKeepsTheFigures() {
+        val viewModel = SummaryViewModel(ledger, FakeSessionRepository())
+        val shown = viewModel.state.value.hero
+        ledger.summaries = { _, _, _ -> error("offline") }
+        viewModel.refresh()
+        val state = viewModel.state.value
+        assertEquals(shown, state.hero)
+        assertNotNull(state.error)
+        assertFalse(state.refreshing)
+    }
 }
