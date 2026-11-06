@@ -48,11 +48,13 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.Light -> false
                 ThemeMode.Dark -> true
             }
-            // System bar icons follow the app's theme, not just the system's.
-            DisposableEffect(dark) {
+            // System bar icons follow the app's theme, not just the system's. Sign-in
+            // is always on the dark brand surface.
+            val darkBars = dark || session !is SessionState.SignedIn
+            DisposableEffect(darkBars) {
                 enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
-                    navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM) { dark },
+                    statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { darkBars },
+                    navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM) { darkBars },
                 )
                 onDispose {}
             }

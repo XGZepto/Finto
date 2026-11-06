@@ -13,6 +13,7 @@ import page.zepto.finto.core.model.LoginRequest
 import page.zepto.finto.core.model.PreferencesPatch
 import page.zepto.finto.core.model.User
 import page.zepto.finto.core.network.FintoApi
+import page.zepto.finto.core.network.NetworkCache
 import page.zepto.finto.core.network.PersistentCookieJar
 import page.zepto.finto.core.network.ServerEndpoint
 import page.zepto.finto.core.network.SessionEvents
@@ -47,6 +48,7 @@ internal class DefaultSessionRepository @Inject constructor(
     private val api: FintoApi,
     private val endpoint: ServerEndpoint,
     private val cookies: PersistentCookieJar,
+    private val httpCache: NetworkCache,
     private val settings: SettingsRepository,
     events: SessionEvents,
     @ApplicationScope scope: CoroutineScope,
@@ -121,6 +123,8 @@ internal class DefaultSessionRepository @Inject constructor(
     override suspend fun setBaseCurrency(currency: String): Result<User> =
         suspendRunCatching { api.updatePreferences(PreferencesPatch(baseCurrency = currency)) }
             .onSuccess { user ->
+                // Converted figures are cached per currency; drop them with the old choice.
+                httpCache.clear()
                 settings.setCachedUser(FintoJson.encodeToString(User.serializer(), user))
                 val current = mutableState.value
                 if (current is SessionState.SignedIn) mutableState.value = current.copy(user = user)
@@ -128,6 +132,7 @@ internal class DefaultSessionRepository @Inject constructor(
 
     private suspend fun forget() {
         cookies.clear()
+        httpCache.clear()
         settings.setCachedUser(null)
     }
 }

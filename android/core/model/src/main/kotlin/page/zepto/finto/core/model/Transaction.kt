@@ -36,6 +36,8 @@ data class Txn(
     val details: Map<String, JsonElement> = emptyMap(),
     val tags: List<String> = emptyList(),
     val provenance: Provenance? = null,
+    val transferLegs: List<LinkedRow> = emptyList(),
+    val relatedTransactions: List<LinkedRow> = emptyList(),
 ) {
     /** The name to show: the cleaned-up merchant when there is one. */
     val title: String get() = merchant?.takeIf { it.isNotBlank() } ?: description
@@ -63,4 +65,56 @@ data class TxnPage(
     val offset: Int = 0,
     val items: List<Txn> = emptyList(),
     val totals: List<TotalRow> = emptyList(),
+)
+
+/** The other side of a transfer, or a purchase/refund/duplicate this row is tied to. */
+@Serializable
+data class LinkedRow(
+    val id: String,
+    val role: String? = null,
+    /** `purchase`, `refund`, `canonical` or `duplicate`, for related rows. */
+    val relation: String? = null,
+    val descriptionRaw: String = "",
+    val amountBooked: Long = 0,
+    val currencyBooked: String = "",
+    val accountId: String = "",
+    val txnDate: String = "",
+) {
+    val amount: Money get() = Money(amountBooked, currencyBooked)
+}
+
+@Serializable
+data class CategorySuggestion(
+    val category: String,
+    val subcategory: String? = null,
+    val merchant: String? = null,
+    val tags: List<String> = emptyList(),
+    val confidence: Double = 0.0,
+)
+
+@Serializable
+data class SuggestionResponse(
+    val available: Boolean = false,
+    val suggestion: CategorySuggestion? = null,
+)
+
+@Serializable
+data class TagRequest(val tag: String)
+
+/** Distinct values for filters and editors. */
+@Serializable
+data class Facets(
+    val accounts: List<FacetAccount> = emptyList(),
+    val categories: List<String> = emptyList(),
+    val kinds: List<String> = emptyList(),
+    val currencies: List<String> = emptyList(),
+)
+
+@Serializable
+data class FacetAccount(
+    val id: String,
+    val displayName: String,
+    val institutionId: String = "",
+    val accountType: String = "",
+    val primaryCurrency: String = "",
 )

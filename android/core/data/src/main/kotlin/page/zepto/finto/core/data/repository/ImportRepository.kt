@@ -12,9 +12,10 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import page.zepto.finto.core.data.IoDispatcher
 import page.zepto.finto.core.model.ImportCapabilities
-import page.zepto.finto.core.model.ImportResult
+import page.zepto.finto.core.model.ConfirmResponse
 import page.zepto.finto.core.model.StagePreview
 import page.zepto.finto.core.network.FintoApi
+import page.zepto.finto.core.network.NetworkCache
 import java.io.File
 import java.io.IOException
 import java.util.UUID
@@ -33,7 +34,7 @@ interface ImportRepository {
     suspend fun capabilities(): ImportCapabilities
     suspend fun stage(uri: Uri): StagedFile
     suspend fun preview(file: StagedFile, review: Boolean = true): StagePreview
-    suspend fun confirm(file: StagedFile, sha256: String): ImportResult
+    suspend fun confirm(file: StagedFile, sha256: String): ConfirmResponse
     suspend fun discard(file: StagedFile)
 }
 
@@ -41,6 +42,7 @@ interface ImportRepository {
 internal class NetworkImportRepository @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val api: FintoApi,
+    private val cache: NetworkCache,
     @param:IoDispatcher private val io: CoroutineDispatcher,
 ) : ImportRepository {
 
@@ -72,8 +74,8 @@ internal class NetworkImportRepository @Inject constructor(
     override suspend fun preview(file: StagedFile, review: Boolean): StagePreview =
         api.previewImport(part(file), if (review) "true".toRequestBody() else null)
 
-    override suspend fun confirm(file: StagedFile, sha256: String): ImportResult =
-        api.confirmImport(part(file), sha256.toRequestBody()).result
+    override suspend fun confirm(file: StagedFile, sha256: String): ConfirmResponse =
+        api.confirmImport(part(file), sha256.toRequestBody()).also { cache.clear() }
 
     override suspend fun discard(file: StagedFile) {
         withContext(io) { File(file.path).delete() }

@@ -109,9 +109,7 @@ fun SettingsScreen(
                 modifier = Modifier.clickable(role = Role.Button) { pickCurrency = true },
                 leadingContent = { Icon(Icons.Outlined.CurrencyExchange, null) },
                 headlineContent = { Text("Reporting currency") },
-                supportingContent = {
-                    Text(state.error ?: "Totals across currencies are converted to ${state.currency}.")
-                },
+                supportingContent = state.error?.let { error -> { Text(error, color = MaterialTheme.colorScheme.error) } },
                 trailingContent = { Text(if (state.savingCurrency) "Saving…" else state.currency) },
             )
 
@@ -131,7 +129,7 @@ fun SettingsScreen(
                     modifier = Modifier.clickable(role = Role.Switch) { onDynamicColorChange(!state.dynamicColor) },
                     leadingContent = { Icon(Icons.Outlined.Palette, null) },
                     headlineContent = { Text("Dynamic colour") },
-                    supportingContent = { Text("Match your wallpaper instead of Finto's palette.") },
+                    supportingContent = { Text("Use wallpaper colours") },
                     trailingContent = { Switch(checked = state.dynamicColor, onCheckedChange = null) },
                 )
             }
@@ -141,7 +139,6 @@ fun SettingsScreen(
                 modifier = Modifier.clickable(role = Role.Button) { uriHandler.openUri("https://${state.server}") },
                 leadingContent = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null) },
                 headlineContent = { Text("Open Finto on the web") },
-                supportingContent = { Text("Reports, review queues and tools live in the web app.") },
             )
             ListItem(headlineContent = { Text("Version") }, trailingContent = { Text(appVersion) })
             ListItem(
@@ -182,7 +179,6 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },
             title = { Text("Sign out?") },
-            text = { Text("This ends the session on this device. Your ledger stays on the server.") },
             confirmButton = {
                 TextButton(onClick = { confirmSignOut = false; onSignOut() }) { Text("Sign out") }
             },

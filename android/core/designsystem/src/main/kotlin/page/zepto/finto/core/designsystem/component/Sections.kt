@@ -1,5 +1,7 @@
 package page.zepto.finto.core.designsystem.component
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -11,6 +13,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import page.zepto.finto.core.designsystem.theme.FintoMotion
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -48,6 +53,10 @@ fun ShareBar(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
+    // Grows from empty on first show and eases between values after that.
+    val target = fraction.coerceIn(0f, 1f)
+    val grown = remember { Animatable(0f) }
+    LaunchedEffect(target) { grown.animateTo(target, tween(600, easing = FintoMotion.EmphasizedDecelerate)) }
     Box(
         modifier
             .fillMaxWidth()
@@ -57,7 +66,7 @@ fun ShareBar(
     ) {
         Box(
             Modifier
-                .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                .fillMaxWidth(grown.value)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(3.dp))
                 .background(color),

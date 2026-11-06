@@ -82,6 +82,7 @@ data class ImportAgent(
 @Serializable
 data class ConfirmResponse(
     @SerialName("import") val result: ImportResult,
+    val reconcile: ReconcileSummary? = null,
 )
 
 @Serializable

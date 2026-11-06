@@ -205,7 +205,7 @@ private fun ActivityList(
         refresh is LoadState.NotLoading && items.itemCount == 0 -> MessageState(
             icon = if (state.query.isNotEmpty()) Icons.Outlined.SearchOff else Icons.Outlined.ReceiptLong,
             title = if (state.query.isNotEmpty()) "No matches" else "No transactions",
-            body = if (state.query.isNotEmpty()) "Nothing matches “${state.query}”." else "Nothing in this view yet.",
+            body = if (state.query.isNotEmpty()) "Nothing matches “${state.query}”." else "",
         )
         else -> LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
             items(

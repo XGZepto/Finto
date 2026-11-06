@@ -10,10 +10,30 @@ data class Account(
     val accountType: String,
     val primaryCurrency: String,
     val settlementCurrencies: List<String> = emptyList(),
+    val balanceGroup: String? = null,
     val maskedNumber: String? = null,
     val openedOn: String? = null,
     val closedOn: String? = null,
+    val watchStatements: Boolean = true,
+) {
+    val isOpen: Boolean get() = closedOn == null
+}
+
+@Serializable
+data class Card(
+    val id: String,
+    val accountId: String,
+    val cardholderName: String? = null,
+    val last4: String? = null,
+    val isSupplementary: Boolean = false,
+    val issuedOn: String? = null,
+    val closedOn: String? = null,
+    val replacesCardId: String? = null,
+    val lineageRoot: String? = null,
 )
+
+@Serializable
+data class CardsResponse(val cards: List<Card> = emptyList())
 
 @Serializable
 data class AccountsResponse(val accounts: List<Account> = emptyList())

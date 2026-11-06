@@ -66,7 +66,7 @@ fun AccountsScreen(
             state.groups.isEmpty() -> MessageState(
                 Icons.Outlined.AccountBalance,
                 "No accounts yet",
-                "Accounts appear once a statement has been imported.",
+                "Import a statement to add one.",
                 Modifier.padding(padding),
             )
             else -> PullToRefreshBox(

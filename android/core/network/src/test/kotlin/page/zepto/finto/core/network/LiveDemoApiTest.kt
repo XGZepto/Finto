@@ -63,27 +63,30 @@ class LiveDemoApiTest {
         assertEquals("demo", api.me().username)
 
         val page = api.transactions(
-            from = null, to = null, months = null, accounts = null, categories = null, query = null,
-            spendingOnly = true, includeTransfers = null, maxAmount = null, limit = 20, offset = 0,
+            scalars = mapOf("spendingOnly" to "true"), months = null, accounts = null, cards = null, cardholders = null,
+            institutions = null, categories = null, kinds = null, tags = null, detail = null, statements = null,
+            limit = 20, offset = 0,
         )
         assertTrue(page.items.isNotEmpty())
         val account = page.items.first().accountId
         val scoped = api.transactions(
-            from = null, to = null, months = null, accounts = listOf(account), categories = null, query = null,
-            spendingOnly = null, includeTransfers = null, maxAmount = null, limit = 20, offset = 0,
+            scalars = emptyMap(), months = null, accounts = listOf(account), cards = null, cardholders = null,
+            institutions = null, categories = null, kinds = null, tags = null, detail = null, statements = null,
+            limit = 20, offset = 0,
         )
         assertTrue("account filter applied", scoped.items.all { it.accountId == account })
         val second = api.transactions(
-            from = null, to = null, months = null, accounts = null, categories = null, query = null,
-            spendingOnly = true, includeTransfers = null, maxAmount = null, limit = 20, offset = 20,
+            scalars = mapOf("spendingOnly" to "true"), months = null, accounts = null, cards = null, cardholders = null,
+            institutions = null, categories = null, kinds = null, tags = null, detail = null, statements = null,
+            limit = 20, offset = 20,
         )
         assertTrue("offset paging", second.items.none { it.id in page.items.map { item -> item.id } })
         assertEquals(page.items.first().id, api.transaction(page.items.first().id).id)
 
         val summary = api.summary(
-            groupBy = "category", from = "2025-01-01", to = null, months = null, accounts = null,
-            categories = null, query = null, spendingOnly = true, includeTransfers = null, maxAmount = null,
-            convertTo = "HKD",
+            groupBy = "category", scalars = mapOf("from" to "2025-01-01", "spendingOnly" to "true"), months = null,
+            accounts = null, cards = null, cardholders = null, institutions = null, categories = null, kinds = null,
+            tags = null, detail = null, statements = null, convertTo = "HKD",
         )
         assertNotNull(summary.ledgerThrough)
         assertTrue(summary.rows.any { it.spendConverted?.ok == true })

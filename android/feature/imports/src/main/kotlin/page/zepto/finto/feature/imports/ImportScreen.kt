@@ -119,8 +119,7 @@ private fun IdleContent(formats: List<ImportFormat>, onPick: () -> Unit) {
                     Icon(Icons.Outlined.UploadFile, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
                     Text("Import a statement", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Choose a PDF or CSV, or share one to Finto from your bank's app. " +
-                            "You'll see what was read before anything is saved.",
+                        "PDF, CSV or XLSX. Nothing is saved until you confirm.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,

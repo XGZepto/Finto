@@ -101,6 +101,7 @@ class ScreenshotTest {
         LoginScreen(
             state = LoginUiState(server = "finto.zepto.page", identifier = "owner"),
             onServerChange = {}, onIdentifierChange = {}, onPasswordChange = {}, onSubmit = {}, onDemo = {},
+            animateEntrance = false,
         )
     }
 

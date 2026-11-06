@@ -115,7 +115,7 @@ private fun SummaryContent(
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
         item(key = "hero") {
             state.hero?.let { HeroCard(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
-                ?: MessageState(Icons.Outlined.ReceiptLong, "No spending yet", "Import a statement to see where your money goes.")
+                ?: MessageState(Icons.Outlined.ReceiptLong, "No spending this month", "")
         }
         if (state.stale.isNotEmpty()) {
             item(key = "stale") { StaleCard(state.stale.map { it.displayName }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
@@ -160,7 +160,7 @@ private fun SummaryContent(
         }
         if (state.ranked.isEmpty()) {
             item(key = "where-empty") {
-                MessageState(Icons.Outlined.Inventory2, "Nothing to rank", "No spending in this period.")
+                MessageState(Icons.Outlined.Inventory2, "No spending in this period", "")
             }
         }
         itemsIndexed(state.ranked.take(10), key = { _, bucket -> "bucket-${bucket.bucket}" }) { index, bucket ->

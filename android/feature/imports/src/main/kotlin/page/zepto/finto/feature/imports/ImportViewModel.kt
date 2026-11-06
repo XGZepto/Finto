@@ -17,6 +17,7 @@ import page.zepto.finto.core.data.repository.StagedFile
 import page.zepto.finto.core.data.suspendRunCatching
 import page.zepto.finto.core.model.ImportFormat
 import page.zepto.finto.core.model.ImportResult
+import page.zepto.finto.core.model.ReconcileSummary
 import page.zepto.finto.core.model.StagePreview
 import javax.inject.Inject
 
@@ -31,7 +32,11 @@ sealed interface ImportStep {
     data class Previewing(val file: StagedFile) : ImportStep
     data class Ready(val file: StagedFile, val preview: StagePreview) : ImportStep
     data class Importing(val file: StagedFile, val preview: StagePreview) : ImportStep
-    data class Done(val preview: StagePreview, val result: ImportResult) : ImportStep
+    data class Done(
+        val preview: StagePreview,
+        val result: ImportResult,
+        val reconcile: ReconcileSummary? = null,
+    ) : ImportStep
     data class Failed(val message: String, val preview: StagePreview? = null) : ImportStep
 }
 
@@ -91,9 +96,9 @@ class ImportViewModel @Inject constructor(
         mutableState.update { it.copy(step = ImportStep.Importing(ready.file, ready.preview)) }
         viewModelScope.launch {
             suspendRunCatching { imports.confirm(ready.file, ready.preview.sha256) }
-                .onSuccess { result ->
+                .onSuccess { response ->
                     imports.discard(ready.file)
-                    mutableState.update { it.copy(step = ImportStep.Done(ready.preview, result)) }
+                    mutableState.update { it.copy(step = ImportStep.Done(ready.preview, response.result, response.reconcile)) }
                 }
                 .onFailure { error ->
                     imports.discard(ready.file)

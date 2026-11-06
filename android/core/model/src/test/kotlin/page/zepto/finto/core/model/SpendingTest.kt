@@ -31,3 +31,29 @@ class SpendingTest {
         assertEquals("Card payment", Labels.kind("cc_payment"))
     }
 }
+
+class DrillTest {
+    @Test
+    fun entityDimensionsBecomeListFilters() {
+        val scope = LedgerFilter(from = "2026-01-01", spendingOnly = true)
+        assertEquals(listOf("dining"), Drill.into("category", "dining", scope).categories)
+        assertEquals("2026-01-01", Drill.into("category", "dining", scope).from)
+        assertEquals(listOf("amex"), Drill.into("account", "amex").accounts)
+        assertEquals(listOf("subscription"), Drill.into("tag", "subscription").tags)
+    }
+
+    @Test
+    fun monthsBecomeRangesAndMerchantsBecomeSearch() {
+        val month = Drill.into("month", "2026-02", LedgerFilter(months = listOf("2026-01")))
+        assertEquals("2026-02-01" to "2026-02-28", month.from to month.to)
+        assertTrue(month.months.isEmpty())
+        assertEquals("Adobe", Drill.into("merchant", "Adobe").query)
+    }
+
+    @Test
+    fun filterTravelsAsJson() {
+        val filter = LedgerFilter(accounts = listOf("a"), spendingOnly = true, query = "café")
+        val decoded = FintoJson.decodeFromString(LedgerFilter.serializer(), FintoJson.encodeToString(LedgerFilter.serializer(), filter))
+        assertEquals(filter, decoded)
+    }
+}

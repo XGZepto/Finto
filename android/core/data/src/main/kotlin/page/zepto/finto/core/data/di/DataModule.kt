@@ -15,7 +15,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import page.zepto.finto.core.data.ApplicationScope
 import page.zepto.finto.core.data.IoDispatcher
+import page.zepto.finto.core.data.repository.AdminRepository
+import page.zepto.finto.core.data.repository.AskRepository
 import page.zepto.finto.core.data.repository.DataStoreSettingsRepository
+import page.zepto.finto.core.data.repository.InvestmentsRepository
+import page.zepto.finto.core.data.repository.NetworkAdminRepository
+import page.zepto.finto.core.data.repository.NetworkAskRepository
+import page.zepto.finto.core.data.repository.NetworkInvestmentsRepository
+import page.zepto.finto.core.data.repository.NetworkReviewRepository
+import page.zepto.finto.core.data.repository.ReviewRepository
 import page.zepto.finto.core.data.repository.DefaultSessionRepository
 import page.zepto.finto.core.data.repository.ImportRepository
 import page.zepto.finto.core.data.repository.LedgerRepository
@@ -40,6 +48,18 @@ internal abstract class DataBindings {
 
     @Binds
     abstract fun imports(impl: NetworkImportRepository): ImportRepository
+
+    @Binds
+    abstract fun review(impl: NetworkReviewRepository): ReviewRepository
+
+    @Binds
+    abstract fun investments(impl: NetworkInvestmentsRepository): InvestmentsRepository
+
+    @Binds
+    abstract fun ask(impl: NetworkAskRepository): AskRepository
+
+    @Binds
+    abstract fun admin(impl: NetworkAdminRepository): AdminRepository
 }
 
 @Module

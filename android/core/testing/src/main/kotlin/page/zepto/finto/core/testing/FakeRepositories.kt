@@ -17,7 +17,10 @@ import page.zepto.finto.core.data.repository.ThemeMode
 import page.zepto.finto.core.model.ImportCapabilities
 import page.zepto.finto.core.model.ImportResult
 import page.zepto.finto.core.model.StagePreview
+import page.zepto.finto.core.data.ReadPolicy
 import page.zepto.finto.core.model.Account
+import page.zepto.finto.core.model.ConfirmResponse
+import page.zepto.finto.core.model.TransactionChanges
 import page.zepto.finto.core.model.LedgerFilter
 import page.zepto.finto.core.model.PositionsResponse
 import page.zepto.finto.core.model.StatementFreshness
@@ -62,18 +65,25 @@ class FakeLedgerRepository(
     var positions = PositionsResponse()
     var freshness = StatementFreshness(asOf = "2026-11-05")
 
-    override suspend fun summary(groupBy: String, filter: LedgerFilter, convertTo: String?): SummaryResponse {
+    override suspend fun summary(groupBy: String, filter: LedgerFilter, convertTo: String?, policy: ReadPolicy): SummaryResponse {
         summaryCalls += Triple(groupBy, filter, convertTo)
         return summaries(groupBy, filter, convertTo)
     }
 
-    override suspend fun positions(convertTo: String?) = positions
-    override suspend fun accounts() = accounts
-    override suspend fun statementFreshness() = freshness
+    val edits = mutableListOf<Pair<String, TransactionChanges>>()
+
+    override suspend fun positions(convertTo: String?, policy: ReadPolicy) = positions
+    override suspend fun accounts(policy: ReadPolicy) = accounts
+    override suspend fun statementFreshness(policy: ReadPolicy) = freshness
     override suspend fun transaction(id: String) = transactions.first { it.id == id }
 
-    override suspend fun transactionsPage(filter: LedgerFilter, limit: Int, offset: Int) =
+    override suspend fun transactionsPage(filter: LedgerFilter, limit: Int, offset: Int, convertTo: String?, policy: ReadPolicy) =
         TxnPage(total = transactions.size, limit = limit, offset = offset, items = transactions.drop(offset).take(limit))
+
+    override suspend fun editTransaction(id: String, changes: TransactionChanges): Txn {
+        edits += id to changes
+        return transaction(id)
+    }
 
     override fun transactions(filter: LedgerFilter): Flow<PagingData<Txn>> = flowOf(PagingData.from(transactions))
 }
@@ -107,9 +117,9 @@ class FakeImportRepository(
         return preview
     }
 
-    override suspend fun confirm(file: StagedFile, sha256: String): ImportResult {
+    override suspend fun confirm(file: StagedFile, sha256: String): ConfirmResponse {
         confirmed += sha256
-        return result
+        return ConfirmResponse(result)
     }
 
     override suspend fun discard(file: StagedFile) {
