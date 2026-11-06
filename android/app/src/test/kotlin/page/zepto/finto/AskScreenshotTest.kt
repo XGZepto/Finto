@@ -12,7 +12,13 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import page.zepto.finto.core.model.AskStep
+import page.zepto.finto.core.model.ChangeFields
+import page.zepto.finto.core.model.ChangeProposal
+import page.zepto.finto.core.model.ChangeSample
+import page.zepto.finto.core.model.ChangeSet
+import page.zepto.finto.core.model.CurrencyAmount
 import page.zepto.finto.core.model.Money
+import page.zepto.finto.core.model.SpendingChange
 import page.zepto.finto.core.model.QueryResult
 import page.zepto.finto.core.model.SummaryRow
 import page.zepto.finto.core.model.TotalRow
@@ -59,6 +65,12 @@ class AskScreenshotTest {
     @Test
     fun error() = capture("ask-error", state = AskUiState(turns = listOf(AskSample.dining, AskSample.failed)))
 
+    @Test
+    fun proposal() = capture("ask-proposal", state = AskUiState(turns = listOf(AskSample.fix)))
+
+    @Test
+    fun proposalApplied() = capture("ask-proposal-applied", dark = true, state = AskUiState(turns = listOf(AskSample.fixed)))
+
     @Composable
     private fun Ask(state: AskUiState) = AskScreen(
         state = state,
@@ -68,6 +80,38 @@ class AskScreenshotTest {
 
 private object AskSample {
     val names = mapOf("amex_hk_main" to "AMEX Platinum", "hsbc_hk_current" to "HSBC Current")
+
+    private val wrong = ChangeFields(kind = "purchase", category = "fees")
+    private val right = ChangeFields(kind = "cc_payment", category = "transfers", subcategory = "card_payment")
+
+    private val cardPayments = ChangeProposal(
+        id = "c1",
+        title = "Mark 13 HSBC card bill payments as card payments",
+        set = ChangeSet(kind = "cc_payment", category = "transfers", subcategory = "card_payment"),
+        rows = 13,
+        totals = listOf(CurrencyAmount("HKD", -11_401_460)),
+        spending = listOf(SpendingChange("HKD", -11_401_460)),
+        sample = listOf(
+            ChangeSample("t1", "2026-11-01", "HSBC CREDIT CARDS", "mox_credit", "Mox Credit", Money(-2_839_194, "HKD"), wrong, right),
+            ChangeSample("t2", "2026-10-20", "HSBC CREDIT CARDS", "mox_credit", "Mox Credit", Money(-160_216, "HKD"), wrong, right),
+            ChangeSample("t3", "2026-10-02", "HSBC CREDIT CARDS", "mox_credit", "Mox Credit", Money(-1_510_000, "HKD"), wrong, right),
+        ),
+    )
+
+    val fix = AskTurn(
+        id = 7,
+        question = "Can you fix these? I think they are card bill payments",
+        state = TurnState.Done,
+        steps = listOf(
+            AskStep(id = "s1", name = "search_transactions", state = "done", label = "Finding rows · “HSBC Credit Cards”"),
+            AskStep(id = "s2", name = "propose_changes", state = "done", label = "Preparing a change · Mark 13 HSBC card bill payments as card payments"),
+        ),
+        text = "These 13 \"HSBC Credit Cards\" rows on Mox Credit are card bill payments. Applying the change takes **HKD 114,014.60** out of spending.",
+        data = QueryResult(ok = true, proposals = listOf(cardPayments)),
+        seconds = 9.2,
+    )
+
+    val fixed = fix.copy(data = QueryResult(ok = true, proposals = listOf(cardPayments.copy(status = "applied", applied = 13, skipped = 0))))
 
     private fun money(amount: Long, currency: String = "HKD") = Money(amount, currency)
 

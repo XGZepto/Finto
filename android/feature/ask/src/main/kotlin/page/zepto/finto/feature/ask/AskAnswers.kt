@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
+import page.zepto.finto.core.model.ChangeProposal
 import page.zepto.finto.core.model.AskStep
 import page.zepto.finto.core.model.DisplayDates
 import page.zepto.finto.core.model.Labels
@@ -49,7 +50,30 @@ object AskAnswers {
         rows = next.rows ?: base.rows,
         transactions = next.transactions ?: base.transactions,
         filter = next.filter ?: base.filter,
+        proposals = mergeProposals(base.proposals, next.proposals),
     )
+
+    private fun stage(status: String) = when (status) {
+        "proposed" -> 0
+        "undone" -> 2
+        else -> 1
+    }
+
+    /**
+     * Proposals arrive one per streamed step and again with the finished answer;
+     * keep each once. A copy never moves a proposal back: one applied while the
+     * answer was still streaming stays applied when the final copy says "proposed".
+     */
+    fun mergeProposals(current: List<ChangeProposal>?, incoming: List<ChangeProposal>?): List<ChangeProposal>? {
+        if (incoming.isNullOrEmpty()) return current
+        val byId = LinkedHashMap<String, ChangeProposal>()
+        current.orEmpty().forEach { byId[it.id] = it }
+        incoming.forEach { p ->
+            val held = byId[p.id]
+            if (held == null || stage(p.status) >= stage(held.status)) byId[p.id] = p
+        }
+        return byId.values.toList()
+    }
 
     /** A step replaces the one with its id, in place, or joins the end. */
     fun upsert(steps: List<AskStep>, step: AskStep): List<AskStep> {

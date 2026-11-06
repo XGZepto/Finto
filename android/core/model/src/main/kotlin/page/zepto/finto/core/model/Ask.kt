@@ -30,6 +30,73 @@ data class QueryResult(
     val rows: List<SummaryRow>? = null,
     val transactions: TxnPage? = null,
     val filter: JsonObject? = null,
+    /** Corrections Ask proposed; nothing changes until the user applies one. */
+    val proposals: List<ChangeProposal>? = null,
+)
+
+/** The fields a correction reads and writes on one row. */
+@Serializable
+data class ChangeFields(
+    val kind: String = "",
+    val category: String? = null,
+    val subcategory: String? = null,
+    val merchant: String? = null,
+    val reviewState: String = "unreviewed",
+    val tags: List<String> = emptyList(),
+)
+
+/** What a proposal sets; absent fields are left alone. */
+@Serializable
+data class ChangeSet(
+    val kind: String? = null,
+    val category: String? = null,
+    val subcategory: String? = null,
+    val merchant: String? = null,
+    val reviewState: String? = null,
+)
+
+/** A signed change to spending (a positive outflow) in one currency. */
+@Serializable
+data class SpendingChange(val currency: String, val change: Long)
+
+@Serializable
+data class ChangeSample(
+    val id: String,
+    val date: String,
+    val description: String = "",
+    val accountId: String = "",
+    val accountName: String = "",
+    val amount: Money,
+    val before: ChangeFields,
+    val after: ChangeFields,
+)
+
+/**
+ * A ledger correction Ask proposed. It snapshots the rows it matched; applying
+ * it is the user's own edit, and undo puts back what it replaced.
+ */
+@Serializable
+data class ChangeProposal(
+    val id: String,
+    /** `proposed`, `applied`, `dismissed` or `undone`. */
+    val status: String = "proposed",
+    val title: String = "",
+    val set: ChangeSet = ChangeSet(),
+    val addTags: List<String> = emptyList(),
+    val removeTags: List<String> = emptyList(),
+    /** Rows the change alters, and rows that already matched it. */
+    val rows: Int = 0,
+    val unchanged: Int = 0,
+    val totals: List<CurrencyAmount> = emptyList(),
+    val spending: List<SpendingChange> = emptyList(),
+    val sample: List<ChangeSample> = emptyList(),
+    val applied: Int? = null,
+    val skipped: Int? = null,
+    val restored: Int? = null,
+    val createdAt: String = "",
+    val appliedAt: String? = null,
+    val undoneAt: String? = null,
+    val dismissedAt: String? = null,
 )
 
 /** A tool the answer is using, shown as a step while it runs. */

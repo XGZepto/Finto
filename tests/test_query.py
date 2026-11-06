@@ -222,7 +222,7 @@ def test_agent_answer_uses_allowlisted_sql_tool(seeded):
         "SELECT output,prompt_version FROM llm_decision WHERE task='query'"
     ).fetchone()
     assert "Dining spend was USD 134.00" in audit["output"]
-    assert audit["prompt_version"] == "agent-v4"
+    assert audit["prompt_version"] == "agent-v5"
 
     repeated = answer_question(
         seeded, provider, "How much did I spend on dining?",

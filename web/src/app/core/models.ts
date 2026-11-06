@@ -392,6 +392,48 @@ export interface QueryResult {
   totals?: TotalRow[];
   rows?: SummaryRow[];
   transactions?: Page<Txn>;
+  /** Corrections Ask proposed; nothing changes until the user applies one. */
+  proposals?: ChangeProposal[];
+}
+
+/** The fields a correction reads and writes on one row. */
+export interface ChangeFields {
+  kind: string;
+  category: string | null;
+  subcategory: string | null;
+  merchant: string | null;
+  review_state: string;
+  tags: string[];
+}
+
+/**
+ * A ledger correction Ask proposed. It snapshots the rows it matched; applying
+ * it is the user's own edit, and undo puts back what it replaced.
+ */
+export interface ChangeProposal {
+  id: string;
+  status: 'proposed' | 'applied' | 'dismissed' | 'undone';
+  title: string;
+  set: Partial<Pick<ChangeFields, 'kind' | 'category' | 'subcategory' | 'merchant' | 'review_state'>>;
+  add_tags: string[];
+  remove_tags: string[];
+  /** Rows the change would alter, and rows that already matched it. */
+  rows: number;
+  unchanged: number;
+  totals: Array<{ currency: string; amount: number }>;
+  /** Signed change to spending (a positive outflow) per currency. */
+  spending: Array<{ currency: string; change: number }>;
+  sample: Array<{
+    id: string; date: string; description: string; account_id: string; account_name: string;
+    amount: Money; before: ChangeFields; after: ChangeFields;
+  }>;
+  applied?: number | null;
+  skipped?: number | null;
+  restored?: number | null;
+  created_at: string;
+  applied_at?: string | null;
+  undone_at?: string | null;
+  dismissed_at?: string | null;
 }
 
 

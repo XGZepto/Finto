@@ -15,6 +15,7 @@ import page.zepto.finto.core.model.ApiKeyRequest
 import page.zepto.finto.core.model.AskEvent
 import page.zepto.finto.core.model.AskRequest
 import page.zepto.finto.core.model.AskTurnContext
+import page.zepto.finto.core.model.ChangeProposal
 import page.zepto.finto.core.model.ImportHistory
 import page.zepto.finto.core.model.ImportReview
 import page.zepto.finto.core.model.InvestmentActivity
@@ -88,12 +89,27 @@ internal class NetworkInvestmentsRepository @Inject constructor(
 /** Questions to the ledger, answered from its own tools and streamed as they run. */
 interface AskRepository {
     fun ask(question: String, history: List<AskTurnContext>): Flow<AskEvent>
+
+    /** Applies a correction Ask proposed, as the signed-in user's own edit. */
+    suspend fun applyChange(id: String): ChangeProposal = error("read-only")
+
+    suspend fun undoChange(id: String): ChangeProposal = error("read-only")
+
+    suspend fun dismissChange(id: String): ChangeProposal = error("read-only")
 }
 
 @Singleton
 internal class NetworkAskRepository @Inject constructor(
     private val api: FintoApi,
+    private val cache: NetworkCache,
 ) : AskRepository {
+    // Applying or undoing changes figures every screen shows; drop cached reads.
+    override suspend fun applyChange(id: String) = api.applyChange(id).also { cache.clear() }
+
+    override suspend fun undoChange(id: String) = api.undoChange(id).also { cache.clear() }
+
+    override suspend fun dismissChange(id: String) = api.dismissChange(id)
+
     override fun ask(question: String, history: List<AskTurnContext>): Flow<AskEvent> = flow {
         val request = AskRequest(question, history.takeLast(MAX_HISTORY).map { it.copy(answer = it.answer.take(MAX_ANSWER)) })
         var started = false

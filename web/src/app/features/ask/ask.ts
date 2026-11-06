@@ -1,14 +1,16 @@
 import { Component, ElementRef, NgZone, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { Observable } from 'rxjs';
 import { Api } from '../../core/api.service';
 import { StreamEvent, streamAsk } from '../../core/ask-stream';
 import { describeFilter, filterToParams } from '../../core/filter-state';
 import { Haptics } from '../../core/haptics';
 import { MoneyPipe, ShortDatePipe } from '../../core/money.pipe';
-import { LedgerFilter, QueryResult, SummaryRow } from '../../core/models';
+import { ChangeProposal, LedgerFilter, QueryResult, SummaryRow } from '../../core/models';
 import { Bar, FintoBars } from '../../shared/finto-bars';
 import { AnswerBlock, parseAnswerMarkdown } from './answer-format';
+import { describeChange, describeRowChange, mergeProposals } from './proposal-format';
 
 function requestError(error: any): string {
   const body = error?.error;
@@ -78,6 +80,9 @@ export class AskPage {
   /** A broad query can group into hundreds of buckets; lead with the movers. */
   readonly rowCap = 8;
   expanded = signal<Set<number>>(new Set());
+  /** Proposals with a request in flight, and the last error for each. */
+  changeBusy = signal<Set<string>>(new Set());
+  changeErrors = signal<Record<string, string>>({});
 
   ask(text?: string): void {
     const q = (text ?? this.question()).trim();
@@ -144,7 +149,10 @@ export class AskPage {
         });
         break;
       case 'data':
-        this.patch(id, (t) => ({ ...t, data: { ...t.data, ...data } }));
+        this.patch(id, (t) => ({
+          ...t,
+          data: { ...t.data, ...data, proposals: mergeProposals(t.data.proposals, data.proposals) },
+        }));
         break;
       case 'text':
         this.patch(id, (t) => ({ ...t, text: t.text + (data.delta ?? '') }));
@@ -165,7 +173,9 @@ export class AskPage {
       state: failed ? 'error' : 'done',
       error: failed ? (result?.error ?? error ?? 'Ask could not finish.') : undefined,
       text: result?.ok ? (result.answer ?? t.text) : t.text,
-      data: result?.ok ? { ...t.data, ...result } : t.data,
+      data: result?.ok
+        ? { ...t.data, ...result, proposals: mergeProposals(t.data.proposals, result.proposals) }
+        : t.data,
       steps: t.steps.map((s) => s.state === 'running' ? { ...s, state: 'done' } : s),
       seconds: (Date.now() - t.startedAt) / 1000,
     }));
@@ -277,6 +287,59 @@ export class AskPage {
       .filter((s) => s.total > 0)
       .sort((a, b) => b.total - a.total)
       .slice(0, 3);
+  }
+
+  // --- Proposed corrections -------------------------------------------------
+
+  readonly describeChange = describeChange;
+  readonly describeRowChange = describeRowChange;
+
+  busy(p: ChangeProposal): boolean {
+    return this.changeBusy().has(p.id);
+  }
+
+  changeError(p: ChangeProposal): string | undefined {
+    return this.changeErrors()[p.id];
+  }
+
+  /** Apply the change as the user's own edit; the figures elsewhere reload. */
+  applyChange(turn: Turn, p: ChangeProposal): void {
+    this.act(turn, p, this.api.applyChange(p.id), 'success');
+  }
+
+  undoChange(turn: Turn, p: ChangeProposal): void {
+    this.act(turn, p, this.api.undoChange(p.id), 'success');
+  }
+
+  dismissChange(turn: Turn, p: ChangeProposal): void {
+    this.act(turn, p, this.api.dismissChange(p.id), 'selection');
+  }
+
+  private act(turn: Turn, p: ChangeProposal, request: Observable<ChangeProposal>, haptic: 'success' | 'selection'): void {
+    if (this.busy(p)) return;
+    this.changeBusy.update((set) => new Set(set).add(p.id));
+    this.changeErrors.update((errors) => ({ ...errors, [p.id]: '' }));
+    const settle = () => this.changeBusy.update((set) => {
+      const next = new Set(set);
+      next.delete(p.id);
+      return next;
+    });
+    request.subscribe({
+      next: (updated) => {
+        settle();
+        this.patch(turn.id, (t) => ({
+          ...t,
+          data: { ...t.data, proposals: (t.data.proposals ?? []).map((x) => x.id === updated.id ? updated : x) },
+        }));
+        this.persist();
+        this.haptics.fire(haptic);
+      },
+      error: (error) => {
+        settle();
+        this.changeErrors.update((errors) => ({ ...errors, [p.id]: requestError(error) }));
+        this.haptics.fire('error');
+      },
+    });
   }
 
   stepIcon(step: Step): string {

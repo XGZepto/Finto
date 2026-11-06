@@ -116,8 +116,11 @@ fun AskRoute(
     val haptics = LocalHapticFeedback.current
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
-            if (effect is AskEffect.Finished) {
-                haptics.performHapticFeedback(if (effect.ok) HapticFeedbackType.Confirm else HapticFeedbackType.Reject)
+            when (effect) {
+                is AskEffect.Finished, is AskEffect.ChangeSettled -> {
+                    val ok = (effect as? AskEffect.Finished)?.ok ?: (effect as AskEffect.ChangeSettled).ok
+                    haptics.performHapticFeedback(if (ok) HapticFeedbackType.Confirm else HapticFeedbackType.Reject)
+                }
             }
         }
     }
@@ -129,8 +132,20 @@ fun AskRoute(
         onNewConversation = viewModel::newConversation,
         onToggleRows = viewModel::toggleRows,
         onOpenLedger = onOpenLedger,
+        changes = ChangeActions(
+            onApply = viewModel::applyChange,
+            onUndo = viewModel::undoChange,
+            onDismiss = viewModel::dismissChange,
+        ),
     )
 }
+
+/** What a proposed correction's buttons do, by turn and proposal id. */
+data class ChangeActions(
+    val onApply: (turnId: Long, changeId: String) -> Unit = { _, _ -> },
+    val onUndo: (turnId: Long, changeId: String) -> Unit = { _, _ -> },
+    val onDismiss: (turnId: Long, changeId: String) -> Unit = { _, _ -> },
+)
 
 @Composable
 fun AskScreen(
@@ -141,6 +156,7 @@ fun AskScreen(
     onNewConversation: () -> Unit,
     onToggleRows: (turnId: Long) -> Unit,
     onOpenLedger: OpenLedger,
+    changes: ChangeActions = ChangeActions(),
 ) {
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
@@ -160,7 +176,7 @@ fun AskScreen(
         if (state.turns.isEmpty()) {
             Examples(onAsk, Modifier.padding(padding))
         } else {
-            ThreadList(state, onAsk, onToggleRows, onOpenLedger, Modifier.padding(padding))
+            ThreadList(state, onAsk, onToggleRows, onOpenLedger, changes, Modifier.padding(padding))
         }
     }
 }
@@ -207,6 +223,7 @@ private fun ThreadList(
     onAsk: (String) -> Boolean,
     onToggleRows: (Long) -> Unit,
     onOpenLedger: OpenLedger,
+    changes: ChangeActions,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -230,6 +247,9 @@ private fun ThreadList(
                 onAsk = onAsk,
                 onToggleRows = { onToggleRows(turn.id) },
                 onOpenLedger = onOpenLedger,
+                changeBusy = state.changeBusy,
+                changeErrors = state.changeErrors,
+                changes = changes,
                 modifier = Modifier.animateItem(),
             )
         }
@@ -245,6 +265,9 @@ private fun TurnView(
     onAsk: (String) -> Boolean,
     onToggleRows: () -> Unit,
     onOpenLedger: OpenLedger,
+    changeBusy: Set<String> = emptySet(),
+    changeErrors: Map<String, String> = emptyMap(),
+    changes: ChangeActions = ChangeActions(),
     modifier: Modifier = Modifier,
 ) {
     val data = turn.data
@@ -261,6 +284,20 @@ private fun TurnView(
 
         if (turn.state == TurnState.Error) {
             ErrorBanner(turn.error.orEmpty(), enabled = !asking, onRetry = { onAsk(turn.question) })
+        }
+
+        data.proposals.orEmpty().forEach { proposal ->
+            Appear {
+                ProposalCard(
+                    proposal = proposal,
+                    busy = proposal.id in changeBusy,
+                    error = changeErrors[proposal.id],
+                    onApply = { changes.onApply(turn.id, proposal.id) },
+                    onUndo = { changes.onUndo(turn.id, proposal.id) },
+                    onDismiss = { changes.onDismiss(turn.id, proposal.id) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
 
         data.totals?.takeIf { it.isNotEmpty() }?.let { Appear { Totals(it) } }

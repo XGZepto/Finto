@@ -5,7 +5,7 @@ import {
   Account, Card, CategorySuggestion, ImportReview, CompleteThrough, Composition, Coverage, Facets, Flows,
   ImportCapabilities, InstallmentPlan, InvestmentActivity, InvestmentDetail,
   InvestmentHistory, InvestmentSnapshot, Job, MpfBundlePreview, MpfImportResult,
-  LedgerFilter, Money, Page, Position, QueryResult, ReviewCandidate, StagePreview, StatementFreshness, SummaryRow,
+  ChangeProposal, LedgerFilter, Money, Page, Position, QueryResult, ReviewCandidate, StagePreview, StatementFreshness, SummaryRow,
   TotalRow, Txn,
 } from './models';
 import { ReadCache } from './read-cache';
@@ -360,6 +360,21 @@ addTag(id: string, tag: string): Observable<Txn> {
   installment(id: string): Observable<InstallmentPlan> {
     return this.cached<InstallmentPlan>(
       `${this.base}/installments/${id}`, this.computedTtl);
+  }
+
+  /** Apply a correction Ask proposed, as the signed-in user's own edit. */
+  applyChange(id: string): Observable<ChangeProposal> {
+    return this.http.post<ChangeProposal>(`${this.base}/changes/${id}/apply`, {})
+      .pipe(tap(() => this.invalidateReads()));
+  }
+
+  undoChange(id: string): Observable<ChangeProposal> {
+    return this.http.post<ChangeProposal>(`${this.base}/changes/${id}/undo`, {})
+      .pipe(tap(() => this.invalidateReads()));
+  }
+
+  dismissChange(id: string): Observable<ChangeProposal> {
+    return this.http.post<ChangeProposal>(`${this.base}/changes/${id}/dismiss`, {});
   }
 
   ask(question: string, convertTo?: string): Observable<QueryResult> {
