@@ -12,9 +12,9 @@ data object ReportsDestination
 data object TimelineDestination
 
 fun NavGraphBuilder.reportsScreen(onOpenLedger: OpenLedger) {
-    composable<ReportsDestination> { Placeholder("Reports", onBack = null) }
+    composable<ReportsDestination> { ReportsRoute(onOpenLedger = onOpenLedger) }
 }
 
 fun NavGraphBuilder.timelineScreen(onBack: () -> Unit, onOpenLedger: OpenLedger) {
-    composable<TimelineDestination> { Placeholder("Timeline", onBack = onBack) }
+    composable<TimelineDestination> { TimelineRoute(onBack = onBack, onOpenLedger = onOpenLedger) }
 }
