@@ -23,9 +23,11 @@ import page.zepto.finto.feature.health.IntegrityDestination
 import page.zepto.finto.feature.health.ReviewDestination
 import page.zepto.finto.feature.imports.ImportDestination
 import page.zepto.finto.feature.investments.InvestmentsDestination
+import page.zepto.finto.feature.investments.MpfImportDestination
 import page.zepto.finto.feature.recurring.InstallmentDestination
 import page.zepto.finto.feature.recurring.InstallmentsDestination
 import page.zepto.finto.feature.recurring.RecurringDestination
+import page.zepto.finto.feature.recurring.RecurringItemDestination
 import page.zepto.finto.feature.reports.ReportsDestination
 import page.zepto.finto.feature.reports.TimelineDestination
 import page.zepto.finto.feature.settings.SettingsDestination
@@ -68,11 +70,13 @@ enum class TopLevelDestination(
         Icons.Filled.MoreHoriz,
         children = setOf(
             RecurringDestination::class,
+            RecurringItemDestination::class,
             AskDestination::class,
             ImportDestination::class,
             InstallmentsDestination::class,
             InstallmentDestination::class,
             InvestmentsDestination::class,
+            MpfImportDestination::class,
             ReviewDestination::class,
             IntegrityDestination::class,
             TimelineDestination::class,

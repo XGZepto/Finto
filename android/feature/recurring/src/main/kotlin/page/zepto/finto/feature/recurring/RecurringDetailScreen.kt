@@ -56,6 +56,7 @@ import page.zepto.finto.core.model.Txn
 fun RecurringDetailRoute(
     onBack: () -> Unit,
     onOpenLedger: OpenLedger,
+    onOpenTransaction: (LedgerFilter, String?, String) -> Unit = { filter, title, _ -> onOpenLedger(filter, title) },
     viewModel: RecurringDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -64,7 +65,7 @@ fun RecurringDetailRoute(
         onBack = onBack,
         onRefresh = viewModel::refresh,
         onOpenInBlotter = { commitment -> onOpenLedger(blotterFilter(commitment), commitment.merchant) },
-        onOpenCharge = { txn -> onOpenLedger(chargeFilter(txn), txn.title) },
+        onOpenCharge = { txn -> onOpenTransaction(chargeFilter(txn), txn.title, txn.id) },
         onNoticeShown = viewModel::noticeShown,
     )
 }

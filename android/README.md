@@ -4,32 +4,55 @@ A native Android client for the Finto ledger, written in Kotlin with Jetpack
 Compose and Material 3. It talks to the same FastAPI server as the web app,
 signs in with the same accounts, and shows the same figures.
 
-| Summary | Activity | Accounts | Import |
+| Summary | Activity | Reports | Accounts |
 | --- | --- | --- | --- |
-| ![Summary](docs/screenshots/summary-dark.png) | ![Activity](docs/screenshots/activity-light.png) | ![Accounts](docs/screenshots/accounts.png) | ![Import](docs/screenshots/import-preview.png) |
+| ![Summary](docs/screenshots/summary-dark.png) | ![Activity](docs/screenshots/activity-light.png) | ![Reports](docs/screenshots/reports-light.png) | ![Accounts](docs/screenshots/accounts.png) |
+
+| Account | Transaction | Ask | Matching suggestions |
+| --- | --- | --- | --- |
+| ![Account](docs/screenshots/account-detail.png) | ![Transaction](docs/screenshots/transaction-detail.png) | ![Ask](docs/screenshots/ask-finished.png) | ![Matching suggestions](docs/screenshots/review-transfers.png) |
 
 ## What it does
 
-- **Summary**: spending this month against the same days of the month
-  before, anchored on the last day the ledger actually reaches, as on the web.
-  Income and savings rate, overdue statements, a monthly in/out chart, and
-  spending ranked by category in your reporting currency. Tap a category to
-  open its transactions.
-- **Activity**: the blotter, paged and grouped by day, with search, an
-  account filter and a spending-only filter. Tap a row for its details:
-  card, category, foreign amount and rate, tags, notes, the statement's own
-  facts and the file it came from.
-- **Accounts**: net worth in the reporting currency, then each account and
-  currency with its balance and where that balance comes from (a printed
-  statement, a valuation, or the running total of imported rows).
-- **Import**: pick a PDF or CSV, or share one to Finto from a bank's app,
-  Files or Gmail. The server previews it (parser, period, totals, checks
-  against the ledger, the analysis model's verdict, the first rows) and
-  nothing is written until you confirm.
-- **Settings**: reporting currency (saved to your account), light, dark or
-  system theme, Material You dynamic colour, sign out.
+Everything the web app does, laid out the same way: Summary, Activity,
+Reports and Accounts in the navigation bar, and the rest under More,
+grouped as on the web.
 
-Reports, review queues, investments and Ask stay in the web app for now.
+- **Summary**: spending this month against the same days of the month
+  before, anchored on the last day the ledger reaches; In, Net and Saved;
+  overdue statements; monthly cash flow; spending split by any dimension, in
+  any reporting currency. Every figure opens the rows behind it.
+- **Activity**: the blotter, paged and grouped by day, with search and
+  filters. A row's details show every fact from the statement and each one
+  opens the rows that share it. Edit the category (with the model's
+  suggestion), merchant, notes, tags and review state; long-press a row to
+  categorise it straight away.
+- **Reports**: In, Out, Net and Saved for 1M to YTD against the prior
+  period, a monthly chart with its average, months you can select, and where
+  the money went, split by category, merchant, tag, cardholder and more.
+- **Accounts**: net worth as of the last day every statement covers, and
+  today's; assets and liabilities; a net-worth line; products grouped by
+  balance group. Each account has its own page: balances, whether
+  statements are expected (watch, close, reopen), money flow, monthly
+  outflow, cards, cardholders, transfers and recent activity.
+- **More**
+  - Money: **Recurring** (subscriptions by cadence, what is committed each
+    month, instalment plans) and **Ask** (questions in plain language,
+    answered as the ledger's tools run, with figures, charts and rows).
+  - Ledger: **Import** (preview, confirm, the post-import review, history,
+    maintenance; share a statement to Finto from any app), **Instalments**
+    (plans and their schedules) and **Investments** (valuations, holdings,
+    contributions, MPF statement import).
+  - Ledger health: **Matching suggestions** (duplicates, transfers and
+    instalment runs to accept or reject), **Integrity** (balance checks and
+    structural violations) and **Timeline** (spending composition by month,
+    statement coverage).
+  - **Settings**: reporting currency, theme, language (English or
+    Traditional Chinese, as the web translates), dynamic colour, API keys,
+    sign out.
+
+Reads are answered from the HTTP cache first and then from the server, so
+screens open with the last figures at once and refresh behind them.
 
 ## Architecture
 
@@ -46,11 +69,16 @@ core/data/              Repositories, Paging source, DataStore settings, error m
 core/designsystem/      Material 3 theme (dynamic colour + Finto palette), shared components
 core/testing/           Fakes and rules for unit tests
 feature/auth/           Sign-in, including the public demo
-feature/summary/        Summary screen
-feature/transactions/   Activity (blotter) and transaction details
-feature/accounts/       Accounts and net worth
-feature/imports/        Statement preview and import
-feature/settings/       Settings
+feature/summary/        Summary
+feature/transactions/   Activity (blotter), transaction details and editing
+feature/reports/        Reports and Timeline
+feature/accounts/       Accounts, net worth, account and product pages
+feature/recurring/      Recurring and Instalments
+feature/investments/    Investments and MPF import
+feature/health/         Matching suggestions and Integrity
+feature/ask/            Ask
+feature/imports/        Statement import, review, history and maintenance
+feature/settings/       Settings and API keys
 build-logic/            Gradle convention plugins shared by every module
 ```
 
@@ -87,7 +115,15 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The debug build installs as `page.zepto.finto.debug`, beside a release build.
-To try it without an account, tap **Explore the demo** on the sign-in screen.
+To try it without an account, tap **Try the demo** on the sign-in screen.
+
+Debug builds are slow by design (no R8, debuggable Compose). To judge real
+speed, install the `preview` build: release code signed with the debug key,
+installed as `page.zepto.finto.preview`.
+
+```bash
+./gradlew assemblePreview
+```
 
 To use a local server, run the API from the repository root and sign in to
 `http://10.0.2.2:8000` from the emulator:
@@ -134,5 +170,5 @@ APK is left unsigned. No key material belongs in the repository.
   ```
 
 CI (`.github/workflows/android.yml`) runs the build, unit tests, lint and
-screenshots when `android/` changes. It uploads the debug APK and the
-screenshots as workflow artifacts.
+screenshots when `android/` changes. It uploads the debug and preview APKs
+and the screenshots as workflow artifacts.

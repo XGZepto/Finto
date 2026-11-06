@@ -120,6 +120,7 @@ object AskAnswers {
             includeTransfers = flag("includeTransfers"),
             includeDuplicates = flag("includeDuplicates"),
             uncategorisedOnly = flag("uncategorisedOnly"),
+            installmentsOnly = flag("installmentsOnly"),
             minAmount = number("minAmount"),
             maxAmount = number("maxAmount"),
         )

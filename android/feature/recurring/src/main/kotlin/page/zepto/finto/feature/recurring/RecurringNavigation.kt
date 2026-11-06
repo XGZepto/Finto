@@ -4,6 +4,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import kotlinx.serialization.Serializable
+import page.zepto.finto.core.model.LedgerFilter
 import page.zepto.finto.core.model.OpenLedger
 
 @Serializable
@@ -20,7 +21,12 @@ data class InstallmentDestination(val id: String)
 data class RecurringItemDestination(val key: String)
 
 /** Recurring charges, instalment plans and a plan's schedule. */
-fun NavGraphBuilder.recurringScreens(navController: NavController, onOpenLedger: OpenLedger) {
+fun NavGraphBuilder.recurringScreens(
+    navController: NavController,
+    onOpenLedger: OpenLedger,
+    /** Opens the blotter on [filter] with one row's details showing. */
+    onOpenTransaction: (filter: LedgerFilter, title: String?, id: String) -> Unit = { filter, title, _ -> onOpenLedger(filter, title) },
+) {
     composable<RecurringDestination> {
         RecurringRoute(
             onBack = navController::popBackStack,
@@ -30,7 +36,7 @@ fun NavGraphBuilder.recurringScreens(navController: NavController, onOpenLedger:
         )
     }
     composable<RecurringItemDestination> {
-        RecurringDetailRoute(onBack = navController::popBackStack, onOpenLedger = onOpenLedger)
+        RecurringDetailRoute(onBack = navController::popBackStack, onOpenLedger = onOpenLedger, onOpenTransaction = onOpenTransaction)
     }
     composable<InstallmentsDestination> {
         InstallmentsRoute(
@@ -39,6 +45,6 @@ fun NavGraphBuilder.recurringScreens(navController: NavController, onOpenLedger:
         )
     }
     composable<InstallmentDestination> {
-        InstallmentDetailRoute(onBack = navController::popBackStack, onOpenLedger = onOpenLedger)
+        InstallmentDetailRoute(onBack = navController::popBackStack, onOpenLedger = onOpenLedger, onOpenTransaction = onOpenTransaction)
     }
 }

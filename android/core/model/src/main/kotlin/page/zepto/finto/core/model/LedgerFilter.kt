@@ -31,6 +31,8 @@ data class LedgerFilter(
     val includeTransfers: Boolean = false,
     val includeDuplicates: Boolean = false,
     val uncategorisedOnly: Boolean = false,
+    /** Only rows that belong to an instalment plan. */
+    val installmentsOnly: Boolean = false,
     val minAmount: Long? = null,
     val maxAmount: Long? = null,
 ) {
@@ -44,6 +46,7 @@ data class LedgerFilter(
         if (includeTransfers) put("includeTransfers", "true")
         if (includeDuplicates) put("includeDuplicates", "true")
         if (uncategorisedOnly) put("uncategorisedOnly", "true")
+        if (installmentsOnly) put("installmentsOnly", "true")
         minAmount?.let { put("minAmount", it.toString()) }
         maxAmount?.let { put("maxAmount", it.toString()) }
     }

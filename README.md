@@ -28,8 +28,9 @@ is regenerated daily and whenever the seed code changes on `main`.
 - PostgreSQL row-level security with viewer, editor, and owner account roles
 - Password sessions and revocable per-user API keys
 - Installable PWA with desktop and mobile layouts
-- Native Android app (Kotlin, Jetpack Compose, Material 3) for the summary,
-  transactions, accounts, statement import and settings
+- Native Android app (Kotlin, Jetpack Compose, Material 3) with the web
+  app's features: summary, blotter and editing, reports, accounts, recurring,
+  Ask, import, instalments, investments, ledger health and settings
 - Read-only LLM analysis with allowlisted ledger tools and prompt caching
 - Vercel deployment in the Tokyo region
 

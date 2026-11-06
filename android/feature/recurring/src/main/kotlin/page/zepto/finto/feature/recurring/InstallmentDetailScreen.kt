@@ -66,6 +66,7 @@ import page.zepto.finto.core.model.OpenLedger
 fun InstallmentDetailRoute(
     onBack: () -> Unit,
     onOpenLedger: OpenLedger,
+    onOpenTransaction: (LedgerFilter, String?, String) -> Unit = { filter, title, _ -> onOpenLedger(filter, title) },
     viewModel: InstallmentDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -73,7 +74,10 @@ fun InstallmentDetailRoute(
         state = state,
         onBack = onBack,
         onRefresh = viewModel::refresh,
-        onOpenCharge = { plan, row -> onOpenLedger(scheduleFilter(plan, row), plan.title) },
+        onOpenCharge = { plan, row ->
+            val id = row.txnId
+            if (id != null) onOpenTransaction(scheduleFilter(plan, row), plan.title, id) else onOpenLedger(scheduleFilter(plan, row), plan.title)
+        },
         onNoticeShown = viewModel::noticeShown,
     )
 }

@@ -160,7 +160,7 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
                 onOpenMatching = { navController.navigate(ReviewDestination) { launchSingleTop = true } },
             )
             settingsScreen(appVersion = appVersion, onBack = navController::popBackStack)
-            recurringScreens(navController, onOpenLedger = openLedger)
+            recurringScreens(navController, onOpenLedger = openLedger, onOpenTransaction = openTransaction)
             investmentsScreens(navController)
             healthScreens(navController, onOpenLedger = openLedger, onOpenAccount = openAccount)
             timelineScreen(onBack = navController::popBackStack, onOpenLedger = openLedger)
