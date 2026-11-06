@@ -119,7 +119,8 @@ def _rows(conn, ids: list[str]) -> list[dict[str, Any]]:
     found = conn.execute(
         "SELECT t.id, t.txn_date, t.description_raw, t.merchant, t.kind, t.category, "
         "t.subcategory, t.review_state, t.amount_booked, t.currency_booked, t.account_id, "
-        "a.display_name AS account_name "
+        "a.display_name AS account_name, a.user_id AS owner, "
+        "finto_txn_access(t.id, 'editor') AS editable "
         "FROM txn t JOIN account a ON a.id=t.account_id WHERE t.id = ANY(%s)",
         (ids,),
     ).fetchall()
@@ -295,6 +296,7 @@ def _annotations(conn, txn_id: str) -> dict[str, Any]:
 
 
 def _write_fields(conn, txn_id: str, values: dict[str, Any], *, owner: str) -> None:
+    """Write fields; a named merchant joins the account owner's merchant list, as the blotter does."""
     if not values:
         return
     sets = ", ".join(f"{field}=%s" for field in values)
@@ -315,21 +317,21 @@ def apply(conn, change_id: str) -> dict[str, Any]:
     record = _load(conn, change_id)
     if record["status"] != "proposed":
         raise ChangeError(f"this change is {record['status']}")
-    owner = current_user(conn)
     now = _now()
     entries = [entry for entry in record["rows"] if entry["changes"]]
     current = {row["id"]: row for row in _rows(conn, [entry["id"] for entry in entries])}
     applied, skipped = [], []
     for entry in entries:
         row = current.get(entry["id"])
-        # Changed since it was proposed (or gone): leave it to the person.
-        if row is None or _before(row) != entry["before"]:
+        # Changed since it was proposed, gone, or only shared for viewing:
+        # leave it to the person.
+        if row is None or not row["editable"] or _before(row) != entry["before"]:
             skipped.append(entry["id"])
             continue
         before, after = entry["before"], entry["after"]
         entry["annotations"] = _annotations(conn, entry["id"])
         values = {field: after[field] for field in FIELDS if after[field] != before[field]}
-        _write_fields(conn, entry["id"], values, owner=owner)
+        _write_fields(conn, entry["id"], values, owner=row["owner"])
         for field in ANNOTATED:
             if field in values:
                 conn.execute(
@@ -359,20 +361,19 @@ def undo(conn, change_id: str) -> dict[str, Any]:
     record = _load(conn, change_id)
     if record["status"] != "applied":
         raise ChangeError(f"this change is {record['status']}")
-    owner = current_user(conn)
     done = set(record.get("applied_ids") or [])
     entries = [entry for entry in record["rows"] if entry["id"] in done]
     current = {row["id"]: row for row in _rows(conn, [entry["id"] for entry in entries])}
     restored, kept = 0, 0
     for entry in entries:
         row = current.get(entry["id"])
-        # Edited again since: the later edit wins.
-        if row is None or _before(row) != entry["after"]:
+        # Edited again since (or no longer editable): the later state wins.
+        if row is None or not row["editable"] or _before(row) != entry["after"]:
             kept += 1
             continue
         before, after = entry["before"], entry["after"]
         values = {field: before[field] for field in FIELDS if after[field] != before[field]}
-        _write_fields(conn, entry["id"], values, owner=owner)
+        _write_fields(conn, entry["id"], values, owner=row["owner"])
         previous = entry.get("annotations") or {}
         for field in ANNOTATED:
             if field not in values:
