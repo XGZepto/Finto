@@ -7,8 +7,6 @@
 .identity > div:nth-child(2) span { display: block; overflow: hidden; color: var(--fg-3); text-overflow: ellipsis; white-space: nowrap; }
 .avatar { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid var(--line-2); color: var(--fg); font: 650 var(--t-lede)/1 var(--sans); }
 .sign-out-action { min-height: 44px; padding-inline: var(--s2); color: var(--neg); font: 550 var(--t-meta)/1 var(--sans); letter-spacing: 0; }
-.setting-row { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 16px; }
-.setting-row p { margin: 4px 0 0; }
 .preference-row { display: grid; grid-template-columns: 1fr minmax(130px, 45%); align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid var(--line); }
 .preference-row label { margin: 0; color: var(--fg-2); }
 .preference-row finto-select { width: 100%; }

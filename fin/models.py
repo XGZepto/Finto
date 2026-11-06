@@ -383,14 +383,6 @@ class Txn(BaseModel):
         ])
         return hashlib.sha256(basis.encode()).hexdigest()[:32]
 
-    @property
-    def is_outflow(self) -> bool:
-        return self.booked.amount < 0
-
-    @property
-    def abs_amount(self) -> int:
-        return abs(self.booked.amount)
-
 
 # ---------------------------------------------------------------------------
 # Transfers

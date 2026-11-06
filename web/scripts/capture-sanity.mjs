@@ -36,7 +36,6 @@ const routes = [
   ['instalments', '/installments'],
   ['investments', '/investments'],
   ['matching-suggestions', '/review'],
-  ['integrity', '/integrity'],
   ['ask', '/ask'],
   ['settings', '/profile'],
 ];
@@ -263,15 +262,9 @@ async function captureActions(mode) {
     await shot(mode, 'matching-suggestions-candidate');
   }
 
-  await visit('/integrity');
-  if (await clickText('.seg button', 'All periods')) {
-    await settle();
-    await shot(mode, 'integrity-all-periods');
-  }
-
   await visit('/ask');
   if (await click('.suggestions button')) {
-    await settle('.generated-answer');
+    await settle('.turn[data-state=done]');
     await shot(mode, 'ask-example-ready');
   }
 

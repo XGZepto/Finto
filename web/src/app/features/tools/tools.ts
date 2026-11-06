@@ -89,7 +89,6 @@ export class ToolsPage {
       label: 'Ledger health',
       items: [
         { path: '/review', icon: 'review', name: 'Matching suggestions', note: 'Potential duplicates, transfers and instalments' },
-        { path: '/integrity', icon: 'integrity', name: 'Integrity', note: 'Statement reconciliation and coverage' },
         { path: '/timeline', icon: 'timeline', name: 'Timeline', note: 'Month by month movement' },
       ],
     },

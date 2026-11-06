@@ -2,8 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import {
-  Account, Card, CategorySuggestion, ImportReview, CompleteThrough, Composition, Coverage, DetailKey, DetailValue, Facets, Flows,
-  ImportCapabilities, InstallmentPlan, IntegrityReport, InvestmentActivity, InvestmentDetail,
+  Account, Card, CategorySuggestion, ImportReview, CompleteThrough, Composition, Coverage, Facets, Flows,
+  ImportCapabilities, InstallmentPlan, InvestmentActivity, InvestmentDetail,
   InvestmentHistory, InvestmentSnapshot, Job, MpfBundlePreview, MpfImportResult,
   LedgerFilter, Money, Page, Position, QueryResult, ReviewCandidate, StagePreview, StatementFreshness, SummaryRow,
   TotalRow, Txn,
@@ -197,10 +197,6 @@ addTag(id: string, tag: string): Observable<Txn> {
     return this.cached<any>(`${this.base}/networth-series?${p.toString()}`, this.computedTtl);
   }
 
-  stats(): Observable<any> {
-    return this.cached(`${this.base}/stats`, this.activityTtl);
-  }
-
   facets(): Observable<Facets> {
     return this.cached<Facets>(`${this.base}/facets`, this.referenceTtl);
   }
@@ -281,14 +277,6 @@ addTag(id: string, tag: string): Observable<Txn> {
     return this.http.post<any>(`${this.base}/fx/harvest`, {});
   }
 
-  job(id: string): Observable<Job> {
-    return this.http.get<Job>(`${this.base}/jobs/${id}`).pipe(
-      tap((job) => {
-        if (job.status === 'done') this.invalidateReads();
-      }),
-    );
-  }
-
   // --- Review -------------------------------------------------------------
 
   reviewQueue(queue: 'duplicates' | 'transfers' | 'installments'):
@@ -342,15 +330,6 @@ addTag(id: string, tag: string): Observable<Txn> {
       `${this.base}/investments/history?${p.toString()}`, this.computedTtl);
   }
 
-  detailKeys(): Observable<{ keys: DetailKey[] }> {
-    return this.cached<{ keys: DetailKey[] }>(`${this.base}/details`, this.referenceTtl);
-  }
-
-  detailValues(key: string): Observable<{ key: string; values: DetailValue[] }> {
-    return this.cached<{ key: string; values: DetailValue[] }>(
-      `${this.base}/details/${encodeURIComponent(key)}`, this.computedTtl);
-  }
-
   composition(convertTo: string, dimension: string, f: LedgerFilter = {}): Observable<Composition> {
     const p = filterToParams(f).set('convert_to', convertTo).set('dimension', dimension);
     return this.cached<Composition>(
@@ -367,9 +346,6 @@ addTag(id: string, tag: string): Observable<Txn> {
       `${this.base}/flows${query ? `?${query}` : ''}`, this.computedTtl);
   }
 
-  integrity(): Observable<IntegrityReport> {
-    return this.cached<IntegrityReport>(`${this.base}/integrity`, this.computedTtl);
-  }
 
   installments(activeOnly = false): Observable<{
     plans: InstallmentPlan[];

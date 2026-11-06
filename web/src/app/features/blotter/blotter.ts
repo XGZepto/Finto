@@ -623,15 +623,6 @@ export class BlotterPage implements OnDestroy {
     this.afterClose = null;
   }
 
-  /** Monogram standing in for a merchant logo, which a statement never carries. */
-  initials(txn: Txn): string {
-    const source = (txn.merchant || txn.description || '').trim();
-    const words = source.split(/[\s·|/-]+/).filter(Boolean);
-    if (!words.length) return '—';
-    const letters = words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2);
-    return letters.toUpperCase();
-  }
-
   /** The counterpart legs — everything in the group except this row. */
   otherLegs(txn: Txn) {
     return (txn.transfer_legs ?? []).filter((leg) => leg.id !== txn.id);

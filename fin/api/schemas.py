@@ -105,12 +105,6 @@ class ResolveRequest(BaseModel):
     action: Literal["accept", "reject"]
 
 
-class ImportRequest(BaseModel):
-    institution_id: str | None = None
-    account_id: str | None = None
-    currency: str | None = None
-
-
 class QueryTurn(BaseModel):
     question: str
     answer: str = ""

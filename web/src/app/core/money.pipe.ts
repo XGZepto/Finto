@@ -20,10 +20,6 @@ export function minorExponent(currency: string): number {
   return EXPONENTS[currency?.toUpperCase()] ?? 2;
 }
 
-export function toMajor(money: Money): number {
-  return money.amount / Math.pow(10, minorExponent(money.currency));
-}
-
 @Pipe({ name: 'money', standalone: true })
 export class MoneyPipe implements PipeTransform {
   transform(

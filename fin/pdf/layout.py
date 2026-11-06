@@ -58,9 +58,6 @@ class Column:
     x0: float
     x1: float
 
-    def contains(self, mid: float) -> bool:
-        return self.x0 <= mid < self.x1
-
 
 @dataclass
 class ColumnSet:
@@ -187,14 +184,3 @@ def detect_money_columns(
         left = min(x0 for _, x0 in c)
         out.append((left, right))
     return out
-
-
-def find_line(
-    lines: list[TextLine], pattern: str, *, start: int = 0
-) -> int | None:
-    """Index of the first line matching a regex, or None."""
-    rx = re.compile(pattern, re.IGNORECASE)
-    for i in range(start, len(lines)):
-        if rx.search(lines[i].text):
-            return i
-    return None

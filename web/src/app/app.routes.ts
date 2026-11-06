@@ -75,11 +75,6 @@ export const routes: Routes = [
     title: 'Matching suggestions · Finto',
   },
   {
-    path: 'integrity',
-    loadComponent: () => import('./features/integrity/integrity').then((m) => m.IntegrityPage),
-    title: 'Integrity · Finto',
-  },
-  {
     path: 'ask',
     loadComponent: () => import('./features/ask/ask').then((m) => m.AskPage),
     title: 'Ask · Finto',

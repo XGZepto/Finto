@@ -14,7 +14,6 @@ import { Component, input } from '@angular/core';
         @case ('installments') { <path d="M4 6h16v12H4zM8 10h8M8 14h5" /> }
         @case ('investments') { <path d="M4 18 9 13l3 3 8-10M15 6h5v5" /> }
         @case ('review') { <path d="M5 4h14v16H5zM8 8h8M8 12h5M8 16h3" /> }
-        @case ('integrity') { <path d="m5 12 4 4L19 6M4 4h16v16H4z" /> }
         @case ('ask') { <path d="M9 9a3 3 0 1 1 4 2.83c-.61.27-1 .87-1 1.54V14M12 18h.01M4 4h16v16H4z" /> }
         @case ('settings') { <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12m0-12.72-2.12 2.12M7.76 16.24l-2.12 2.12" /> }
         @case ('more') { <path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3" /> }

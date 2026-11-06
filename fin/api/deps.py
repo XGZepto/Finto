@@ -28,7 +28,7 @@ def get_conn(request: Request):
 
 @contextmanager
 def write_conn(user_id: str):
-    """Connection for background jobs, committing atomically on success."""
+    """Connection for a write request, committing atomically on success."""
     conn = dbm.connect()
     try:
         dbm.apply_acl(conn, user_id)

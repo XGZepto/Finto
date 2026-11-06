@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.40 — 2026-11-06
+
+- Removed the Integrity page. Its checks run in the import review and the
+  agent tools, and `GET /api/integrity` stays for them.
+- Removed the unused job queue (`/api/jobs`), the pre-agent query
+  translator, and components, API client methods, model fields and styles
+  nothing referenced any more.
+
 ## 0.4.39 — 2026-11-05
 
 - Ask streams. Each step shows as it runs ("Breaking down by month ·

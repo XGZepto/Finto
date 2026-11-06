@@ -368,32 +368,6 @@ export interface ImportCapabilities {
   contribution: { guide: string; request: string };
 }
 
-export interface BalanceCheck {
-  account_id: string;
-  account_name?: string;
-  period: string;
-  period_start: string;
-  period_end: string;
-  expected_delta: Money;
-  actual_delta: Money;
-  discrepancy: Money;
-  currency: string;
-  status: string;
-}
-
-export interface IntegrityReport {
-  healthy: boolean;
-  violations: Array<{ check: string; count: number; description: string }>;
-  balance_checks: BalanceCheck[];
-  discrepancies: BalanceCheck[];
-  unverified_accounts: Array<{ account_id: string; display_name: string; txn_count: number }>;
-  summary: {
-    checks_run: number;
-    discrepancy_count: number;
-    violation_count: number;
-    unverified_account_count: number;
-  };
-}
 
 export interface QueryResult {
   ok: boolean;
@@ -420,18 +394,6 @@ export interface QueryResult {
   transactions?: Page<Txn>;
 }
 
-
-/** A fact a parser lifted off a statement, and how often it appears. */
-export interface DetailKey {
-  key: string;
-  facts: number;
-  transactions: number;
-}
-
-export interface DetailValue {
-  value: string;
-  transactions: number;
-}
 
 /**
  * An MPF valuation. These are units, not cash: contributions that left a bank

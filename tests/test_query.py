@@ -14,12 +14,11 @@ import pytest
 from fin.llm.agent import _execute_tool, answer_question
 from fin.llm.provider import (
     AnthropicProvider,
-    EchoProvider,
     LLMProvider,
     LLMResponse,
     build_provider,
 )
-from fin.llm.query import build_context, sanitise, translate
+from fin.llm.query import build_context, sanitise
 from fin.models import Money, Txn
 
 
@@ -49,22 +48,22 @@ def seeded(conn):
     return conn
 
 
-def _provider(answer: dict) -> EchoProvider:
-    return EchoProvider(canned={"Question": answer})
+def _plan(conn, raw: dict) -> dict:
+    """What the agent's tools accept from a model-proposed filter."""
+    return sanitise(raw, build_context(conn))
 
 
 # ---------------------------------------------------------------------------
-# Translation
+# Filter validation
 # ---------------------------------------------------------------------------
 
 def test_question_becomes_a_filter(seeded):
-    provider = _provider({
+    plan = _plan(seeded, {
         "filter": {"from": "2025-04-01", "to": "2025-06-30",
                    "categories": ["dining"], "includeTransfers": False},
         "group_by": "month", "intent": "aggregate", "confidence": 0.9,
         "explanation": "dining spend, April to June",
     })
-    plan = translate(seeded, provider, "how much on dining last quarter?")
     assert plan["ok"]
     assert plan["filter"]["categories"] == ["dining"]
     assert plan["filter"]["from"] == "2025-04-01"
@@ -78,64 +77,64 @@ def test_invented_account_is_dropped(seeded):
     That reads as "you spent nothing" rather than "no such account", so the id
     is discarded instead of queried.
     """
-    plan = translate(seeded, _provider({
+    plan = _plan(seeded, {
         "filter": {"accounts": ["barclays_offshore"]}, "confidence": 0.5,
-    }), "spending at Barclays")
+    })
     assert "accounts" not in plan["filter"]
     assert any("accounts" in d for d in plan["dropped_fields"])
 
 
 def test_invented_category_is_dropped(seeded):
-    plan = translate(seeded, _provider({
+    plan = _plan(seeded, {
         "filter": {"categories": ["cryptocurrency"]}, "confidence": 0.4,
-    }), "crypto spend")
+    })
     assert "categories" not in plan["filter"]
 
 
 def test_real_account_survives(seeded):
-    plan = translate(seeded, _provider({
+    plan = _plan(seeded, {
         "filter": {"accounts": ["amex_us_main"]}, "confidence": 0.9,
-    }), "amex spending")
+    })
     assert plan["filter"]["accounts"] == ["amex_us_main"]
 
 
 def test_unknown_filter_keys_are_stripped(seeded):
-    plan = translate(seeded, _provider({
+    plan = _plan(seeded, {
         "filter": {"categories": ["dining"], "sql": "DROP TABLE txn",
                    "limit": 999999},
-    }), "dining")
+    })
     assert set(plan["filter"]) <= {"categories"}
     assert "sql" in plan["dropped_fields"]
 
 
 def test_invalid_group_by_becomes_none(seeded):
-    plan = translate(seeded, _provider({
+    plan = _plan(seeded, {
         "filter": {}, "group_by": "; DELETE FROM txn",
-    }), "everything")
+    })
     assert plan["group_by"] is None
 
 
 def test_non_integer_amount_is_rejected(seeded):
     """Amounts are integer minor units; a decimal means the model misunderstood."""
-    plan = translate(seeded, _provider({
+    plan = _plan(seeded, {
         "filter": {"minAmount": -123.45},
-    }), "big purchases")
+    })
     assert "minAmount" not in plan["filter"]
 
 
 def test_malformed_date_is_rejected(seeded):
-    plan = translate(seeded, _provider({
+    plan = _plan(seeded, {
         "filter": {"from": "last April"},
-    }), "since April")
+    })
     assert "from" not in plan["filter"]
 
 
 def test_unsupported_question_is_flagged_not_faked(seeded):
-    plan = translate(seeded, _provider({
+    plan = _plan(seeded, {
         "filter": {"categories": ["dining"]},
         "unsupported": "cannot compare two periods in one query",
         "confidence": 0.3,
-    }), "did I spend more on dining this year than last?")
+    })
     assert plan["unsupported"]
     assert plan["filter"]["categories"] == ["dining"]
 
@@ -146,53 +145,17 @@ def test_garbage_output_does_not_crash(seeded):
 
 
 # ---------------------------------------------------------------------------
-# Caching — reproducibility, not just cost
-# ---------------------------------------------------------------------------
-
-def test_identical_questions_reuse_the_cached_plan(seeded):
-    provider = _provider({"filter": {"categories": ["dining"]}, "confidence": 0.9})
-    first = translate(seeded, provider, "dining spend")
-    second = translate(seeded, provider, "dining spend")
-    assert first["cached"] is False
-    assert second["cached"] is True
-    # One model call, not two.
-    assert len(provider.calls) == 1
-    assert first["filter"] == second["filter"]
-
-
-def test_cached_answer_survives_a_model_change(seeded):
-    """A ledger whose numbers move because a model was updated is not a ledger."""
-    first = translate(seeded, _provider({"filter": {"categories": ["dining"]}}),
-                      "dining spend")
-    # A different model returning something else must not change the answer.
-    second = translate(seeded, _provider({"filter": {"categories": ["home"]}}),
-                       "dining spend")
-    assert second["filter"] == first["filter"]
-    assert second["cached"] is True
-
-
-def test_clearing_the_cache_allows_recomputation(seeded):
-    from fin.llm.cache import invalidate
-    translate(seeded, _provider({"filter": {"categories": ["dining"]}}), "q")
-    invalidate(seeded, task="query")
-    seeded.commit()
-    again = translate(seeded, _provider({"filter": {"categories": ["home"]}}), "q")
-    assert again["cached"] is False
-    assert again["filter"]["categories"] == ["home"]
-
-
-# ---------------------------------------------------------------------------
 # The database, not the model, produces the number
 # ---------------------------------------------------------------------------
 
 def test_figures_come_from_sql_not_the_model(seeded):
     """Even when the model asserts a total, the reported figure is computed."""
     from fin.reporting import totals
-    plan = translate(seeded, _provider({
+    plan = _plan(seeded, {
         "filter": {"categories": ["dining"]},
         "total": 999999999,          # a fabricated figure the model volunteered
         "confidence": 0.9,
-    }), "dining spend")
+    })
     assert "total" not in plan["filter"]
 
     computed = totals(seeded, filters=plan["filter"])

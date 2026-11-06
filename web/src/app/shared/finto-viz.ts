@@ -10,59 +10,6 @@ export interface Slice {
 export const SERIES = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)',
                 'var(--c5)', 'var(--c6)', 'var(--c7)', 'var(--c8)'];
 
-/** Composition as one bar. Reads faster than a pie and stacks in a narrow column. */
-@Component({
-  selector: 'finto-share-bar',
-  template: `
-    <div class="share" role="img" [attr.aria-label]="label()">
-      @for (s of shares(); track s.label) {
-        <span [style.width.%]="s.pct" [style.background]="s.colour" [title]="s.title"></span>
-      }
-    </div>
-    @if (legend()) {
-      <div class="legend">
-        @for (s of shares(); track s.label) {
-          <div class="legend-row">
-            <span class="dot" [style.background]="s.colour"></span>
-            <span class="name">{{ s.label }}</span>
-            @if (s.display) { <span class="amount mono">{{ s.display }}</span> }
-            <span class="pct mono">{{ s.pct.toFixed(1) }}%</span>
-          </div>
-        }
-      </div>
-    }
-  `,
-  styles: [`
-    .share { display: flex; height: 8px; width: 100%; overflow: hidden; background: var(--panel-3); }
-    .share span { display: block; height: 100%; transform-origin: left; animation: share-reveal var(--motion) var(--ease-out) both; }
-    @keyframes share-reveal { from { transform: scaleX(0); } }
-    .legend { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s3); }
-    .legend-row { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-data); }
-    .dot { width: 8px; height: 8px; flex: none; }
-    .name { flex: 1; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .amount { font-variant-numeric: tabular-nums; color: var(--fg); }
-    .pct { font-variant-numeric: tabular-nums; color: var(--fg-4); width: 48px; text-align: right; }
-    @media (prefers-reduced-motion: reduce) { .share span { animation: none; } }
-  `],
-})
-export class FintoShareBar {
-  slices = input.required<Slice[]>();
-  label = input('Composition');
-  legend = input(true);
-
-  shares = computed(() => {
-    const rows = this.slices().filter((s) => s.value > 0);
-    const total = rows.reduce((sum, s) => sum + s.value, 0) || 1;
-    return rows.map((s, i) => ({
-      label: s.label,
-      display: s.display,
-      colour: SERIES[i % SERIES.length],
-      pct: (s.value / total) * 100,
-      title: `${s.label} — ${((s.value / total) * 100).toFixed(1)}%`,
-    }));
-  });
-}
-
 /** Share of a whole, when the whole is the point — spending by category or tag. */
 @Component({
   selector: 'finto-donut',
@@ -146,42 +93,5 @@ export class FintoDonut {
       used += len;
       return arc;
     });
-  });
-}
-
-/** Shape of a balance over time, at row scale. No axes — the trend is the point. */
-@Component({
-  selector: 'finto-sparkline',
-  template: `
-    <svg [attr.viewBox]="'0 0 ' + width() + ' ' + height()" role="img" [attr.aria-label]="label()">
-      <polyline class="spark" pathLength="1" [attr.points]="points()" fill="none" stroke="var(--fg-4)" stroke-width="1.5" />
-    </svg>
-  `,
-  styles: [`
-    :host { display: block; }
-    svg { display: block; width: 100%; height: 100%; }
-    .spark { stroke-dasharray: 1000; animation: spark-reveal var(--motion) var(--ease-out) both; }
-    @keyframes spark-reveal { from { stroke-dashoffset: 1000; } }
-    @media (prefers-reduced-motion: reduce) { .spark { animation: none; } }
-  `],
-})
-export class FintoSparkline {
-  values = input.required<number[]>();
-  label = input('Trend');
-  width = input(80);
-  height = input(22);
-
-  points = computed(() => {
-    const v = this.values();
-    if (v.length < 2) return '';
-    const min = Math.min(...v);
-    const max = Math.max(...v);
-    const span = max - min || 1;
-    const stepX = this.width() / (v.length - 1);
-    const pad = 2;
-    const usable = this.height() - pad * 2;
-    return v
-      .map((n, i) => `${(i * stepX).toFixed(1)},${(pad + usable - ((n - min) / span) * usable).toFixed(1)}`)
-      .join(' ');
   });
 }

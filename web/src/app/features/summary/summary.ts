@@ -119,11 +119,6 @@ export class SummaryPage {
       : [],
   );
 
-  rankedTotal = computed(() => ({
-    amount: -this.ranked().reduce((s, b) => s + Math.abs(b.spend.amount), 0),
-    currency: this.convertTo(),
-  }));
-
   /** How far back the cash-flow chart reaches, in months per pill. */
   readonly rangeOptions = ['3M', '6M', '1Y', '2Y'];
   readonly rangeMonths: Record<string, number> = { '3M': 3, '6M': 6, '1Y': 12, '2Y': 24 };
@@ -368,10 +363,6 @@ export class SummaryPage {
       current: { from: isoDate(currentStart), to: isoDate(anchor), spendingOnly: true },
       previous: { from: isoDate(previousStart), to: isoDate(previousEnd), spendingOnly: true },
     };
-  }
-
-  drillAccount(id: string): void {
-    this.filters.drillInto('account', id, this.periodFilter());
   }
 
   setGroupBy(value: string): void {

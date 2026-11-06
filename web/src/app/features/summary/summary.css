@@ -15,8 +15,6 @@
 .hero-change.worse { color: var(--neg); }
 .page-head .currency-select { width: 92px; }
 .flow-controls { display: flex; align-items: center; gap: var(--s2); }
-.hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3); flex-wrap: wrap; }
-.hero-mix { display: flex; flex-direction: column; }
 
 /* Supporting figures stay quiet: one number on this screen is the headline. */
 .hero-stats {
