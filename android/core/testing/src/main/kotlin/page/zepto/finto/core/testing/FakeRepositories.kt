@@ -19,6 +19,15 @@ import page.zepto.finto.core.model.ImportResult
 import page.zepto.finto.core.model.StagePreview
 import page.zepto.finto.core.data.ReadPolicy
 import page.zepto.finto.core.model.Account
+import page.zepto.finto.core.model.Card
+import page.zepto.finto.core.model.Composition
+import page.zepto.finto.core.model.Coverage
+import page.zepto.finto.core.model.Facets
+import page.zepto.finto.core.model.Flows
+import page.zepto.finto.core.model.InstallmentPlan
+import page.zepto.finto.core.model.InstallmentsResponse
+import page.zepto.finto.core.model.IntegrityReport
+import page.zepto.finto.core.model.SuggestionResponse
 import page.zepto.finto.core.model.ConfirmResponse
 import page.zepto.finto.core.model.TransactionChanges
 import page.zepto.finto.core.model.LedgerFilter
@@ -64,6 +73,18 @@ class FakeLedgerRepository(
     var accounts: List<Account> = emptyList()
     var positions = PositionsResponse()
     var freshness = StatementFreshness(asOf = "2026-11-05")
+    var cards: List<Card> = emptyList()
+    var facets = Facets()
+    var flows = Flows()
+    var compositions: (dimension: String) -> Composition = { Composition(it, "HKD") }
+    var coverage = Coverage()
+    var integrity = IntegrityReport()
+    var installments = InstallmentsResponse()
+    var installmentDetails: Map<String, InstallmentPlan> = emptyMap()
+    var suggestion = SuggestionResponse()
+    var failure: Throwable? = null
+    val accountEdits = mutableListOf<Pair<String, String>>()
+    val tagEdits = mutableListOf<Triple<String, String, Boolean>>()
 
     override suspend fun summary(groupBy: String, filter: LedgerFilter, convertTo: String?, policy: ReadPolicy): SummaryResponse {
         summaryCalls += Triple(groupBy, filter, convertTo)
@@ -72,13 +93,50 @@ class FakeLedgerRepository(
 
     val edits = mutableListOf<Pair<String, TransactionChanges>>()
 
-    override suspend fun positions(convertTo: String?, policy: ReadPolicy) = positions
-    override suspend fun accounts(policy: ReadPolicy) = accounts
+    private fun check() = failure?.let { throw it }
+
+    override suspend fun positions(convertTo: String?, policy: ReadPolicy) = positions.also { check() }
+    override suspend fun accounts(policy: ReadPolicy) = accounts.also { check() }
+    override suspend fun cards(policy: ReadPolicy) = cards.also { check() }
+    override suspend fun facets(policy: ReadPolicy) = facets.also { check() }
+    override suspend fun flows(convertTo: String, policy: ReadPolicy) = flows.also { check() }
+    override suspend fun composition(dimension: String, convertTo: String, policy: ReadPolicy) = compositions(dimension).also { check() }
+    override suspend fun coverage(policy: ReadPolicy) = coverage.also { check() }
+    override suspend fun integrity(policy: ReadPolicy) = integrity.also { check() }
+    override suspend fun installments(activeOnly: Boolean, policy: ReadPolicy) = installments.also { check() }
+    override suspend fun installment(id: String) = installmentDetails.getValue(id).also { check() }
     override suspend fun statementFreshness(policy: ReadPolicy) = freshness
     override suspend fun transaction(id: String) = transactions.first { it.id == id }
+    override suspend fun categorySuggestion(id: String) = suggestion
+
+    override suspend fun addTag(id: String, tag: String): Txn {
+        tagEdits += Triple(id, tag, true)
+        return transaction(id)
+    }
+
+    override suspend fun removeTag(id: String, tag: String): Txn {
+        tagEdits += Triple(id, tag, false)
+        return transaction(id)
+    }
+
+    private fun account(id: String) = accounts.first { it.id == id }
+
+    override suspend fun closeAccount(id: String, today: String) = account(id).also { accountEdits += id to "close" }
+    override suspend fun reopenAccount(id: String) = account(id).also { accountEdits += id to "reopen" }
+    override suspend fun watchStatements(id: String, watch: Boolean) =
+        account(id).also { accountEdits += id to if (watch) "watch" else "unwatch" }
+
+    val pageCalls = mutableListOf<LedgerFilter>()
 
     override suspend fun transactionsPage(filter: LedgerFilter, limit: Int, offset: Int, convertTo: String?, policy: ReadPolicy) =
-        TxnPage(total = transactions.size, limit = limit, offset = offset, items = transactions.drop(offset).take(limit))
+        pageFor(filter).let { rows ->
+            pageCalls += filter
+            check()
+            TxnPage(total = rows.size, limit = limit, offset = offset, items = rows.drop(offset).take(limit))
+        }
+
+    /** Rows a page read returns; by default every transaction regardless of the filter. */
+    var pageFor: (LedgerFilter) -> List<Txn> = { transactions }
 
     override suspend fun editTransaction(id: String, changes: TransactionChanges): Txn {
         edits += id to changes

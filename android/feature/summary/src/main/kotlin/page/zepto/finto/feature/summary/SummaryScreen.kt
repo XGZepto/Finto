@@ -57,7 +57,10 @@ import page.zepto.finto.core.designsystem.component.SectionHeader
 import page.zepto.finto.core.designsystem.component.ShareBar
 import page.zepto.finto.core.designsystem.theme.SeriesColors
 import page.zepto.finto.core.model.DisplayDates
+import page.zepto.finto.core.model.Drill
 import page.zepto.finto.core.model.Labels
+import page.zepto.finto.core.model.LedgerFilter
+import page.zepto.finto.core.model.OpenLedger
 import page.zepto.finto.core.model.RankedBucket
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -66,7 +69,7 @@ import kotlin.math.roundToInt
 
 @Composable
 fun SummaryRoute(
-    onOpenCategory: (category: String, label: String, from: String) -> Unit,
+    onOpenLedger: OpenLedger,
     viewModel: SummaryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -74,7 +77,9 @@ fun SummaryRoute(
         state = state,
         onRangeChange = viewModel::setRange,
         onRefresh = viewModel::refresh,
-        onOpenCategory = { bucket -> onOpenCategory(bucket, Labels.humanize(bucket), state.windowStart) },
+        onOpenCategory = { bucket ->
+            onOpenLedger(Drill.into("category", bucket, LedgerFilter(from = state.windowStart, spendingOnly = true)), Labels.humanize(bucket))
+        },
     )
 }
 

@@ -45,6 +45,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import page.zepto.finto.core.designsystem.component.FintoTopBar
+import page.zepto.finto.core.model.LedgerFilter
+import page.zepto.finto.core.model.OpenLedger
 import page.zepto.finto.core.designsystem.component.MoneyText
 import page.zepto.finto.core.designsystem.component.SectionHeader
 import page.zepto.finto.core.designsystem.theme.FintoThemeTokens
@@ -63,7 +66,8 @@ private val STATEMENT_TYPES = arrayOf(
 
 @Composable
 fun ImportRoute(
-    onOpenActivity: () -> Unit,
+    onBack: () -> Unit,
+    onOpenLedger: OpenLedger,
     viewModel: ImportViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -75,7 +79,15 @@ fun ImportRoute(
         onPick = { picker.launch(STATEMENT_TYPES) },
         onConfirm = viewModel::confirm,
         onReset = viewModel::reset,
-        onOpenActivity = onOpenActivity,
+        onOpenActivity = {
+            val done = state.step as? ImportStep.Done
+            val file = done?.result?.statementFileId
+            onOpenLedger(
+                if (file != null) LedgerFilter(statements = listOf(file), includeTransfers = true) else LedgerFilter(),
+                if (file != null) "Imported rows" else null,
+            )
+        },
+        onBack = onBack,
     )
 }
 
@@ -87,8 +99,9 @@ fun ImportScreen(
     onConfirm: () -> Unit,
     onReset: () -> Unit,
     onOpenActivity: () -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
-    Scaffold(topBar = { TopAppBar(title = { Text("Import") }) }) { padding ->
+    Scaffold(topBar = { FintoTopBar("Import", onBack = onBack) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             when (val step = state.step) {
                 ImportStep.Idle -> IdleContent(state.formats, onPick)

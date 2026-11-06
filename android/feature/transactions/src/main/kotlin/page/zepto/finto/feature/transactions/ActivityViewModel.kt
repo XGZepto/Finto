@@ -68,24 +68,28 @@ class ActivityViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val route: ActivityDestination = savedStateHandle.toRoute()
+    private val scope: LedgerFilter = route.scope
 
     private val query = MutableStateFlow("")
-    private val spendingOnly = MutableStateFlow(route.spendingOnly)
-    private val account = MutableStateFlow(route.accountId?.let { AccountChoice(it, route.accountName ?: it) })
+    private val spendingOnly = MutableStateFlow(scope.spendingOnly)
+    private val account = MutableStateFlow<String?>(null)
     private val accounts = MutableStateFlow<List<AccountChoice>>(emptyList())
     private val detailState = MutableStateFlow<DetailState?>(null)
     val detail: StateFlow<DetailState?> = detailState.asStateFlow()
 
+    private val locked = scope.accounts.isNotEmpty()
+
     val state: StateFlow<ActivityUiState> = combine(query, spendingOnly, account, accounts) { q, spending, acct, all ->
+        val shown = if (locked) scope.accounts.singleOrNull() else acct
         ActivityUiState(
-            title = route.categoryLabel ?: route.accountName ?: "Activity",
-            subtitle = route.from?.takeIf { route.category != null }?.let { "Since ${DisplayDates.medium(it)}" },
+            title = route.title ?: "Activity",
+            subtitle = describe(scope),
             scoped = route.isScoped,
             query = q,
             spendingOnly = spending,
-            account = acct,
+            account = shown?.let { id -> all.firstOrNull { it.id == id } ?: AccountChoice(id, id) },
             accounts = all,
-            accountLocked = route.accountId != null,
+            accountLocked = locked,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ActivityUiState(scoped = route.isScoped))
 
@@ -94,11 +98,9 @@ class ActivityViewModel @Inject constructor(
         spendingOnly,
         account,
     ) { q, spending, acct ->
-        LedgerFilter(
-            from = route.from,
-            accounts = listOfNotNull(acct?.id),
-            categories = listOfNotNull(route.category),
-            query = q.trim().ifEmpty { null },
+        scope.copy(
+            accounts = if (locked) scope.accounts else listOfNotNull(acct),
+            query = q.trim().ifEmpty { null } ?: scope.query,
             spendingOnly = spending,
         )
     }.distinctUntilChanged()
@@ -119,7 +121,7 @@ class ActivityViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             suspendRunCatching { ledger.accounts() }.onSuccess { list ->
-                accounts.value = list.filter { it.closedOn == null }.map(Account::toChoice)
+                accounts.value = list.filter { it.closedOn == null || it.id in scope.accounts }.map(Account::toChoice)
             }
         }
     }
@@ -133,7 +135,7 @@ class ActivityViewModel @Inject constructor(
     }
 
     fun onAccountChange(choice: AccountChoice?) {
-        if (route.accountId == null) account.value = choice
+        if (!locked) account.value = choice?.id
     }
 
     fun open(txn: Txn) {
@@ -152,3 +154,13 @@ class ActivityViewModel @Inject constructor(
 }
 
 private fun Account.toChoice() = AccountChoice(id, displayName)
+
+/** The period a scoped blotter covers, for the line under its title. */
+internal fun describe(filter: LedgerFilter): String? = when {
+    filter.months.isNotEmpty() -> filter.months.sorted().joinToString(", ") { DisplayDates.shortMonth(it) }
+    filter.from != null && filter.to != null && filter.from == filter.to -> DisplayDates.medium(filter.from)
+    filter.from != null && filter.to != null -> "${DisplayDates.medium(filter.from)} – ${DisplayDates.medium(filter.to)}"
+    filter.from != null -> "Since ${DisplayDates.medium(filter.from)}"
+    filter.to != null -> "Until ${DisplayDates.medium(filter.to)}"
+    else -> null
+}

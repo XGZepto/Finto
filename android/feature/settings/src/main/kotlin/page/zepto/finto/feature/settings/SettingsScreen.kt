@@ -48,11 +48,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import page.zepto.finto.core.data.repository.ThemeMode
+import page.zepto.finto.core.designsystem.component.FintoTopBar
 import page.zepto.finto.core.designsystem.component.SectionHeader
 
 @Composable
 fun SettingsRoute(
     appVersion: String,
+    onBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -63,6 +65,7 @@ fun SettingsRoute(
         onThemeModeChange = viewModel::setThemeMode,
         onDynamicColorChange = viewModel::setDynamicColor,
         onSignOut = viewModel::signOut,
+        onBack = onBack,
     )
 }
 
@@ -75,12 +78,13 @@ fun SettingsScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onSignOut: () -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
     var pickCurrency by rememberSaveable { mutableStateOf(false) }
     var confirmSignOut by rememberSaveable { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Settings") }) }) { padding ->
+    Scaffold(topBar = { FintoTopBar("Settings", onBack = onBack) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             Row(
                 Modifier.fillMaxWidth().padding(16.dp),

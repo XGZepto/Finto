@@ -7,6 +7,6 @@ import kotlinx.serialization.Serializable
 @Serializable
 data object SettingsDestination
 
-fun NavGraphBuilder.settingsScreen(appVersion: String) {
-    composable<SettingsDestination> { SettingsRoute(appVersion = appVersion) }
+fun NavGraphBuilder.settingsScreen(appVersion: String, onBack: () -> Unit) {
+    composable<SettingsDestination> { SettingsRoute(appVersion = appVersion, onBack = onBack) }
 }

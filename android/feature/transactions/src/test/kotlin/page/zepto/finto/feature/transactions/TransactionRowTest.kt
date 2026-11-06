@@ -8,6 +8,8 @@ import androidx.compose.material.icons.outlined.Savings
 import androidx.compose.material.icons.outlined.ShoppingBag
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import page.zepto.finto.core.model.DisplayDates
+import page.zepto.finto.core.model.LedgerFilter
 import page.zepto.finto.core.testing.TestData
 
 class TransactionRowTest {
@@ -24,6 +26,13 @@ class TransactionRowTest {
     @Test
     fun destinationKnowsWhenItIsScoped() {
         assertEquals(false, ActivityDestination().isScoped)
-        assertEquals(true, ActivityDestination(category = "dining").isScoped)
+        val scoped = ActivityDestination.of(LedgerFilter(categories = listOf("dining"), from = "2026-01-01"), "Dining")
+        assertEquals(true, scoped.isScoped)
+        assertEquals(listOf("dining"), scoped.scope.categories)
+        assertEquals("Since ${DisplayDates.medium("2026-01-01")}", describe(scoped.scope))
+        assertEquals(
+            "${DisplayDates.medium("2026-02-01")} – ${DisplayDates.medium("2026-02-28")}",
+            describe(LedgerFilter(from = "2026-02-01", to = "2026-02-28")),
+        )
     }
 }

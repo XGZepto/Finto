@@ -63,6 +63,11 @@ dependencies {
     implementation(projects.feature.accounts)
     implementation(projects.feature.imports)
     implementation(projects.feature.settings)
+    implementation(projects.feature.reports)
+    implementation(projects.feature.recurring)
+    implementation(projects.feature.investments)
+    implementation(projects.feature.health)
+    implementation(projects.feature.ask)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

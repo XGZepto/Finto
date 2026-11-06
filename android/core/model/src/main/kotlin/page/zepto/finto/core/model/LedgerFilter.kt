@@ -83,3 +83,6 @@ object Drill {
     fun monthToDate(bucket: String, today: LocalDate = LocalDate.now()): Pair<String, String>? =
         monthRange(bucket)?.let { (from, to) -> from to minOf(LocalDate.parse(to), today).toString() }
 }
+
+/** Opens the blotter on [filter], titled [title]: how every feature drills into its rows. */
+typealias OpenLedger = (filter: LedgerFilter, title: String?) -> Unit

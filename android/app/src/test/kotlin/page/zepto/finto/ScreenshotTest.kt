@@ -55,6 +55,7 @@ import page.zepto.finto.feature.transactions.ActivityScreen
 import page.zepto.finto.feature.transactions.ActivityUiState
 import page.zepto.finto.feature.transactions.DetailState
 import page.zepto.finto.feature.transactions.TransactionDetail
+import page.zepto.finto.ui.MoreScreen
 import page.zepto.finto.ui.TopLevelDestination
 import java.time.LocalDate
 import java.time.YearMonth
@@ -71,30 +72,11 @@ class ScreenshotTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun capture(name: String, dark: Boolean = false, tab: TopLevelDestination? = null, content: @Composable () -> Unit) {
-        compose.setContent {
-            FintoTheme(darkTheme = dark, dynamicColor = false) {
-                if (tab == null) {
-                    Surface(Modifier.fillMaxSize()) { content() }
-                } else {
-                    NavigationSuiteScaffold(
-                        navigationSuiteItems = {
-                            TopLevelDestination.entries.forEach { destination ->
-                                item(
-                                    selected = destination == tab,
-                                    onClick = {},
-                                    icon = { Icon(if (destination == tab) destination.selectedIcon else destination.icon, null) },
-                                    label = { Text(destination.label) },
-                                )
-                            }
-                        },
-                    ) { content() }
-                }
-            }
-        }
-        compose.waitForIdle()
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
-    }
+    private fun capture(name: String, dark: Boolean = false, tab: TopLevelDestination? = null, content: @Composable () -> Unit) =
+        compose.captureScreen(name, dark, tab, content)
+
+    @Test
+    fun more() = capture("more", tab = TopLevelDestination.More) { MoreScreen(onOpen = {}) }
 
     @Test
     fun login() = capture("login") {
@@ -128,7 +110,7 @@ class ScreenshotTest {
     }
 
     @Test
-    fun importPreview() = capture("import-preview", tab = TopLevelDestination.Import) {
+    fun importPreview() = capture("import-preview", tab = TopLevelDestination.More) {
         ImportScreen(
             state = ImportUiState(step = ImportStep.Ready(Sample.staged, Sample.preview)),
             onPick = {}, onConfirm = {}, onReset = {}, onOpenActivity = {},
@@ -136,7 +118,7 @@ class ScreenshotTest {
     }
 
     @Test
-    fun settings() = capture("settings", dark = true, tab = TopLevelDestination.Settings) {
+    fun settings() = capture("settings", dark = true, tab = TopLevelDestination.More) {
         SettingsScreen(
             state = SettingsUiState(username = "owner", email = "owner@example.com", server = "finto.zepto.page", currency = "HKD"),
             appVersion = "0.1.0",

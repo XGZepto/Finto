@@ -3,6 +3,7 @@ import com.android.build.api.dsl.LibraryExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.dependencies
+import org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension
 
 /** Compose compiler, the BOM and tooling for an Android application or library module. */
 class AndroidComposeConventionPlugin : Plugin<Project> {
@@ -10,6 +11,10 @@ class AndroidComposeConventionPlugin : Plugin<Project> {
         pluginManager.apply(libs.pluginId("kotlin-compose"))
         extensions.findByType(ApplicationExtension::class.java)?.buildFeatures?.compose = true
         extensions.findByType(LibraryExtension::class.java)?.buildFeatures?.compose = true
+        // Material 3's scroll behaviours and sheets are still marked experimental; every screen uses them.
+        extensions.findByType(KotlinAndroidProjectExtension::class.java)?.compilerOptions?.optIn?.add(
+            "androidx.compose.material3.ExperimentalMaterial3Api",
+        )
         dependencies {
             val bom = platform(libs.lib("androidx-compose-bom"))
             add("implementation", bom)

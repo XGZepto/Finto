@@ -20,7 +20,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -29,7 +28,19 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import page.zepto.finto.core.data.IncomingFiles
 import page.zepto.finto.core.data.repository.SessionState
+import androidx.navigation.compose.composable
+import page.zepto.finto.core.designsystem.theme.FintoMotion
+import page.zepto.finto.core.model.OpenLedger
+import page.zepto.finto.feature.accounts.AccountDetailDestination
+import page.zepto.finto.feature.accounts.accountDetailScreen
 import page.zepto.finto.feature.accounts.accountsScreen
+import page.zepto.finto.feature.ask.askScreens
+import page.zepto.finto.feature.health.healthScreens
+import page.zepto.finto.feature.imports.ImportDestination
+import page.zepto.finto.feature.investments.investmentsScreens
+import page.zepto.finto.feature.recurring.recurringScreens
+import page.zepto.finto.feature.reports.reportsScreen
+import page.zepto.finto.feature.reports.timelineScreen
 import page.zepto.finto.feature.auth.LoginRoute
 import page.zepto.finto.feature.imports.importScreen
 import page.zepto.finto.feature.settings.settingsScreen
@@ -49,8 +60,9 @@ fun FintoApp(session: SessionState, appVersion: String, incomingFiles: IncomingF
 }
 
 /**
- * Five top-level destinations in a bottom bar on phones and a rail on tablets
- * and foldables, chosen by window size.
+ * Five tabs in a bottom bar on phones and a rail on tablets and foldables,
+ * chosen by window size. Switching tabs fades through; drilling in slides
+ * along the shared axis, and back reverses it.
  */
 @Composable
 private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
@@ -61,14 +73,22 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
 
     val incoming by incomingFiles.file.collectAsStateWithLifecycle()
     LaunchedEffect(incoming) {
-        if (incoming != null) navController.navigateToTopLevel(TopLevelDestination.Import)
+        if (incoming != null) {
+            navController.navigateToTopLevel(TopLevelDestination.More)
+            navController.navigate(ImportDestination) { launchSingleTop = true }
+        }
     }
+
+    val openLedger: OpenLedger = { filter, title -> navController.navigate(ActivityDestination.of(filter, title)) }
+    val openAccount: (String) -> Unit = { id -> navController.navigate(AccountDetailDestination(id)) }
 
     NavigationSuiteScaffold(
         layoutType = layoutType,
         navigationSuiteItems = {
             TopLevelDestination.entries.forEach { destination ->
-                val selected = current?.hierarchy?.any { it.hasRoute(destination.routeClass) } == true
+                val selected = current?.hierarchy?.any { destination.owns(it) } == true &&
+                    // A drilled-into blotter belongs to the tab it was opened from, not Activity.
+                    (destination != TopLevelDestination.Activity || backStack?.isTabRoot() == true)
                 item(
                     selected = selected,
                     onClick = { navController.navigateToTopLevel(destination) },
@@ -88,25 +108,37 @@ private fun FintoShell(appVersion: String, incomingFiles: IncomingFiles) {
             navController = navController,
             startDestination = SummaryDestination,
             modifier = Modifier.consumeWindowInsets(consumed),
+            enterTransition = { if (targetState.isTabRoot()) FintoMotion.fadeThroughIn() else FintoMotion.sharedAxisIn(forward = true) },
+            exitTransition = { if (targetState.isTabRoot()) FintoMotion.fadeThroughOut() else FintoMotion.sharedAxisOut(forward = true) },
+            popEnterTransition = { if (initialState.isTabRoot()) FintoMotion.fadeThroughIn() else FintoMotion.sharedAxisIn(forward = false) },
+            popExitTransition = { if (initialState.isTabRoot()) FintoMotion.fadeThroughOut() else FintoMotion.sharedAxisOut(forward = false) },
         ) {
-            summaryScreen(
-                onOpenCategory = { category, label, from ->
-                    navController.navigate(
-                        ActivityDestination(category = category, categoryLabel = label, from = from, spendingOnly = true),
-                    )
-                },
-            )
+            summaryScreen(onOpenLedger = openLedger)
             activityScreen(onBack = navController::popBackStack)
-            accountsScreen(
-                onOpenAccount = { id, name -> navController.navigate(ActivityDestination(accountId = id, accountName = name)) },
+            reportsScreen(onOpenLedger = openLedger)
+            accountsScreen(onOpenAccount = openAccount)
+            accountDetailScreen(onBack = navController::popBackStack, onOpenLedger = openLedger, onOpenAccount = openAccount)
+            composable<MoreDestination> { MoreScreen(onOpen = { route -> navController.navigate(route) { launchSingleTop = true } }) }
+            importScreen(
+                onBack = navController::popBackStack,
+                onOpenLedger = openLedger,
             )
-            importScreen(onOpenActivity = { navController.navigateToTopLevel(TopLevelDestination.Activity) })
-            settingsScreen(appVersion = appVersion)
+            settingsScreen(appVersion = appVersion, onBack = navController::popBackStack)
+            recurringScreens(navController, onOpenLedger = openLedger)
+            investmentsScreens(navController)
+            healthScreens(navController, onOpenLedger = openLedger, onOpenAccount = openAccount)
+            timelineScreen(onBack = navController::popBackStack, onOpenLedger = openLedger)
+            askScreens(navController, onOpenLedger = openLedger)
         }
     }
 }
 
 private fun NavHostController.navigateToTopLevel(destination: TopLevelDestination) {
+    // Tapping the tab you are on returns to its root, as on the web.
+    if (currentBackStackEntry?.let { destination.owns(it.destination) && !it.isTabRoot() } == true) {
+        popBackStack(destination.route, inclusive = false)
+        return
+    }
     navigate(destination.route) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
