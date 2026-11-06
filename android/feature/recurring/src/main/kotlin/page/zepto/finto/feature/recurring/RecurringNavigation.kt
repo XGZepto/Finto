@@ -15,9 +15,30 @@ data object InstallmentsDestination
 @Serializable
 data class InstallmentDestination(val id: String)
 
+/** One recurring merchant, by its normalised name ([Commitment.key]). */
+@Serializable
+data class RecurringItemDestination(val key: String)
+
 /** Recurring charges, instalment plans and a plan's schedule. */
 fun NavGraphBuilder.recurringScreens(navController: NavController, onOpenLedger: OpenLedger) {
-    composable<RecurringDestination> { Placeholder("Recurring", onBack = navController::popBackStack) }
-    composable<InstallmentsDestination> { Placeholder("Instalments", onBack = navController::popBackStack) }
-    composable<InstallmentDestination> { Placeholder("Instalment", onBack = navController::popBackStack) }
+    composable<RecurringDestination> {
+        RecurringRoute(
+            onBack = navController::popBackStack,
+            onOpenCommitment = { key -> navController.navigate(RecurringItemDestination(key)) },
+            onOpenPlan = { id -> navController.navigate(InstallmentDestination(id)) },
+            onOpenPlans = { navController.navigate(InstallmentsDestination) { launchSingleTop = true } },
+        )
+    }
+    composable<RecurringItemDestination> {
+        RecurringDetailRoute(onBack = navController::popBackStack, onOpenLedger = onOpenLedger)
+    }
+    composable<InstallmentsDestination> {
+        InstallmentsRoute(
+            onBack = navController::popBackStack,
+            onOpenPlan = { id -> navController.navigate(InstallmentDestination(id)) },
+        )
+    }
+    composable<InstallmentDestination> {
+        InstallmentDetailRoute(onBack = navController::popBackStack, onOpenLedger = onOpenLedger)
+    }
 }

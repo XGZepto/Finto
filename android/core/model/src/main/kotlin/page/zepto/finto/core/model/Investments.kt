@@ -99,7 +99,11 @@ data class MpfSnapshotPreview(
 )
 
 @Serializable
-data class MpfActivityCount(val count: Int = 0)
+data class MpfActivityCount(
+    val count: Int = 0,
+    /** Activities read per member account. */
+    val byAccount: Map<String, Int> = emptyMap(),
+)
 
 @Serializable
 data class MpfImportResult(
