@@ -1,0 +1,66 @@
+{
+ "as_of": "2026-11-06",
+ "stale_count": 0,
+ "accounts": [
+  {
+   "account_id": "amex_hk_main",
+   "display_name": "AMEX Platinum",
+   "statement_date": null,
+   "latest_activity": "2026-11-22",
+   "expected_on": null,
+   "status": "unknown",
+   "statement_empty": false,
+   "days_overdue": 0
+  },
+  {
+   "account_id": "hsbc_hk_current",
+   "display_name": "HSBC Current",
+   "statement_date": null,
+   "latest_activity": "2026-11-18",
+   "expected_on": null,
+   "status": "unknown",
+   "statement_empty": false,
+   "days_overdue": 0
+  },
+  {
+   "account_id": "hsbc_hk_savings",
+   "display_name": "HSBC Savings",
+   "statement_date": null,
+   "latest_activity": "2026-11-03",
+   "expected_on": null,
+   "status": "unknown",
+   "statement_empty": false,
+   "days_overdue": 0
+  },
+  {
+   "account_id": "mox_main",
+   "display_name": "Mox",
+   "statement_date": null,
+   "latest_activity": "2026-10-27",
+   "expected_on": null,
+   "status": "unknown",
+   "statement_empty": false,
+   "days_overdue": 0
+  },
+  {
+   "account_id": "wise_hkd",
+   "display_name": "Wise HKD",
+   "statement_date": null,
+   "latest_activity": null,
+   "expected_on": null,
+   "status": "unknown",
+   "statement_empty": false,
+   "days_overdue": 0
+  },
+  {
+   "account_id": "wise_usd",
+   "display_name": "Wise USD",
+   "statement_date": null,
+   "latest_activity": null,
+   "expected_on": null,
+   "status": "unknown",
+   "statement_empty": false,
+   "days_overdue": 0
+  }
+ ]
+}

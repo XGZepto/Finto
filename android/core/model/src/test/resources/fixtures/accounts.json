@@ -1,0 +1,94 @@
+{
+ "accounts": [
+  {
+   "id": "hsbc_hk_current",
+   "institution_id": "hsbc_hk",
+   "display_name": "HSBC Current",
+   "account_type": "checking",
+   "primary_currency": "HKD",
+   "settlement_currencies": [
+    "HKD"
+   ],
+   "balance_group": null,
+   "masked_number": null,
+   "opened_on": null,
+   "closed_on": null,
+   "watch_statements": true
+  },
+  {
+   "id": "hsbc_hk_savings",
+   "institution_id": "hsbc_hk",
+   "display_name": "HSBC Savings",
+   "account_type": "savings",
+   "primary_currency": "HKD",
+   "settlement_currencies": [
+    "HKD"
+   ],
+   "balance_group": null,
+   "masked_number": null,
+   "opened_on": null,
+   "closed_on": null,
+   "watch_statements": true
+  },
+  {
+   "id": "wise_hkd",
+   "institution_id": "wise",
+   "display_name": "Wise HKD",
+   "account_type": "multi_currency",
+   "primary_currency": "HKD",
+   "settlement_currencies": [
+    "HKD"
+   ],
+   "balance_group": "wise_personal",
+   "masked_number": null,
+   "opened_on": null,
+   "closed_on": null,
+   "watch_statements": true
+  },
+  {
+   "id": "wise_usd",
+   "institution_id": "wise",
+   "display_name": "Wise USD",
+   "account_type": "multi_currency",
+   "primary_currency": "USD",
+   "settlement_currencies": [
+    "USD"
+   ],
+   "balance_group": "wise_personal",
+   "masked_number": null,
+   "opened_on": null,
+   "closed_on": null,
+   "watch_statements": true
+  },
+  {
+   "id": "amex_hk_main",
+   "institution_id": "amex_hk",
+   "display_name": "AMEX Platinum",
+   "account_type": "credit_card",
+   "primary_currency": "HKD",
+   "settlement_currencies": [
+    "HKD"
+   ],
+   "balance_group": null,
+   "masked_number": null,
+   "opened_on": null,
+   "closed_on": null,
+   "watch_statements": true
+  },
+  {
+   "id": "mox_main",
+   "institution_id": "mox",
+   "display_name": "Mox",
+   "account_type": "checking",
+   "primary_currency": "HKD",
+   "settlement_currencies": [
+    "HKD"
+   ],
+   "balance_group": null,
+   "masked_number": null,
+   "opened_on": null,
+   "closed_on": null,
+   "watch_statements": true
+  }
+ ]
+}

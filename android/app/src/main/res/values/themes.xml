@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws the UI; this only colours the window behind it. -->
+    <style name="Theme.Finto" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+
+    <style name="Theme.Finto.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/finto_ink</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Finto</item>
+    </style>
+</resources>

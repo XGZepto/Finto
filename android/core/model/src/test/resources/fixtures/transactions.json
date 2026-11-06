@@ -1,0 +1,220 @@
+{
+ "total": 1270,
+ "limit": 5,
+ "offset": 0,
+ "items": [
+  {
+   "id": "e42c208a-a681-42f5-aaf8-1e8328664849",
+   "date": "2026-11-22",
+   "posted_date": null,
+   "account_id": "amex_hk_main",
+   "account_name": "AMEX Platinum",
+   "account_currency": "HKD",
+   "institution_id": "amex_hk",
+   "card_id": "amex_primary",
+   "cardholder_name": "ALEX E",
+   "card_last4": "3007",
+   "description": "ADOBE SUBSCRIPTION",
+   "merchant": "Adobe",
+   "counterparty": null,
+   "booked": {
+    "amount": -16800,
+    "currency": "HKD"
+   },
+   "native": null,
+   "fx_rate": null,
+   "fx_fee": null,
+   "kind": "purchase",
+   "category": "subscriptions",
+   "subcategory": "software",
+   "status": "posted",
+   "transfer_group_id": null,
+   "installment_plan_id": null,
+   "installment_seq": null,
+   "refund_of_id": null,
+   "external_ref": null,
+   "review_state": "confirmed",
+   "notes": null,
+   "details": {
+    "reference": "REF426173"
+   },
+   "tags": []
+  },
+  {
+   "id": "340d243b-1cff-40c4-a4a7-1ab77ff8b466",
+   "date": "2026-11-18",
+   "posted_date": null,
+   "account_id": "hsbc_hk_current",
+   "account_name": "HSBC Current",
+   "account_currency": "HKD",
+   "institution_id": "hsbc_hk",
+   "card_id": null,
+   "cardholder_name": null,
+   "card_last4": null,
+   "description": "AMEX AUTOPAY",
+   "merchant": "American Express",
+   "counterparty": null,
+   "booked": {
+    "amount": -1992255,
+    "currency": "HKD"
+   },
+   "native": null,
+   "fx_rate": null,
+   "fx_fee": null,
+   "kind": "cc_payment",
+   "category": null,
+   "subcategory": null,
+   "status": "posted",
+   "transfer_group_id": null,
+   "installment_plan_id": null,
+   "installment_seq": null,
+   "refund_of_id": null,
+   "external_ref": null,
+   "review_state": "unreviewed",
+   "notes": null,
+   "details": {
+    "reference": "REF835020"
+   },
+   "tags": []
+  },
+  {
+   "id": "04fee6be-3948-47ae-8a48-8d130a48da64",
+   "date": "2026-11-12",
+   "posted_date": null,
+   "account_id": "amex_hk_main",
+   "account_name": "AMEX Platinum",
+   "account_currency": "HKD",
+   "institution_id": "amex_hk",
+   "card_id": "amex_primary",
+   "cardholder_name": "ALEX E",
+   "card_last4": "3007",
+   "description": "ICLOUD SUBSCRIPTION",
+   "merchant": "iCloud",
+   "counterparty": null,
+   "booked": {
+    "amount": -2300,
+    "currency": "HKD"
+   },
+   "native": null,
+   "fx_rate": null,
+   "fx_fee": null,
+   "kind": "purchase",
+   "category": "subscriptions",
+   "subcategory": "software",
+   "status": "posted",
+   "transfer_group_id": null,
+   "installment_plan_id": null,
+   "installment_seq": null,
+   "refund_of_id": null,
+   "external_ref": null,
+   "review_state": "confirmed",
+   "notes": null,
+   "details": {
+    "reference": "REF122291"
+   },
+   "tags": []
+  },
+  {
+   "id": "299c0969-3db5-4636-9804-e6224c7ff984",
+   "date": "2026-11-08",
+   "posted_date": null,
+   "account_id": "amex_hk_main",
+   "account_name": "AMEX Platinum",
+   "account_currency": "HKD",
+   "institution_id": "amex_hk",
+   "card_id": "amex_primary",
+   "cardholder_name": "ALEX E",
+   "card_last4": "3007",
+   "description": "GITHUB SUBSCRIPTION",
+   "merchant": "GitHub",
+   "counterparty": null,
+   "booked": {
+    "amount": -3124,
+    "currency": "HKD"
+   },
+   "native": {
+    "amount": -400,
+    "currency": "USD"
+   },
+   "fx_rate": "7.81",
+   "fx_fee": null,
+   "kind": "purchase",
+   "category": "subscriptions",
+   "subcategory": "software",
+   "status": "posted",
+   "transfer_group_id": null,
+   "installment_plan_id": null,
+   "installment_seq": null,
+   "refund_of_id": null,
+   "external_ref": null,
+   "review_state": "confirmed",
+   "notes": null,
+   "details": {
+    "reference": "REF178468"
+   },
+   "tags": []
+  },
+  {
+   "id": "99733ad3-3a0f-49ec-a381-1b7478c86e47",
+   "date": "2026-11-06",
+   "posted_date": null,
+   "account_id": "amex_hk_main",
+   "account_name": "AMEX Platinum",
+   "account_currency": "HKD",
+   "institution_id": "amex_hk",
+   "card_id": "amex_primary",
+   "cardholder_name": "ALEX E",
+   "card_last4": "3007",
+   "description": "HKBN SUBSCRIPTION",
+   "merchant": "HKBN",
+   "counterparty": null,
+   "booked": {
+    "amount": -21800,
+    "currency": "HKD"
+   },
+   "native": null,
+   "fx_rate": null,
+   "fx_fee": null,
+   "kind": "purchase",
+   "category": "utilities",
+   "subcategory": "internet",
+   "status": "posted",
+   "transfer_group_id": null,
+   "installment_plan_id": null,
+   "installment_seq": null,
+   "refund_of_id": null,
+   "external_ref": null,
+   "review_state": "confirmed",
+   "notes": null,
+   "details": {
+    "reference": "REF170538"
+   },
+   "tags": []
+  }
+ ],
+ "totals": [
+  {
+   "currency": "HKD",
+   "txn_count": 1270,
+   "net": {
+    "amount": -49278902,
+    "currency": "HKD"
+   },
+   "spend": {
+    "amount": 193678902,
+    "currency": "HKD"
+   },
+   "income": {
+    "amount": 144400000,
+    "currency": "HKD"
+   },
+   "uncategorised": 71
+  }
+ ],
+ "review": {
+  "total": 1270,
+  "unreviewed": 71,
+  "confirmed": 1199,
+  "flagged": 0
+ }
+}

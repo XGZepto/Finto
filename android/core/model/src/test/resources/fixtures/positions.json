@@ -1,0 +1,324 @@
+{
+ "positions": [
+  {
+   "account_id": "amex_hk_main",
+   "account_name": "AMEX Platinum",
+   "institution_id": "amex_hk",
+   "account_type": "credit_card",
+   "currency": "HKD",
+   "txn_count": 1088,
+   "balance": {
+    "amount": -113132660,
+    "currency": "HKD"
+   },
+   "net": {
+    "amount": -113132660,
+    "currency": "HKD"
+   },
+   "inflow": {
+    "amount": 460151,
+    "currency": "HKD"
+   },
+   "outflow": {
+    "amount": -113592811,
+    "currency": "HKD"
+   },
+   "basis": "movements",
+   "basis_date": "2026-11-22",
+   "covered_through": null,
+   "complete": false,
+   "first_date": "2025-05-03",
+   "last_date": "2026-11-22",
+   "balance_converted": {
+    "amount": -113132660,
+    "currency": "HKD",
+    "source": {
+     "amount": -113132660,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "inflow_converted": {
+    "amount": 460151,
+    "currency": "HKD",
+    "source": {
+     "amount": 460151,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "outflow_converted": {
+    "amount": -113592811,
+    "currency": "HKD",
+    "source": {
+     "amount": -113592811,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "account_id": "hsbc_hk_current",
+   "account_name": "HSBC Current",
+   "institution_id": "hsbc_hk",
+   "account_type": "checking",
+   "currency": "HKD",
+   "txn_count": 76,
+   "balance": {
+    "amount": 49694489,
+    "currency": "HKD"
+   },
+   "net": {
+    "amount": 49694489,
+    "currency": "HKD"
+   },
+   "inflow": {
+    "amount": 129200000,
+    "currency": "HKD"
+   },
+   "outflow": {
+    "amount": -79505511,
+    "currency": "HKD"
+   },
+   "basis": "movements",
+   "basis_date": "2026-11-18",
+   "covered_through": null,
+   "complete": false,
+   "first_date": "2025-05-01",
+   "last_date": "2026-11-18",
+   "balance_converted": {
+    "amount": 49694489,
+    "currency": "HKD",
+    "source": {
+     "amount": 49694489,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "inflow_converted": {
+    "amount": 129200000,
+    "currency": "HKD",
+    "source": {
+     "amount": 129200000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "outflow_converted": {
+    "amount": -79505511,
+    "currency": "HKD",
+    "source": {
+     "amount": -79505511,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "account_id": "hsbc_hk_savings",
+   "account_name": "HSBC Savings",
+   "institution_id": "hsbc_hk",
+   "account_type": "savings",
+   "currency": "HKD",
+   "txn_count": 19,
+   "balance": {
+    "amount": 15200000,
+    "currency": "HKD"
+   },
+   "net": {
+    "amount": 15200000,
+    "currency": "HKD"
+   },
+   "inflow": {
+    "amount": 15200000,
+    "currency": "HKD"
+   },
+   "outflow": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "basis": "movements",
+   "basis_date": "2026-11-03",
+   "covered_through": null,
+   "complete": false,
+   "first_date": "2025-05-03",
+   "last_date": "2026-11-03",
+   "balance_converted": {
+    "amount": 15200000,
+    "currency": "HKD",
+    "source": {
+     "amount": 15200000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "inflow_converted": {
+    "amount": 15200000,
+    "currency": "HKD",
+    "source": {
+     "amount": 15200000,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "outflow_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  },
+  {
+   "account_id": "mox_main",
+   "account_name": "Mox",
+   "institution_id": "mox",
+   "account_type": "checking",
+   "currency": "HKD",
+   "txn_count": 87,
+   "balance": {
+    "amount": -1040731,
+    "currency": "HKD"
+   },
+   "net": {
+    "amount": -1040731,
+    "currency": "HKD"
+   },
+   "inflow": {
+    "amount": 0,
+    "currency": "HKD"
+   },
+   "outflow": {
+    "amount": -1040731,
+    "currency": "HKD"
+   },
+   "basis": "movements",
+   "basis_date": "2026-10-27",
+   "covered_through": null,
+   "complete": false,
+   "first_date": "2025-05-21",
+   "last_date": "2026-10-27",
+   "balance_converted": {
+    "amount": -1040731,
+    "currency": "HKD",
+    "source": {
+     "amount": -1040731,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "inflow_converted": {
+    "amount": 0,
+    "currency": "HKD",
+    "source": {
+     "amount": 0,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   },
+   "outflow_converted": {
+    "amount": -1040731,
+    "currency": "HKD",
+    "source": {
+     "amount": -1040731,
+     "currency": "HKD"
+    },
+    "rate": "1",
+    "rate_date": null,
+    "converted": false,
+    "ok": true
+   }
+  }
+ ],
+ "declared_currencies": {
+  "hsbc_hk_current": [
+   "HKD"
+  ],
+  "hsbc_hk_savings": [
+   "HKD"
+  ],
+  "wise_hkd": [
+   "HKD"
+  ],
+  "amex_hk_main": [
+   "HKD"
+  ],
+  "mox_main": [
+   "HKD"
+  ],
+  "wise_usd": [
+   "USD"
+  ]
+ },
+ "complete_through": null,
+ "conversion": {
+  "to": "HKD",
+  "unconvertible_currencies": []
+ },
+ "normalised": {
+  "to": "HKD",
+  "net_worth": {
+   "amount": -49278902,
+   "currency": "HKD"
+  },
+  "by_type": [
+   {
+    "account_type": "checking",
+    "balance": {
+     "amount": 48653758,
+     "currency": "HKD"
+    }
+   },
+   {
+    "account_type": "credit_card",
+    "balance": {
+     "amount": -113132660,
+     "currency": "HKD"
+    }
+   },
+   {
+    "account_type": "savings",
+    "balance": {
+     "amount": 15200000,
+     "currency": "HKD"
+    }
+   }
+  ],
+  "unconvertible_currencies": []
+ }
+}

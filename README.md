@@ -2,8 +2,8 @@
 
 Finto is a PostgreSQL-backed personal finance ledger for bank, credit-card,
 multi-currency, and investment statements. It includes statement ingestion,
-reconciliation, reporting, account-level access control, and a responsive web
-application.
+reconciliation, reporting, account-level access control, a responsive web
+application, and a native Android app.
 
 No financial data or production credentials are stored in this repository.
 
@@ -28,6 +28,9 @@ is regenerated daily and whenever the seed code changes on `main`.
 - PostgreSQL row-level security with viewer, editor, and owner account roles
 - Password sessions and revocable per-user API keys
 - Installable PWA with desktop and mobile layouts
+- Native Android app (Kotlin, Jetpack Compose, Material 3) with the web
+  app's features: summary, blotter and editing, reports, accounts, recurring,
+  Ask, import, instalments, investments, ledger health and settings
 - Read-only LLM analysis with allowlisted ledger tools and prompt caching
 - Vercel deployment in the Tokyo region
 
@@ -38,14 +41,19 @@ to add or request a format.
 ## Architecture
 
 ```text
-Angular web application
-        │
-        ▼
-FastAPI application
-        │
-        ▼
-PostgreSQL
+Angular web application      Android app
+              │                  │
+              ▼                  ▼
+            FastAPI application
+                     │
+                     ▼
+                PostgreSQL
 ```
+
+This repository holds all three. The Python API and the Angular app deploy
+together to Vercel. The Android app is a separate Gradle project in
+[`android/`](android/README.md) that uses the same HTTP API and session
+cookie, and has its own CI workflow.
 
 Money is stored as integer minor units. Every transaction uses one sign
 convention: negative is money out and positive is money in. Native and booked
@@ -58,6 +66,7 @@ currency and dated FX rates.
 - Node.js 22
 - PostgreSQL 17 or a compatible managed PostgreSQL service
 - `psql` for direct database administration
+- JDK 21 and the Android SDK, only for the Android app
 
 ## Local setup
 
@@ -252,6 +261,10 @@ npm --prefix web test
 npm --prefix web run build
 ```
 
+```bash
+cd android && ./gradlew testDebugUnitTest lintDebug
+```
+
 ## Deployment
 
 The production build is configured by [`vercel.json`](vercel.json). It builds
@@ -295,6 +308,7 @@ fin/pdf/templates/       declarative PDF statement templates
 scripts/                 PostgreSQL and migration utilities
 tests/                   unit, integration, and regression tests
 web/                     Angular application and PWA assets
+android/                 native Android app (Gradle project; see android/README.md)
 accounts.example.yaml    account configuration example
 vercel.json              production build and routing configuration
 ```
