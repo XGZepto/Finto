@@ -57,7 +57,8 @@ import androidx.paging.compose.itemContentType
 import androidx.paging.compose.itemKey
 import page.zepto.finto.core.data.ApiErrors
 import page.zepto.finto.core.designsystem.component.ErrorState
-import page.zepto.finto.core.designsystem.component.LoadingState
+import page.zepto.finto.core.designsystem.component.FintoTopBar
+import page.zepto.finto.core.designsystem.component.ListSkeleton
 import page.zepto.finto.core.designsystem.component.MessageState
 import page.zepto.finto.core.model.DisplayDates
 import page.zepto.finto.core.model.OpenLedger
@@ -81,13 +82,16 @@ fun ActivityRoute(
         onSpendingOnlyChange = viewModel::onSpendingOnlyChange,
         onAccountChange = viewModel::onAccountChange,
         onOpen = { viewModel.open(it.txn) },
+        onCategorise = { viewModel.categorise(it.txn) },
     )
     val editor by viewModel.editor.collectAsStateWithLifecycle()
+    val picking by viewModel.picking.collectAsStateWithLifecycle()
     detail?.let {
         TransactionDetailSheet(
-            it,
-            editor,
-            DetailActions(
+            state = it,
+            editor = editor,
+            startInPicker = picking,
+            actions = DetailActions(
                 onDismiss = viewModel::closeDetail,
                 onOpenLedger = { filter, title ->
                     viewModel.closeDetail()
@@ -125,27 +129,16 @@ fun ActivityScreen(
     onSpendingOnlyChange: (Boolean) -> Unit,
     onAccountChange: (AccountChoice?) -> Unit,
     onOpen: (ActivityItem.Row) -> Unit,
+    onCategorise: (ActivityItem.Row) -> Unit = {},
 ) {
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(state.title)
-                        state.subtitle?.let {
-                            Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                },
-                navigationIcon = {
-                    if (state.scoped) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    }
-                },
+            FintoTopBar(
+                title = state.title,
+                subtitle = state.subtitle,
+                onBack = onBack.takeIf { state.scoped },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -158,7 +151,7 @@ fun ActivityScreen(
                 onRefresh = { items.refresh() },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                ActivityList(items, state, onOpen)
+                ActivityList(items, state, onOpen, onCategorise)
             }
         }
     }
@@ -230,10 +223,11 @@ private fun ActivityList(
     items: LazyPagingItems<ActivityItem>,
     state: ActivityUiState,
     onOpen: (ActivityItem.Row) -> Unit,
+    onCategorise: (ActivityItem.Row) -> Unit,
 ) {
     val refresh = items.loadState.refresh
     when {
-        refresh is LoadState.Loading && items.itemCount == 0 -> LoadingState()
+        refresh is LoadState.Loading && items.itemCount == 0 -> ListSkeleton(rows = 10)
         refresh is LoadState.Error && items.itemCount == 0 ->
             ErrorState(ApiErrors.message(refresh.error), onRetry = { items.retry() })
         refresh is LoadState.NotLoading && items.itemCount == 0 -> MessageState(
@@ -259,7 +253,12 @@ private fun ActivityList(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp).semantics { heading() },
                     )
-                    is ActivityItem.Row -> TransactionRow(item.txn, onClick = { onOpen(item) })
+                    is ActivityItem.Row -> TransactionRow(
+                        item.txn,
+                        onClick = { onOpen(item) },
+                        onLongClick = { onCategorise(item) },
+                        modifier = Modifier.animateItem(),
+                    )
                     null -> Unit
                 }
             }

@@ -92,12 +92,12 @@ data class DetailActions(
 )
 
 @Composable
-fun TransactionDetailSheet(state: DetailState, editor: EditorState, actions: DetailActions) {
+fun TransactionDetailSheet(state: DetailState, editor: EditorState, actions: DetailActions, startInPicker: Boolean = false) {
     ModalBottomSheet(
         onDismissRequest = actions.onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = startInPicker),
     ) {
-        TransactionDetail(state, editor, actions)
+        TransactionDetail(state, editor, actions, startInPicker = startInPicker)
     }
 }
 

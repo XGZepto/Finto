@@ -93,6 +93,10 @@ class ActivityViewModel @Inject constructor(
     private val accounts = MutableStateFlow<List<AccountChoice>>(emptyList())
     private val detailState = MutableStateFlow<DetailState?>(null)
     val detail: StateFlow<DetailState?> = detailState.asStateFlow()
+    private val pickingState = MutableStateFlow(false)
+
+    /** True when the sheet should open on the category picker (a long press on a row). */
+    val picking: StateFlow<Boolean> = pickingState.asStateFlow()
     private val editorState = MutableStateFlow(EditorState())
     val editor: StateFlow<EditorState> = editorState.asStateFlow()
 
@@ -163,7 +167,15 @@ class ActivityViewModel @Inject constructor(
         if (!locked) account.value = choice?.id
     }
 
+    /** Opens a row straight on its category picker, as the web's swipe-to-categorise does. */
+    fun categorise(txn: Txn) {
+        open(txn)
+        pickingState.value = true
+        startCategorising()
+    }
+
     fun open(txn: Txn) {
+        pickingState.value = false
         detailState.value = DetailState.Loading(txn)
         viewModelScope.launch {
             detailState.value = suspendRunCatching { ledger.transaction(txn.id) }.fold(

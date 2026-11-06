@@ -1,7 +1,12 @@
 package page.zepto.finto.feature.transactions
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -41,9 +46,20 @@ import page.zepto.finto.core.model.Labels
 import page.zepto.finto.core.model.Txn
 
 @Composable
-fun TransactionRow(txn: Txn, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun TransactionRow(txn: Txn, onClick: () -> Unit, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null) {
+    val haptics = LocalHapticFeedback.current
     ListItem(
-        modifier = modifier.clickable(onClickLabel = "Show details", onClick = onClick),
+        modifier = modifier.combinedClickable(
+            onClickLabel = "Show details",
+            onClick = onClick,
+            onLongClickLabel = onLongClick?.let { "Categorise" },
+            onLongClick = onLongClick?.let { longClick ->
+                {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    longClick()
+                }
+            },
+        ),
         leadingContent = {
             Box(
                 Modifier
@@ -60,7 +76,19 @@ fun TransactionRow(txn: Txn, onClick: () -> Unit, modifier: Modifier = Modifier)
                 )
             }
         },
-        headlineContent = { Text(txn.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        headlineContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(txn.title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (txn.reviewState == "flagged") {
+                    Icon(
+                        Icons.Outlined.Flag,
+                        contentDescription = "Flagged for review",
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(start = 6.dp).size(16.dp),
+                    )
+                }
+            }
+        },
         supportingContent = {
             Text(
                 listOfNotNull(txn.accountName, txn.category?.let(Labels::humanize) ?: Labels.kind(txn.kind)).joinToString(" · "),
