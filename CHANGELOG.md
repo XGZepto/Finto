@@ -5,11 +5,14 @@
 ## 0.4.42 — 2026-11-07
 
 - A card statement now finds its account by card number. HSBC prints every
-  HK card statement under the same heading, so a new card (an HSBC Red, say)
-  matched no account and the import stopped. Rows now go to the account that
-  holds a card with the printed last four digits, when exactly one does.
+  HK card statement under the same heading, so an HSBC Red statement matched
+  no account and the import stopped even though the account existed. Rows now
+  go to the account whose own masked number (****3757), or a card registered
+  on it, ends in the printed last four digits, when exactly one does.
 - The import preview names the issuer, the cards on the statement and its
   statement date, so a client can offer to add the account.
+- `GET /api/agent/accounts` and `POST /api/agent/accounts` let an API key
+  list accounts and add one for a statement nothing matches.
 - Android: the import preview shows where the rows go and lets you choose
   another account or add one, filled in from the statement (issuer, card
   number, cardholder, currency). Adding a card account registers its number,

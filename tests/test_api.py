@@ -1312,6 +1312,21 @@ def test_chosen_account_takes_a_card_the_ledger_does_not_know(client, tmp_path):
     assert len(rows["items"]) == 2
 
 
+def test_an_account_whose_own_number_matches_takes_the_statement(client, tmp_path):
+    # An account set up with its masked number and no card registry entry,
+    # with an earlier statement filed by hand.
+    created = client.post("/api/accounts", json={
+        "id": "hsbc_red", "institution_id": "hsbc_hk", "display_name": "HSBC Red",
+        "account_type": "credit_card", "primary_currency": "HKD",
+        "masked_number": "****4242",
+    })
+    assert created.status_code == 201
+    path = _card_statement(tmp_path)
+    preview = _post_pdf(client, path).json()
+    account = next(c for c in preview["quality"]["checks"] if c["id"] == "account")
+    assert account["level"] == "ok" and "HSBC Red" in account["title"]
+
+
 def test_a_card_number_on_two_accounts_routes_nowhere(conn):
     from fin.ingest import statement_routes
     from fin.models import Card, Money, ParsedTxn
