@@ -174,6 +174,18 @@ def _preview(
         bucket["in" if t.booked.amount > 0 else "out"] += t.booked.amount
         bucket["rows"] += 1
     preview["totals"] = totals
+    # What a new account for this statement would need: the issuer and the
+    # cards printed on it.
+    cards: dict[str, dict] = {}
+    for t in result.txns:
+        if not t.card_last4:
+            continue
+        card = cards.setdefault(t.card_last4, {"last4": t.card_last4, "holder": None, "rows": 0})
+        card["rows"] += 1
+        card["holder"] = card["holder"] or t.cardholder_hint
+    preview["cards"] = list(cards.values())
+    preview["institution_hint"] = _institution_hint(conn, parser, result)
+    preview["statement_date"] = str(result.statement_date) if result.statement_date else None
     if not result.txns and not result.allow_empty:
         preview["error"] = (
             "Parsed zero transactions. The file is not being recorded, so you "
@@ -190,6 +202,18 @@ def _preview(
         if provider.name != "null":
             preview["agent"] = preflight_verdict(provider, preview)
     return preview
+
+
+def _institution_hint(conn, parser, result) -> str | None:
+    """The issuer a statement belongs to, read from its parser or PDF template."""
+    if parser.institution_id and parser.institution_id != "generic":
+        return parser.institution_id
+    template_id = result.raw_rows[0].get("template_id") if result.raw_rows else None
+    if not template_id:
+        return None
+    from ...pdf.registry import available_templates
+    return next((tpl.institution_id for tpl in available_templates(conn)
+                 if tpl.template_id == template_id), None)
 
 
 @router.post("/imports/preview")

@@ -56,8 +56,7 @@ def _fmt(amount_minor: int, currency: str) -> str:
 def preflight(conn, result, *, parser_id: str, digest: str,
               account_id: str | None, today: date | None = None) -> dict:
     """Deterministic checks of a parse result against the ledger."""
-    from .ingest import statement_content_fingerprint
-    from .models import normalize_alias
+    from .ingest import statement_content_fingerprint, statement_routes
 
     today = today or date.today()
     checks: list[dict] = []
@@ -73,15 +72,12 @@ def preflight(conn, result, *, parser_id: str, digest: str,
             "duplicate_content", "bad", "This statement's content is already imported",
             "Another copy of the same statement is in the ledger, so it will be skipped."))
 
-    # Where the rows land: the chosen account, the parser's, or per-row hints.
+    # Where the rows land: per-row hints and card numbers, then the chosen
+    # account or the parser's.
     accounts = dbm.load_accounts(conn)
-    alias_index = dbm.load_account_alias_index(conn)
     resolved = account_id or result.account_id
-    routed: list[str | None] = []
-    for p in txns:
-        hint = (p.extra or {}).get("account_hint", "")
-        routed.append((alias_index.get(normalize_alias(hint)) if hint else None)
-                      or resolved)
+    routed: list[str | None] = [
+        a or resolved for a in statement_routes(conn, txns)]
     missing = sum(1 for a in routed if not a)
     if txns and missing:
         checks.append(_check(

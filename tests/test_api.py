@@ -1233,3 +1233,93 @@ def test_ask_follow_up_carries_the_earlier_turn(client, monkeypatch):
     })
     assert "dining in October?" in scripted.prompts[-1]
     assert scripted.prompts[-1].rstrip().endswith("and in September?")
+
+
+# ---------------------------------------------------------------------------
+# A card statement for an account the ledger does not have yet
+# ---------------------------------------------------------------------------
+
+def _card_statement(tmp_path, last4="4242"):
+    """A one-page HSBC HK card statement for a card the ledger has never seen."""
+    def row(settled, traded, description, amount):
+        return f"{settled:<10}{traded:<6}{description:<59}{amount:>21}"
+
+    return write_pdf(tmp_path / f"card-{last4}.pdf", [
+        "Statement of HSBC Red Credit Card Account",
+        f"{'':<52}Statement date    Statement balance",
+        f"{'':<52}06 NOV 2026       HKD0.00",
+        "Post date Trans date Description of transaction            Amount (HKD)",
+        f"{'':<16}PREVIOUS BALANCE{'':<59}0.00",
+        f"{'':<16}5555 0000 0000 {last4} ALEX SAMPLE",
+        row("30OCT", "28OCT", "TEST TRAVEL HONG KONG HK", "1,602.16"),
+        row("02NOV", "02NOV", "PPS PAYMENT - THANK YOU", "1,602.16CR"),
+        f"{'':<16}Note: \"CR\" means Credit transaction / balance",
+        f"{'':<16}STATEMENT BALANCE{'':<58}0.00",
+        f"{'':<16}***** TRANSACTION SUMMARY *****",
+    ])
+
+
+def _post_pdf(client, path, endpoint="/api/imports/preview", **data):
+    with path.open("rb") as f:
+        return client.post(endpoint, files={"file": (path.name, f, "application/pdf")},
+                           data=data)
+
+
+def test_card_statement_with_no_account_names_the_issuer_and_card(client, tmp_path):
+    preview = _post_pdf(client, _card_statement(tmp_path)).json()
+    account = next(c for c in preview["quality"]["checks"] if c["id"] == "account")
+    assert account["level"] == "bad"
+    # Enough to file a new account under: the issuer, the card, the date.
+    assert preview["institution_hint"] == "hsbc_hk"
+    assert preview["cards"] == [{"last4": "4242", "holder": "ALEX SAMPLE", "rows": 2}]
+    assert preview["statement_date"] == "2026-11-06"
+
+
+def test_new_card_account_takes_its_statement_by_card_number(client, tmp_path):
+    created = client.post("/api/accounts", json={
+        "id": "hsbc_hk_card_4242", "institution_id": "hsbc_hk",
+        "display_name": "HSBC Red", "account_type": "credit_card",
+        "primary_currency": "HKD", "last4": "4242", "cardholder_name": "ALEX SAMPLE",
+    })
+    assert created.status_code == 201
+
+    path = _card_statement(tmp_path)
+    preview = _post_pdf(client, path).json()
+    account = next(c for c in preview["quality"]["checks"] if c["id"] == "account")
+    assert account["level"] == "ok" and "HSBC Red" in account["title"]
+
+    confirmed = _post_pdf(client, path, "/api/imports/confirm",
+                          expected_sha256=preview["sha256"])
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["import"]["status"] == "imported"
+    rows = client.get("/api/transactions", params={"accounts": ["hsbc_hk_card_4242"]}).json()
+    assert len(rows["items"]) == 2
+
+
+def test_chosen_account_takes_a_card_the_ledger_does_not_know(client, tmp_path):
+    client.post("/api/accounts", json={
+        "id": "hsbc_hk_red", "institution_id": "hsbc_hk", "display_name": "HSBC Red",
+        "account_type": "credit_card", "primary_currency": "HKD",
+    })
+    path = _card_statement(tmp_path, last4="7777")
+    preview = _post_pdf(client, path, account_id="hsbc_hk_red").json()
+    account = next(c for c in preview["quality"]["checks"] if c["id"] == "account")
+    assert account["level"] == "ok" and "HSBC Red" in account["title"]
+    confirmed = _post_pdf(client, path, "/api/imports/confirm",
+                          expected_sha256=preview["sha256"], account_id="hsbc_hk_red")
+    assert confirmed.json()["import"]["status"] == "imported"
+    rows = client.get("/api/transactions", params={"accounts": ["hsbc_hk_red"]}).json()
+    assert len(rows["items"]) == 2
+
+
+def test_a_card_number_on_two_accounts_routes_nowhere(conn):
+    from fin.ingest import statement_routes
+    from fin.models import Card, Money, ParsedTxn
+
+    for account in ("amex_hk_main", "hsbc_hk_current"):
+        dbm.upsert_card(conn, Card(id=f"{account}_4242", account_id=account,
+                                   cardholder_name="ALEX SAMPLE", last4="4242"))
+    row = ParsedTxn(txn_date=datetime(2026, 11, 2).date(), posted_date=None,
+                    booked=Money(amount=-100, currency="HKD"), description_raw="TEST",
+                    card_last4="4242", extra={"account_hint": "HSBC HK card"})
+    assert statement_routes(conn, [row]) == [None]

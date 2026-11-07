@@ -19,6 +19,8 @@ import page.zepto.finto.core.model.ImportResult
 import page.zepto.finto.core.model.StagePreview
 import page.zepto.finto.core.data.ReadPolicy
 import page.zepto.finto.core.model.Account
+import page.zepto.finto.core.model.Institution
+import page.zepto.finto.core.model.NewAccount
 import page.zepto.finto.core.model.Card
 import page.zepto.finto.core.model.Composition
 import page.zepto.finto.core.model.Coverage
@@ -102,6 +104,9 @@ class FakeLedgerRepository(
     var suggestion = SuggestionResponse()
     var failure: Throwable? = null
     val accountEdits = mutableListOf<Pair<String, String>>()
+    var institutions: List<Institution> = emptyList()
+    val createdAccounts = mutableListOf<NewAccount>()
+    var createFailure: Throwable? = null
     val tagEdits = mutableListOf<Triple<String, String, Boolean>>()
 
     override suspend fun summary(groupBy: String, filter: LedgerFilter, convertTo: String?, policy: ReadPolicy): SummaryResponse {
@@ -139,6 +144,20 @@ class FakeLedgerRepository(
     }
 
     private fun account(id: String) = accounts.first { it.id == id }
+
+    override suspend fun institutions(policy: ReadPolicy) = institutions
+
+    override suspend fun createAccount(account: NewAccount): Account {
+        createFailure?.let { throw it }
+        createdAccounts += account
+        return Account(
+            id = account.id,
+            institutionId = account.institutionId,
+            displayName = account.displayName,
+            accountType = account.accountType,
+            primaryCurrency = account.primaryCurrency,
+        ).also { accounts = accounts + it }
+    }
 
     override suspend fun closeAccount(id: String, today: String) = account(id).also { accountEdits += id to "close" }
     override suspend fun reopenAccount(id: String) = account(id).also { accountEdits += id to "reopen" }
@@ -189,13 +208,21 @@ class FakeImportRepository(
     override suspend fun stage(uri: Uri) =
         StagedFile(name = "statement.pdf", sizeBytes = 1024, mimeType = "application/pdf", path = "/tmp/statement.pdf")
 
-    override suspend fun preview(file: StagedFile, review: Boolean): StagePreview {
+    /** The account each preview was asked to file unrouted rows under, in order. */
+    val previewAccounts = mutableListOf<String?>()
+    val confirmedAccounts = mutableListOf<String?>()
+    /** What a preview returns once an account is chosen; [preview] otherwise. */
+    var previewFor: (accountId: String?) -> StagePreview = { preview }
+
+    override suspend fun preview(file: StagedFile, review: Boolean, accountId: String?): StagePreview {
         previewError?.let { throw it }
-        return preview
+        previewAccounts += accountId
+        return previewFor(accountId)
     }
 
-    override suspend fun confirm(file: StagedFile, sha256: String): ConfirmResponse {
+    override suspend fun confirm(file: StagedFile, sha256: String, accountId: String?): ConfirmResponse {
         confirmed += sha256
+        confirmedAccounts += accountId
         return ConfirmResponse(result)
     }
 

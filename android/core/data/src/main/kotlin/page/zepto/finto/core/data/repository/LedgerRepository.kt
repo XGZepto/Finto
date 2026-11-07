@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.Flow
 import page.zepto.finto.core.data.ReadPolicy
 import page.zepto.finto.core.data.paging.TransactionsPagingSource
 import page.zepto.finto.core.model.Account
+import page.zepto.finto.core.model.Institution
+import page.zepto.finto.core.model.NewAccount
+import retrofit2.HttpException
 import page.zepto.finto.core.model.AccountChanges
 import page.zepto.finto.core.model.Card
 import page.zepto.finto.core.model.Composition
@@ -61,6 +64,8 @@ interface LedgerRepository {
     suspend fun addTag(id: String, tag: String): Txn = error("read-only")
     suspend fun removeTag(id: String, tag: String): Txn = error("read-only")
     suspend fun categorySuggestion(id: String): SuggestionResponse = SuggestionResponse()
+    suspend fun institutions(policy: ReadPolicy = ReadPolicy.Default): List<Institution> = emptyList()
+    suspend fun createAccount(account: NewAccount): Account = error("read-only")
     suspend fun closeAccount(id: String, today: String): Account = error("read-only")
     suspend fun reopenAccount(id: String): Account = error("read-only")
     suspend fun watchStatements(id: String, watch: Boolean): Account = error("read-only")
@@ -146,6 +151,22 @@ internal class NetworkLedgerRepository @Inject constructor(
 
     override suspend fun categorySuggestion(id: String) = api.categorySuggestion(id)
 
+    override suspend fun institutions(policy: ReadPolicy) = api.institutions(policy.header).institutions
+
+    override suspend fun createAccount(account: NewAccount): Account {
+        // Account ids are unique across everyone on the server, so a sensible
+        // id can already belong to someone else: take the next free suffix.
+        for (attempt in 1..MAX_ID_ATTEMPTS) {
+            val id = if (attempt == 1) account.id else "${account.id.take(60)}_$attempt"
+            try {
+                return api.createAccount(account.copy(id = id)).also { cache.clear() }
+            } catch (taken: HttpException) {
+                if (taken.code() != 409 || attempt == MAX_ID_ATTEMPTS) throw taken
+            }
+        }
+        error("unreachable")
+    }
+
     override suspend fun closeAccount(id: String, today: String) =
         api.patchAccount(id, AccountChanges.close(today)).also { cache.clear() }
 
@@ -159,5 +180,6 @@ internal class NetworkLedgerRepository @Inject constructor(
 
     private companion object {
         const val PAGE_SIZE = 50
+        const val MAX_ID_ATTEMPTS = 5
     }
 }

@@ -56,6 +56,13 @@ import page.zepto.finto.feature.accounts.AccountsUiState
 import page.zepto.finto.feature.auth.LoginScreen
 import page.zepto.finto.feature.auth.LoginUiState
 import page.zepto.finto.feature.imports.ImportScreen
+import page.zepto.finto.feature.imports.AccountActions
+import page.zepto.finto.feature.imports.AccountDrafts
+import page.zepto.finto.feature.imports.NewAccountForm
+import page.zepto.finto.core.model.Institution
+import page.zepto.finto.core.model.StatementCard
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import page.zepto.finto.feature.imports.ImportStep
 import page.zepto.finto.feature.imports.ImportUiState
 import page.zepto.finto.feature.imports.ReviewLoad
@@ -182,6 +189,29 @@ class ScreenshotTest {
             state = ImportUiState(step = ImportStep.Ready(Sample.staged, Sample.preview)),
             onPick = {}, onConfirm = {}, onReset = {}, onOpenActivity = {},
         )
+    }
+
+    @Test
+    fun importNeedsAccount() = capture("import-needs-account", dark = true, tab = TopLevelDestination.More) {
+        ImportScreen(
+            state = ImportUiState(step = ImportStep.Ready(Sample.staged, Sample.unroutedPreview)),
+            onPick = {}, onConfirm = {}, onReset = {}, onOpenActivity = {},
+        )
+    }
+
+    @Test
+    fun importNewAccount() = capture("import-new-account", dark = true) {
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            NewAccountForm(
+                draft = AccountDrafts.from(Sample.unroutedPreview, listOf(Institution("hsbc_hk", "HSBC"))),
+                institutions = listOf(Institution("hsbc_hk", "HSBC"), Institution("mox", "Mox")),
+                currencies = listOf("HKD", "USD"),
+                creating = false,
+                error = null,
+                actions = AccountActions(),
+                modifier = Modifier.padding(top = 24.dp),
+            )
+        }
     }
 
     @Test
@@ -396,6 +426,7 @@ private object Sample {
         quality = ImportQuality(
             grade = "ok",
             checks = listOf(
+                QualityCheck("account", "ok", "Goes to Mox Credit"),
                 QualityCheck("new", "ok", "New statement", "No earlier import of this file or its rows."),
                 QualityCheck("continuity", "ok", "Continues the previous statement", "Starts the day after 4 Oct."),
                 QualityCheck("balance", "info", "One printed balance", "Reconciles against the next statement."),
@@ -410,6 +441,33 @@ private object Sample {
             SampleRow("2026-10-13", "Mox Credit Payment Mox Credit 繳款", 2_522_895, "HKD"),
             SampleRow("2026-10-13", "American Express Cards", -30_730, "HKD"),
             SampleRow("2026-10-17", "HSBC Credit Cards", -250_362, "HKD"),
+        ),
+    )
+
+    /** A card statement for a card the ledger has no account for yet. */
+    val unroutedPreview = StagePreview(
+        sha256 = "b17c02",
+        filename = "eStatementFile_20261107.pdf",
+        parser = "pdf_statement",
+        txnCount = 4,
+        totals = mapOf("HKD" to InOut(inflow = 760_216, out = -760_216, rows = 4)),
+        quality = ImportQuality(
+            grade = "bad",
+            checks = listOf(
+                QualityCheck("account", "bad", "No account for 4 of 4 rows", "Choose the account this statement belongs to."),
+                QualityCheck("new", "ok", "New statement", "No earlier import of this file or its rows."),
+            ),
+        ),
+        agent = ImportAgent(
+            verdict = "hold",
+            headline = "Hold: none of the 4 rows has an account yet",
+            notes = listOf("Each charge is cleared by an equal payment a few days later, so in and out net to zero."),
+        ),
+        institutionHint = "hsbc_hk",
+        cards = listOf(StatementCard("4242", "ALEX SAMPLE", rows = 4)),
+        sample = listOf(
+            SampleRow("2026-10-28", "TEST TRAVEL HONG KONG HK", -160_216, "HKD"),
+            SampleRow("2026-11-02", "PPS PAYMENT - THANK YOU", 160_216, "HKD"),
         ),
     )
 }

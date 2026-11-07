@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.4.42 — 2026-11-07
+
+- A card statement now finds its account by card number. HSBC prints every
+  HK card statement under the same heading, so a new card (an HSBC Red, say)
+  matched no account and the import stopped. Rows now go to the account that
+  holds a card with the printed last four digits, when exactly one does.
+- The import preview names the issuer, the cards on the statement and its
+  statement date, so a client can offer to add the account.
+- Android: the import preview shows where the rows go and lets you choose
+  another account or add one, filled in from the statement (issuer, card
+  number, cardholder, currency). Adding a card account registers its number,
+  so later statements for that card import on their own. Import stays
+  disabled while some rows have no account. App version 0.2.1.
+
 ## 0.4.41 — 2026-11-06
 
 - Ask can fix the ledger. Asked to correct rows ("these are card bill

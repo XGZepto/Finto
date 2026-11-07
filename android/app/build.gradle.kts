@@ -11,8 +11,8 @@ android {
 
     defaultConfig {
         applicationId = "page.zepto.finto"
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
     }
 
     // Release signing comes from Gradle properties or the environment, so no
