@@ -38,6 +38,28 @@ data class CardsResponse(val cards: List<Card> = emptyList())
 @Serializable
 data class AccountsResponse(val accounts: List<Account> = emptyList())
 
+@Serializable
+data class Institution(
+    val id: String,
+    val displayName: String,
+    val country: String? = null,
+)
+
+@Serializable
+data class InstitutionsResponse(val institutions: List<Institution> = emptyList())
+
+/** The body of `POST /api/accounts`: a new account, and its card when it has one. */
+@Serializable
+data class NewAccount(
+    val id: String,
+    val institutionId: String,
+    val displayName: String,
+    val accountType: String,
+    val primaryCurrency: String,
+    val last4: String? = null,
+    val cardholderName: String? = null,
+)
+
 /** A balance per (account, currency), never summed across currencies natively. */
 @Serializable
 data class Position(

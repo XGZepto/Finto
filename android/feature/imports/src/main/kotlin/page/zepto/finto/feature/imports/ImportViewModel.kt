@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.catch
 import page.zepto.finto.core.data.ApiErrors
 import page.zepto.finto.core.data.ReadPolicy
 import page.zepto.finto.core.data.repository.AdminRepository
+import page.zepto.finto.core.data.repository.LedgerRepository
+import page.zepto.finto.core.model.Account
+import page.zepto.finto.core.model.Institution
 import page.zepto.finto.core.data.staleWhileRevalidate
 import page.zepto.finto.core.model.ImportReview
 import page.zepto.finto.core.model.ImportedFile
@@ -80,13 +83,28 @@ data class ImportUiState(
     val historyReviewId: String? = null,
     val historyReview: ReviewLoad = ReviewLoad.Idle,
     val maintenance: MaintenanceState? = null,
-)
+    /** Every account, for filing a statement the server can't route itself. */
+    val accounts: List<Account> = emptyList(),
+    val institutions: List<Institution> = emptyList(),
+    /** The account the person chose for rows the statement doesn't name. */
+    val chosenAccount: String? = null,
+    /** True while the preview is re-checked against the chosen account. */
+    val rechecking: Boolean = false,
+    /** The new-account form, while it is open. */
+    val draft: AccountDraft? = null,
+    val creatingAccount: Boolean = false,
+    val accountError: String? = null,
+) {
+    /** The chosen account, if the person picked one. */
+    val chosen: Account? get() = chosenAccount?.let { id -> accounts.firstOrNull { it.id == id } }
+}
 
 @HiltViewModel
 class ImportViewModel @Inject constructor(
     private val imports: ImportRepository,
     private val incoming: IncomingFiles,
     private val admin: AdminRepository,
+    private val ledger: LedgerRepository,
 ) : ViewModel() {
 
     private val mutableState = MutableStateFlow(ImportUiState())
@@ -99,6 +117,7 @@ class ImportViewModel @Inject constructor(
             }
         }
         loadHistory()
+        loadAccounts()
         viewModelScope.launch {
             incoming.file.filterNotNull().collect {
                 incoming.take()?.let(::onFileChosen)
@@ -110,7 +129,7 @@ class ImportViewModel @Inject constructor(
         val step = mutableState.value.step
         if (step is ImportStep.Previewing || step is ImportStep.Importing) return
         discardCurrent()
-        mutableState.update { it.copy(step = ImportStep.Reading(uri.lastPathSegment)) }
+        mutableState.update { it.forNewFile().copy(step = ImportStep.Reading(uri.lastPathSegment)) }
         viewModelScope.launch {
             val staged = suspendRunCatching { imports.stage(uri) }.getOrElse { error ->
                 mutableState.update { it.copy(step = ImportStep.Failed(ApiErrors.message(error))) }
@@ -129,11 +148,13 @@ class ImportViewModel @Inject constructor(
     }
 
     fun confirm() {
-        val ready = mutableState.value.step as? ImportStep.Ready ?: return
-        if (ready.preview.error != null) return
+        val state = mutableState.value
+        val ready = state.step as? ImportStep.Ready ?: return
+        if (ready.preview.error != null || state.rechecking) return
+        if (ready.preview.needsAccount && state.chosenAccount == null) return
         mutableState.update { it.copy(step = ImportStep.Importing(ready.file, ready.preview)) }
         viewModelScope.launch {
-            suspendRunCatching { imports.confirm(ready.file, ready.preview.sha256) }
+            suspendRunCatching { imports.confirm(ready.file, ready.preview.sha256, state.chosenAccount) }
                 .onSuccess { response ->
                     imports.discard(ready.file)
                     mutableState.update { it.copy(step = ImportStep.Done(ready.preview, response.result, response.reconcile)) }
@@ -152,8 +173,77 @@ class ImportViewModel @Inject constructor(
 
     fun reset() {
         discardCurrent()
-        mutableState.update { it.copy(step = ImportStep.Idle, review = ReviewLoad.Idle) }
+        mutableState.update { it.forNewFile().copy(step = ImportStep.Idle, review = ReviewLoad.Idle) }
     }
+
+    /**
+     * Files the rows the statement doesn't route under [accountId] and checks
+     * the preview again. The model's verdict is dropped rather than re-asked:
+     * it was about the old routing, and the checks below it say the rest.
+     */
+    fun chooseAccount(accountId: String) {
+        val ready = mutableState.value.step as? ImportStep.Ready ?: return
+        mutableState.update { it.copy(chosenAccount = accountId, rechecking = true, accountError = null) }
+        viewModelScope.launch {
+            suspendRunCatching { imports.preview(ready.file, review = false, accountId = accountId) }
+                .onSuccess { preview ->
+                    mutableState.update {
+                        val current = it.step as? ImportStep.Ready
+                        if (current?.file != ready.file) it
+                        else it.copy(step = ImportStep.Ready(ready.file, preview), rechecking = false)
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.update { it.copy(rechecking = false, accountError = ApiErrors.message(error)) }
+                }
+        }
+    }
+
+    /** Opens the new-account form, filled in from the statement being previewed. */
+    fun startNewAccount() {
+        val ready = mutableState.value.step as? ImportStep.Ready ?: return
+        mutableState.update { it.copy(draft = AccountDrafts.from(ready.preview, it.institutions), accountError = null) }
+    }
+
+    fun updateDraft(draft: AccountDraft) = mutableState.update { it.copy(draft = draft) }
+
+    fun cancelDraft() = mutableState.update { it.copy(draft = null, accountError = null) }
+
+    /** Creates the drafted account, then files the statement under it. */
+    fun createAccount() {
+        val state = mutableState.value
+        val draft = state.draft?.takeIf { it.isComplete } ?: return
+        if (state.creatingAccount) return
+        mutableState.update { it.copy(creatingAccount = true, accountError = null) }
+        viewModelScope.launch {
+            suspendRunCatching { ledger.createAccount(AccountDrafts.toNewAccount(draft, state.accounts)) }
+                .onSuccess { account ->
+                    mutableState.update {
+                        it.copy(accounts = it.accounts + account, draft = null, creatingAccount = false)
+                    }
+                    chooseAccount(account.id)
+                }
+                .onFailure { error ->
+                    mutableState.update { it.copy(creatingAccount = false, accountError = ApiErrors.message(error)) }
+                }
+        }
+    }
+
+    private fun loadAccounts() {
+        viewModelScope.launch {
+            suspendRunCatching { ledger.accounts() }.onSuccess { accounts ->
+                mutableState.update { it.copy(accounts = accounts) }
+            }
+        }
+        viewModelScope.launch {
+            suspendRunCatching { ledger.institutions() }.onSuccess { institutions ->
+                mutableState.update { it.copy(institutions = institutions) }
+            }
+        }
+    }
+
+    private fun ImportUiState.forNewFile() =
+        copy(chosenAccount = null, rechecking = false, draft = null, creatingAccount = false, accountError = null)
 
     fun refreshHistory() = loadHistory(ReadPolicy.Network)
 

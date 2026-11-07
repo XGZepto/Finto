@@ -118,6 +118,13 @@ fun ImportRoute(
             onRerunHistoryReview = viewModel::rerunHistoryReview,
             onRetryReview = viewModel::runReview,
             onMaintenance = viewModel::runMaintenance,
+            account = AccountActions(
+                onChoose = viewModel::chooseAccount,
+                onNew = viewModel::startNewAccount,
+                onDraftChange = viewModel::updateDraft,
+                onCreate = viewModel::createAccount,
+                onCancelDraft = viewModel::cancelDraft,
+            ),
         ),
     )
 }
@@ -139,8 +146,8 @@ fun ImportScreen(
                 ImportStep.Idle -> IdleContent(state, onPick, actions)
                 is ImportStep.Reading -> Progress("Reading ${step.name ?: "the file"}…")
                 is ImportStep.Previewing -> Progress("Checking ${step.file.name} against your ledger…")
-                is ImportStep.Ready -> PreviewContent(step.preview, importing = false, onConfirm, onReset)
-                is ImportStep.Importing -> PreviewContent(step.preview, importing = true, onConfirm, onReset)
+                is ImportStep.Ready -> PreviewContent(step.preview, state, importing = false, onConfirm, onReset, actions.account)
+                is ImportStep.Importing -> PreviewContent(step.preview, state, importing = true, onConfirm, onReset, actions.account)
                 is ImportStep.Done -> DoneContent(step, state.review, onOpenActivity, onReset, actions)
                 is ImportStep.Failed -> FailedContent(step, onPick, onReset)
             }
@@ -309,7 +316,36 @@ private fun Progress(text: String) {
 }
 
 @Composable
-private fun PreviewContent(preview: StagePreview, importing: Boolean, onConfirm: () -> Unit, onReset: () -> Unit) {
+private fun PreviewContent(
+    preview: StagePreview,
+    state: ImportUiState,
+    importing: Boolean,
+    onConfirm: () -> Unit,
+    onReset: () -> Unit,
+    accountActions: AccountActions,
+) {
+    var picking by rememberSaveable { mutableStateOf(false) }
+    if (picking) {
+        AccountPickerSheet(
+            accounts = AccountDrafts.ordered(state.accounts, preview.institutionHint),
+            institutions = state.institutions,
+            selected = state.chosenAccount,
+            onSelect = { id -> picking = false; accountActions.onChoose(id) },
+            onNew = { picking = false; accountActions.onNew() },
+            onDismiss = { picking = false },
+        )
+    }
+    state.draft?.let { draft ->
+        NewAccountSheet(
+            draft = draft,
+            institutions = state.institutions,
+            currencies = (preview.totals.keys + state.accounts.map { it.primaryCurrency }).distinct(),
+            creating = state.creatingAccount,
+            error = state.accountError,
+            actions = accountActions,
+        )
+    }
+    val blocked = preview.needsAccount && state.chosenAccount == null
     LazyColumn(contentPadding = PaddingValues(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
@@ -328,6 +364,16 @@ private fun PreviewContent(preview: StagePreview, importing: Boolean, onConfirm:
         }
         preview.error?.let { error ->
             item { Notice(Icons.Outlined.ErrorOutline, "This file can't be imported", error, MaterialTheme.colorScheme.errorContainer, Modifier.padding(horizontal = 16.dp)) }
+        }
+        if (preview.error == null && (preview.txnCount ?: 0) > 0) {
+            item("account") {
+                AccountBinding(
+                    preview,
+                    state,
+                    onOpenPicker = { if (!importing) picking = true },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
         preview.agent?.let { agent ->
             item {
@@ -394,7 +440,7 @@ private fun PreviewContent(preview: StagePreview, importing: Boolean, onConfirm:
                 OutlinedButton(onClick = onReset, enabled = !importing, modifier = Modifier.weight(1f)) { Text("Cancel") }
                 Button(
                     onClick = onConfirm,
-                    enabled = !importing && preview.error == null,
+                    enabled = !importing && preview.error == null && !blocked && !state.rechecking,
                     modifier = Modifier.weight(1f),
                 ) {
                     if (importing) {

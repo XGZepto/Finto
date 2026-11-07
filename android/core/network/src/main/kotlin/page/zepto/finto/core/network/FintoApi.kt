@@ -5,6 +5,8 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import page.zepto.finto.core.model.AccountsResponse
+import page.zepto.finto.core.model.InstitutionsResponse
+import page.zepto.finto.core.model.NewAccount
 import page.zepto.finto.core.model.Account
 import page.zepto.finto.core.model.ActivitiesResponse
 import page.zepto.finto.core.model.ApiKey
@@ -177,6 +179,12 @@ interface FintoApi {
     @GET("api/accounts")
     suspend fun accounts(@Header("Cache-Control") cacheControl: String? = null): AccountsResponse
 
+    @POST("api/accounts")
+    suspend fun createAccount(@Body account: NewAccount): Account
+
+    @GET("api/institutions")
+    suspend fun institutions(@Header("Cache-Control") cacheControl: String? = null): InstitutionsResponse
+
     @PATCH("api/accounts/{id}")
     suspend fun patchAccount(@Path("id") id: String, @Body patch: JsonObject): Account
 
@@ -280,6 +288,7 @@ interface FintoApi {
     suspend fun previewImport(
         @Part file: MultipartBody.Part,
         @Part("review") review: RequestBody?,
+        @Part("account_id") accountId: RequestBody? = null,
     ): StagePreview
 
     @Multipart
@@ -287,6 +296,7 @@ interface FintoApi {
     suspend fun confirmImport(
         @Part file: MultipartBody.Part,
         @Part("expected_sha256") expectedSha256: RequestBody,
+        @Part("account_id") accountId: RequestBody? = null,
     ): ConfirmResponse
 
     @POST("api/imports/{id}/review")

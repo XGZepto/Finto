@@ -46,6 +46,7 @@ data class ImportActions(
     val onRerunHistoryReview: () -> Unit = {},
     val onRetryReview: (String) -> Unit = {},
     val onMaintenance: (Maintenance) -> Unit = {},
+    val account: AccountActions = AccountActions(),
 )
 
 @Composable

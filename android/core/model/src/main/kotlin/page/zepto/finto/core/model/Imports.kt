@@ -37,6 +37,24 @@ data class StagePreview(
     val totals: Map<String, InOut> = emptyMap(),
     val quality: ImportQuality? = null,
     val agent: ImportAgent? = null,
+    /** The issuer the parser or PDF template belongs to, for filing a new account. */
+    val institutionHint: String? = null,
+    /** The card numbers printed on the statement, by last four digits. */
+    val cards: List<StatementCard> = emptyList(),
+    val statementDate: String? = null,
+) {
+    /** The check that says where the rows land, if the server ran one. */
+    val accountCheck: QualityCheck? get() = quality?.checks?.firstOrNull { it.id == "account" }
+
+    /** True when some rows have no account yet: the person has to pick or create one. */
+    val needsAccount: Boolean get() = accountCheck?.level == "bad"
+}
+
+@Serializable
+data class StatementCard(
+    val last4: String,
+    val holder: String? = null,
+    val rows: Int = 0,
 )
 
 @Serializable

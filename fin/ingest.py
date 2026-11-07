@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from datetime import date
 from pathlib import Path
@@ -117,6 +118,37 @@ def _format_of(path: Path) -> FileFormat:
         return FileFormat(ext)
     except ValueError:
         return FileFormat.CSV
+
+
+def statement_routes(conn, txns: list[ParsedTxn]) -> list[str | None]:
+    """The account each parsed row names, before any account the person chose.
+
+    A row's section hint goes through the alias registry first. A hint names
+    an issuer's statement layout, not one card: every HSBC HK card prints as
+    "HSBC HK card". When it names nothing, the card number printed beside the
+    row does, if exactly one account ends in those four digits: its own
+    masked number (****3757) or a card registered on it.
+    Rows neither resolves stay None for the chosen or parsed account to fill.
+    """
+    alias_index = dbm.load_account_alias_index(conn)
+    owners: dict[str, set[str]] = defaultdict(set)
+    for card in dbm.load_cards(conn):
+        if card.last4:
+            owners[card.last4].add(card.account_id)
+    for account in dbm.load_accounts(conn).values():
+        digits = re.sub(r"\D", "", account.masked_number or "")
+        if len(digits) >= 4:
+            owners[digits[-4:]].add(account.id)
+    by_last4 = {last4: next(iter(accts)) for last4, accts in owners.items()
+                if len(accts) == 1}
+    routes: list[str | None] = []
+    for p in txns:
+        hint = (p.extra or {}).get("account_hint", "")
+        account = alias_index.get(normalize_alias(hint)) if hint else None
+        if account is None and p.card_last4:
+            account = by_last4.get(p.card_last4)
+        routes.append(account)
+    return routes
 
 
 def resolve_card(parsed: ParsedTxn, account_id: str, cards: list[Card]) -> str | None:
@@ -320,15 +352,16 @@ def ingest_file(
 
     # Consolidated statements (Chase checking+savings, HSBC One HKD+CNY, Mox
     # HKD+JPY) carry rows for several accounts in one file. Each row's
-    # account_hint resolves to an account through the alias registry; rows
-    # whose hint resolves nothing fall back to the file's account.
+    # account_hint resolves to an account through the alias registry, or its
+    # card number through the card registry; rows that resolve nothing fall
+    # back to the file's account.
     alias_index = dbm.load_account_alias_index(conn)
 
     def route(hint: str) -> str | None:
         return alias_index.get(normalize_alias(hint)) if hint else None
 
     accounts = dbm.load_accounts(conn)
-    routed = [route((p.extra or {}).get("account_hint", "")) for p in result.txns]
+    routed = statement_routes(conn, result.txns)
     routed = [_settle_in_currency(accounts, a or resolved_account, p.booked.currency) or a
               for a, p in zip(routed, result.txns)]
     # Idle consolidated months have no rows but still carry per-account

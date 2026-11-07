@@ -33,8 +33,9 @@ data class StagedFile(
 interface ImportRepository {
     suspend fun capabilities(): ImportCapabilities
     suspend fun stage(uri: Uri): StagedFile
-    suspend fun preview(file: StagedFile, review: Boolean = true): StagePreview
-    suspend fun confirm(file: StagedFile, sha256: String): ConfirmResponse
+    /** [accountId] files rows the statement itself doesn't route; null lets the server decide. */
+    suspend fun preview(file: StagedFile, review: Boolean = true, accountId: String? = null): StagePreview
+    suspend fun confirm(file: StagedFile, sha256: String, accountId: String? = null): ConfirmResponse
     suspend fun discard(file: StagedFile)
 }
 
@@ -71,11 +72,11 @@ internal class NetworkImportRepository @Inject constructor(
         )
     }
 
-    override suspend fun preview(file: StagedFile, review: Boolean): StagePreview =
-        api.previewImport(part(file), if (review) "true".toRequestBody() else null)
+    override suspend fun preview(file: StagedFile, review: Boolean, accountId: String?): StagePreview =
+        api.previewImport(part(file), if (review) "true".toRequestBody() else null, accountId?.toRequestBody())
 
-    override suspend fun confirm(file: StagedFile, sha256: String): ConfirmResponse =
-        api.confirmImport(part(file), sha256.toRequestBody()).also { cache.clear() }
+    override suspend fun confirm(file: StagedFile, sha256: String, accountId: String?): ConfirmResponse =
+        api.confirmImport(part(file), sha256.toRequestBody(), accountId?.toRequestBody()).also { cache.clear() }
 
     override suspend fun discard(file: StagedFile) {
         withContext(io) { File(file.path).delete() }
