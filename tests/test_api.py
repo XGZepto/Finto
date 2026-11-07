@@ -1323,3 +1323,38 @@ def test_a_card_number_on_two_accounts_routes_nowhere(conn):
                     booked=Money(amount=-100, currency="HKD"), description_raw="TEST",
                     card_last4="4242", extra={"account_hint": "HSBC HK card"})
     assert statement_routes(conn, [row]) == [None]
+
+
+def test_agent_adds_a_card_account_and_imports_its_statement(client, tmp_path):
+    token = client.post("/api/auth/api-keys", json={"name": "Importer"}).json()["key"]
+    auth = {"Authorization": f"Bearer {token}"}
+    listed = client.get("/api/agent/accounts", headers=auth)
+    assert listed.status_code == 200
+    assert "hsbc_hk_current" in {a["id"] for a in listed.json()["accounts"]}
+
+    created = client.post("/api/agent/accounts", headers=auth, json={
+        "id": "hsbc_hk_card_4242", "institution_id": "hsbc_hk", "display_name": "HSBC Red",
+        "account_type": "credit_card", "primary_currency": "HKD",
+        "last4": "4242", "cardholder_name": "ALEX SAMPLE",
+    })
+    assert created.status_code == 201, created.text
+
+    path = _card_statement(tmp_path)
+    preview = _post_pdf(client, path, "/api/agent/imports/preview")
+    assert preview.status_code == 401  # the key goes in the header
+    with path.open("rb") as f:
+        preview = client.post("/api/agent/imports/preview", headers=auth,
+                              files={"file": (path.name, f, "application/pdf")}).json()
+    account = next(c for c in preview["quality"]["checks"] if c["id"] == "account")
+    assert account["level"] == "ok" and "HSBC Red" in account["title"]
+    with path.open("rb") as f:
+        confirmed = client.post("/api/agent/imports/confirm", headers=auth,
+                                files={"file": (path.name, f, "application/pdf")},
+                                data={"expected_sha256": preview["sha256"]})
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["import"]["status"] == "imported"
+
+
+def test_agent_account_routes_need_a_key(client):
+    assert client.get("/api/agent/accounts").status_code == 401
+    assert client.post("/api/agent/accounts", json={}).status_code in (401, 422)

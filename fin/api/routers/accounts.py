@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from ... import db as dbm
 from ... import reporting
 from ...models import Account, Card
-from ..deps import get_conn
+from ..deps import get_conn, write_conn
 
 router = APIRouter(tags=["accounts"])
 
@@ -57,14 +57,35 @@ class AccountCreate(BaseModel):
 
 @router.post("/accounts", status_code=201)
 def create_account(body: AccountCreate, request: Request) -> dict:
-    """Add an account for the signed-in user.
+    """Add an account for the signed-in user."""
+    return _create_account(body, request.state.user_id)
 
-    Row security cannot see an account until it has an access grant, so this
-    uses the maintenance connection and stamps the caller as owner.
-    """
+
+def _agent_owner(request: Request, scope: str) -> str:
+    # Imported lazily to avoid a module cycle while the app registers routers.
+    from ..app import _api_key_owner
+    return _api_key_owner(request, scope)[0]
+
+
+@router.get("/agent/accounts")
+def agent_list_accounts(request: Request) -> dict:
+    """The key owner's accounts, so an agent can pick where a statement goes."""
+    user_id = _agent_owner(request, "ledger:read")
+    with write_conn(user_id) as conn:
+        return {"accounts": [_serialize_account(a) for a in dbm.load_accounts(conn).values()]}
+
+
+@router.post("/agent/accounts", status_code=201)
+def agent_create_account(body: AccountCreate, request: Request) -> dict:
+    """Add an account for a statement no existing account matches."""
+    return _create_account(body, _agent_owner(request, "imports:write"))
+
+
+def _create_account(body: AccountCreate, user_id: str) -> dict:
+    """Row security cannot see an account until it has an access grant, so
+    this uses the maintenance connection and stamps the caller as owner."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", body.id):
         raise HTTPException(422, "account id must be a lowercase slug")
-    user_id = request.state.user_id
     conn = dbm.connect()
     try:
         if conn.execute(
