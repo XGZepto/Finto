@@ -204,6 +204,17 @@ def resolve_card(parsed: ParsedTxn, account_id: str, cards: list[Card]) -> str |
             # Only trust a partial match when it is unambiguous.
             if len(partial) == 1:
                 return partial[0].id
+        return None
+
+    if not parsed.card_last4:
+        # Nothing on the row names a card. Issuers print a supplementary
+        # card's spending under its holder, so an unnamed row (a payment, an
+        # account-level credit) is the main card's: the account's one
+        # non-supplementary card. A number or name that matches nothing is
+        # never sent here.
+        main = [c for c in scoped if not c.is_supplementary]
+        if len(main) == 1:
+            return main[0].id
     return None
 
 
@@ -503,10 +514,29 @@ def reattribute_cards(conn, *, statement_file_id: str | None = None) -> int:
     leaves everything imported before it unattributed. Re-running resolution
     against the stored raw rows fixes that without re-importing anything.
     """
+    changes = reattribution_plan(conn, statement_file_id=statement_file_id)
+    dbm.execute_many(conn, "UPDATE txn SET card_id=%s WHERE id=%s",
+                     [(new, txn_id) for txn_id, _account, _old, new in changes])
+    return len(changes)
+
+
+def reattribution_summary(changes) -> list[dict]:
+    """Planned or applied changes, counted by account and old -> new card."""
+    counts: dict[tuple, int] = defaultdict(int)
+    for _txn, account, old, new in changes:
+        counts[(account, old, new)] += 1
+    return [{"account_id": a, "from": old, "to": new, "rows": n}
+            for (a, old, new), n in sorted(counts.items(), key=lambda kv: (kv[0][0], -kv[1]))]
+
+
+def reattribution_plan(conn, *, statement_file_id: str | None = None
+                       ) -> list[tuple[str, str, str | None, str | None]]:
+    """(txn_id, account_id, current card, resolved card) for every row whose
+    card would change. Writes nothing."""
     cards = dbm.load_cards(conn)
     if not cards:
-        return 0
-    updates: list[tuple[str | None, str]] = []
+        return []
+    updates: list[tuple[str, str, str | None, str | None]] = []
     query = (
         "SELECT t.id, t.account_id, t.txn_date, t.card_id, t.description_raw, "
         "       rr.payload "
@@ -533,9 +563,10 @@ def reattribute_cards(conn, *, statement_file_id: str | None = None) -> int:
         last4 = digits[-4:] if len(digits) >= 4 else ""
         hint = (details.get("card.holder") or payload.get("Card Member")
                 or payload.get("Cardholder") or None)
-        if not last4 and not hint:
+        if not last4 and not hint and r["card_id"] is not None:
             # Nothing stored to resolve from (PDF rows imported before the
             # facts were kept): leave what ingest decided rather than clear it.
+            # An unattributed row still goes through, to the main card.
             continue
         parsed = ParsedTxn(
             txn_date=date.fromisoformat(r["txn_date"]),
@@ -546,9 +577,8 @@ def reattribute_cards(conn, *, statement_file_id: str | None = None) -> int:
         )
         resolved = resolve_card(parsed, r["account_id"], cards)
         if resolved != r["card_id"]:
-            updates.append((resolved, r["id"]))
-    dbm.execute_many(conn, "UPDATE txn SET card_id=%s WHERE id=%s", updates)
-    return len(updates)
+            updates.append((r["id"], r["account_id"], r["card_id"], resolved))
+    return updates
 
 
 def _settle_in_currency(accounts: dict, account_id: str | None, currency: str) -> str | None:

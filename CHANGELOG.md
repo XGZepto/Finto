@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.4.44 — 2026-11-08
+
+- A row that names no card belongs to the main card. Issuers print a
+  supplementary card's spending under its holder, so a row with no card
+  number and no cardholder (a payment, an account-level credit, or a PDF row
+  imported before names were kept) goes to the account's one
+  non-supplementary card. A number or name that matches no card still stays
+  unattributed, and accounts with more than one main card are left alone.
+- Re-attribute cards fills unattributed rows this way and never moves a row
+  that already has a card without evidence. `POST /api/reattribute` takes
+  `dry_run=true` and both modes return the changes by account and
+  old -> new card.
+
 ## 0.4.43 — 2026-11-08
 
 - An AMEX HK statement finds its card by the account number it prints

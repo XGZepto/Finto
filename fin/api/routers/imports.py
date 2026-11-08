@@ -402,11 +402,21 @@ def agent_reprocess_import(statement_file_id: str, request: Request) -> dict:
 
 
 @router.post("/reattribute")
-def run_reattribute(request: Request) -> dict:
-    """Re-run card resolution over existing rows, e.g. after adding a reissue."""
-    from ...ingest import reattribute_cards
+def run_reattribute(request: Request, dry_run: bool = False) -> dict:
+    """Re-run card resolution over existing rows, e.g. after adding a reissue.
+
+    `dry_run` reports what would change, by account and old -> new card,
+    without writing.
+    """
+    from ... import db as dbm
+    from ...ingest import reattribution_plan, reattribution_summary
     with write_conn(request.state.user_id) as conn:
-        return {"updated": reattribute_cards(conn)}
+        changes = reattribution_plan(conn)
+        if not dry_run:
+            dbm.execute_many(conn, "UPDATE txn SET card_id=%s WHERE id=%s",
+                             [(new, txn_id) for txn_id, _account, _old, new in changes])
+        return {"updated": 0 if dry_run else len(changes), "dry_run": dry_run,
+                "changes": reattribution_summary(changes)}
 
 
 @router.post("/fx/harvest")

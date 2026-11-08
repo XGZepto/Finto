@@ -422,3 +422,24 @@ def test_generic_parser_captures_balances(conn, tmp_path):
                     account_id="hsbc_hk_current", default_currency="HKD")
     assert r["status"] == "imported"
     assert r["balances"] == 2, "generic parser should capture the balance column"
+
+
+def test_a_row_naming_no_card_belongs_to_the_main_card():
+    """Supplementary spending is printed under its holder; the rest is the main card's."""
+    cards = [
+        Card(id="main", account_id="A", cardholder_name="ALEX SAMPLE", last4="03002"),
+        Card(id="supp", account_id="A", cardholder_name="HO CHING LEUNG", last4="03010",
+             is_supplementary=True),
+    ]
+
+    def row(last4=None, name=None):
+        return ParsedTxn(txn_date=date(2026, 11, 6), booked=Money(amount=441740, currency="HKD"),
+                         description_raw="PAYMENT RECEIVED", card_last4=last4, cardholder_hint=name)
+
+    assert resolve_card(row(), "A", cards) == "main"
+    # A name or number that matches nothing is not quietly given to the main card.
+    assert resolve_card(row(name="SOMEONE ELSE"), "A", cards) is None
+    assert resolve_card(row(last4="9999"), "A", cards) is None
+    # Two main cards (a reissue with no dates): no way to choose.
+    both = cards + [Card(id="main2", account_id="A", cardholder_name="ALEX SAMPLE", last4="04000")]
+    assert resolve_card(row(), "A", both) is None
