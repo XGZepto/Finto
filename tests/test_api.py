@@ -1439,3 +1439,49 @@ def test_reattributing_keeps_the_cards_a_pdf_import_resolved(client, tmp_path, d
     finally:
         conn.rollback()
         conn.close()
+
+
+def test_reattribution_gives_unattributed_rows_to_the_main_card_and_dry_runs(client, database_url):
+    from fin.models import Card
+
+    conn = dbm.connect(database_url)
+    try:
+        dbm.upsert_card(conn, Card(id="hsbc_current_main", account_id="hsbc_hk_current",
+                                   cardholder_name="ALEX SAMPLE", last4="7777"))
+        rows = [r["id"] for r in conn.execute(
+            "SELECT id FROM txn WHERE account_id='hsbc_hk_current' ORDER BY id LIMIT 2")]
+        assert len(rows) == 2
+        conn.execute("UPDATE txn SET card_id=NULL WHERE account_id='hsbc_hk_current'")
+        # One row already attributed elsewhere keeps its card.
+        dbm.upsert_card(conn, Card(id="hsbc_current_supp", account_id="hsbc_hk_current",
+                                   cardholder_name="SUPP HOLDER", last4="8888", is_supplementary=True))
+        conn.execute("UPDATE txn SET card_id='hsbc_current_supp' WHERE id=%s", (rows[0],))
+        conn.commit()
+        total = conn.execute("SELECT COUNT(*) AS n FROM txn WHERE account_id='hsbc_hk_current'"
+                             ).fetchone()["n"]
+    finally:
+        conn.close()
+
+    dry = client.post("/api/reattribute", params={"dry_run": "true"}).json()
+    assert dry["dry_run"] and dry["updated"] == 0
+    planned = [c for c in dry["changes"] if c["account_id"] == "hsbc_hk_current"]
+    assert planned == [{"account_id": "hsbc_hk_current", "from": None,
+                        "to": "hsbc_current_main", "rows": total - 1}]
+
+    conn = dbm.connect(database_url)
+    try:
+        assert conn.execute("SELECT COUNT(*) AS n FROM txn WHERE account_id='hsbc_hk_current' "
+                            "AND card_id IS NULL").fetchone()["n"] == total - 1
+    finally:
+        conn.close()
+
+    done = client.post("/api/reattribute").json()
+    assert not done["dry_run"] and done["updated"] >= total - 1
+    conn = dbm.connect(database_url)
+    try:
+        cards = {r["card_id"]: r["n"] for r in conn.execute(
+            "SELECT card_id, COUNT(*) AS n FROM txn WHERE account_id='hsbc_hk_current' "
+            "GROUP BY card_id")}
+    finally:
+        conn.close()
+    assert cards == {"hsbc_current_supp": 1, "hsbc_current_main": total - 1}
