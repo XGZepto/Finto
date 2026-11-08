@@ -218,6 +218,10 @@ class StatementTemplate:
     date: DateSpec = field(default_factory=DateSpec)
     statement_date: str = ""
     period: str = ""
+    #: The account or card number the statement prints for itself; group 1
+    #: is kept, so capture only the trailing digits. It names the account
+    #: when the issuer's layout is shared by several cards.
+    account_number: str = ""
     #: Everything above this marker is preamble. Statements repeat their section
     #: headings in a summary table near the top — Mox lists "HKD Mox Account"
     #: both as a summary row and as the real ledger heading — so sections must
@@ -247,6 +251,7 @@ class StatementTemplate:
                 date=DateSpec(**d.get("date", {})),
                 statement_date=d.get("statement_date", ""),
                 period=d.get("period", ""),
+                account_number=d.get("account_number", ""),
                 body_start=d.get("body_start", ""),
                 body_end=d.get("body_end", ""),
                 sections=sections,
@@ -272,6 +277,7 @@ class StatementTemplate:
             "date": self.date.__dict__,
             "statement_date": self.statement_date,
             "period": self.period,
+            "account_number": self.account_number,
             "body_start": self.body_start,
             "body_end": self.body_end,
             "sections": [_section_to_dict(s) for s in self.sections],
@@ -386,6 +392,7 @@ class TemplateResult:
     statement_date: date | None = None
     period_start: date | None = None
     period_end: date | None = None
+    account_number: str | None = None
 
 
 def apply_template(
@@ -402,6 +409,9 @@ def apply_template(
     result.period_start, result.period_end = _find_period(
         text, tpl.period, tpl.date.dayfirst
     )
+    if tpl.account_number:
+        m = re.search(tpl.account_number, text, re.IGNORECASE)
+        result.account_number = m.group(1) if m and m.groups() else None
     anchor = result.statement_date or result.period_end
 
     page_width = doc.pages[0].width if doc.pages else 612.0

@@ -206,6 +206,7 @@ def _to_parse_result(
         period_start=result.period_start,
         period_end=result.period_end,
         statement_date=result.statement_date,
+        account_number=result.account_number,
         allow_empty=allow_empty,
     )
 

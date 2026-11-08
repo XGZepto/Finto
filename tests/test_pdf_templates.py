@@ -346,3 +346,18 @@ def test_mox_credit_wrapped_description_follows_printed_distance():
         (5322288, "Mox Credit Payment Mox Credit 繳款"),
         (-2311092, "HSBC Credit Cards"),
     ]
+
+
+def test_amex_hk_reads_its_own_account_number_and_keeps_only_the_tail():
+    """Every AMEX HK card shares one layout; the printed number tells them apart."""
+    doc = make_document("\n".join([
+        row((20, "American Express Explorer Credit Card")),
+        row((0, "Statement of Account"), (100, "PAGE 1 OF 2")),
+        row((0, "Cardmember Name"), (60, "Account Number"), (90, "Date")),
+        row((0, "ALEX SAMPLE"), (60, "xxxx-xxxxxx-04242"), (90, "November 8, 2026")),
+        row((0, "STATEMENT PERIOD"), (30, "From October 9 to November 8, 2026")),
+        row((0, "DETAILS"), (60, "FOREIGN SPEND"), (90, "AMOUNT HK$")),
+        row((0, "Payment Advice"), (60, "3712-345678-04242")),
+    ]))
+    result = apply_template(doc, template("amex_hk_card"))
+    assert result.account_number == "04242"

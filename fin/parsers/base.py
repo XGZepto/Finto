@@ -40,6 +40,9 @@ class ParseResult:
     period_end: date | None = None
     statement_date: date | None = None
     account_id: str | None = None
+    #: The account or card number the statement prints for itself (trailing
+    #: digits only), for routing when its rows name no account.
+    account_number: str | None = None
     warnings: list[str] = field(default_factory=list)
     # (date, Money, account_hint) triples from the statement's own balance
     # figures. These are the independent check on whether we captured every

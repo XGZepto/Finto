@@ -1373,3 +1373,69 @@ def test_agent_adds_a_card_account_and_imports_its_statement(client, tmp_path):
 def test_agent_account_routes_need_a_key(client):
     assert client.get("/api/agent/accounts").status_code == 401
     assert client.post("/api/agent/accounts", json={}).status_code in (401, 422)
+
+
+def _amex_row(card_last4=None):
+    from fin.models import Money, ParsedTxn
+    return ParsedTxn(txn_date=datetime(2026, 11, 1).date(), posted_date=None,
+                     booked=Money(amount=-12800, currency="HKD"), description_raw="SPOTIFY",
+                     card_last4=card_last4, extra={"account_hint": "AMEX HK card"})
+
+
+def test_a_statement_number_routes_rows_that_name_no_account(conn):
+    from fin.ingest import account_for_number, statement_routes
+    from fin.models import Account
+
+    for account_id, masked in (("amex_hk_explorer", "****04242"), ("amex_hk_other", "****01111")):
+        dbm.upsert_account(conn, Account(
+            id=account_id, institution_id="amex_hk", display_name=account_id,
+            account_type="credit_card", primary_currency="HKD", masked_number=masked))
+    assert statement_routes(conn, [_amex_row()], "04242") == ["amex_hk_explorer"]
+    # A number printed beside the row still beats the statement's own.
+    assert statement_routes(conn, [_amex_row("01111")], "04242") == ["amex_hk_other"]
+    assert statement_routes(conn, [_amex_row()], "09999") == [None]
+    # An idle month has no rows to route; the file still finds its account.
+    assert account_for_number(conn, "04242") == "amex_hk_explorer"
+
+
+def test_card_numbers_match_on_their_last_four_digits(conn):
+    """AMEX registers five-digit card endings (03002); statements and masks vary."""
+    from fin.ingest import statement_routes
+    from fin.models import Card
+
+    dbm.upsert_card(conn, Card(id="amex_hk_main_primary", account_id="amex_hk_main",
+                               cardholder_name="ALEX SAMPLE", last4="04242"))
+    assert statement_routes(conn, [_amex_row()], "xxxx-xxxxxx-04242") == ["amex_hk_main"]
+    assert statement_routes(conn, [_amex_row("4242")]) == ["amex_hk_main"]
+
+
+def test_reattributing_keeps_the_cards_a_pdf_import_resolved(client, tmp_path, database_url):
+    """Re-attribution used to clear PDF rows: their raw row is one printed line."""
+    from fin.ingest import reattribute_cards
+
+    client.post("/api/accounts", json={
+        "id": "hsbc_hk_card_4242", "institution_id": "hsbc_hk", "display_name": "HSBC Red",
+        "account_type": "credit_card", "primary_currency": "HKD",
+        "last4": "4242", "cardholder_name": "ALEX SAMPLE"})
+    path = _card_statement(tmp_path)
+    preview = _post_pdf(client, path).json()
+    assert _post_pdf(client, path, "/api/imports/confirm",
+                     expected_sha256=preview["sha256"]).status_code == 200
+
+    conn = dbm.connect(database_url)
+    try:
+        def cards():
+            return [r["card_id"] for r in conn.execute(
+                "SELECT card_id FROM txn WHERE account_id='hsbc_hk_card_4242' ORDER BY txn_date")]
+
+        assert cards() == ["hsbc_hk_card_4242_primary"] * 2
+        assert reattribute_cards(conn) == 0
+        assert cards() == ["hsbc_hk_card_4242_primary"] * 2
+
+        # Rows imported before the facts were kept have nothing to go on.
+        conn.execute("DELETE FROM txn_detail WHERE key LIKE 'card.%%'")
+        assert reattribute_cards(conn) == 0
+        assert cards() == ["hsbc_hk_card_4242_primary"] * 2
+    finally:
+        conn.rollback()
+        conn.close()

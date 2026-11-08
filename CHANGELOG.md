@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 0.4.43 — 2026-11-08
+
+- An AMEX HK statement finds its card by the account number it prints
+  (xxxx-xxxxxx-03002). All AMEX HK cards share one layout, so with the
+  account left on "detect" the import stopped with "account_id unknown".
+  Templates can now name the statement's own number (`account_number`,
+  trailing digits only); rows that name no account, and idle statements
+  with none, go to the one account whose card or masked number ends the
+  same way. Card endings are compared on their last four digits, so AMEX's
+  five-digit endings match too.
+- Cardholder attribution accepts a statement name inside the registered
+  one: AMEX prints "ZHOU YIXIANG" for a card registered as "ZEPTO ZHOU
+  YIXIANG". Whole name parts only, at least two, and only when one card
+  fits. This applies to statements imported from now on.
+- Re-attribute cards (and statement reprocess) no longer clears the card on
+  PDF rows. A PDF's raw row is one printed line, without the card number or
+  cardholder, so re-attribution resolved them to no card. Ingest now keeps
+  both in the row's details (`card.last4`, `card.holder`), and rows with
+  nothing stored are left as they are. Rows imported before this keep their
+  current card, attributed or not.
+
 ## 0.4.42 — 2026-11-07
 
 - A card statement now finds its account by card number. HSBC prints every
