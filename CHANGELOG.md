@@ -15,7 +15,13 @@
 - Cardholder attribution accepts a statement name inside the registered
   one: AMEX prints "ZHOU YIXIANG" for a card registered as "ZEPTO ZHOU
   YIXIANG". Whole name parts only, at least two, and only when one card
-  fits. Run Re-attribute cards to apply it to rows already imported.
+  fits. This applies to statements imported from now on.
+- Re-attribute cards (and statement reprocess) no longer clears the card on
+  PDF rows. A PDF's raw row is one printed line, without the card number or
+  cardholder, so re-attribution resolved them to no card. Ingest now keeps
+  both in the row's details (`card.last4`, `card.holder`), and rows with
+  nothing stored are left as they are. Rows imported before this keep their
+  current card, attributed or not.
 
 ## 0.4.42 — 2026-11-07
 

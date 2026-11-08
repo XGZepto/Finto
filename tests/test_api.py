@@ -1407,3 +1407,35 @@ def test_card_numbers_match_on_their_last_four_digits(conn):
                                cardholder_name="ALEX SAMPLE", last4="04242"))
     assert statement_routes(conn, [_amex_row()], "xxxx-xxxxxx-04242") == ["amex_hk_main"]
     assert statement_routes(conn, [_amex_row("4242")]) == ["amex_hk_main"]
+
+
+def test_reattributing_keeps_the_cards_a_pdf_import_resolved(client, tmp_path, database_url):
+    """Re-attribution used to clear PDF rows: their raw row is one printed line."""
+    from fin.ingest import reattribute_cards
+
+    client.post("/api/accounts", json={
+        "id": "hsbc_hk_card_4242", "institution_id": "hsbc_hk", "display_name": "HSBC Red",
+        "account_type": "credit_card", "primary_currency": "HKD",
+        "last4": "4242", "cardholder_name": "ALEX SAMPLE"})
+    path = _card_statement(tmp_path)
+    preview = _post_pdf(client, path).json()
+    assert _post_pdf(client, path, "/api/imports/confirm",
+                     expected_sha256=preview["sha256"]).status_code == 200
+
+    conn = dbm.connect(database_url)
+    try:
+        def cards():
+            return [r["card_id"] for r in conn.execute(
+                "SELECT card_id FROM txn WHERE account_id='hsbc_hk_card_4242' ORDER BY txn_date")]
+
+        assert cards() == ["hsbc_hk_card_4242_primary"] * 2
+        assert reattribute_cards(conn) == 0
+        assert cards() == ["hsbc_hk_card_4242_primary"] * 2
+
+        # Rows imported before the facts were kept have nothing to go on.
+        conn.execute("DELETE FROM txn_detail WHERE key LIKE 'card.%%'")
+        assert reattribute_cards(conn) == 0
+        assert cards() == ["hsbc_hk_card_4242_primary"] * 2
+    finally:
+        conn.rollback()
+        conn.close()

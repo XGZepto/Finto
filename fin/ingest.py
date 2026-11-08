@@ -266,6 +266,12 @@ def to_txn(
         seq, term = parsed.installment_hint
         details.setdefault("installment.sequence", str(seq))
         details.setdefault("installment.term", str(term))
+    # What card attribution read, kept so re-attribution can read it again:
+    # a PDF's raw row is one printed line, without the card or the name.
+    if parsed.card_last4:
+        details.setdefault("card.last4", parsed.card_last4)
+    if parsed.cardholder_hint:
+        details.setdefault("card.holder", parsed.cardholder_hint)
     return Txn(
         account_id=account_id,
         card_id=resolve_card(parsed, account_id, cards),
@@ -516,7 +522,8 @@ def reattribute_cards(conn, *, statement_file_id: str | None = None) -> int:
         payload = json.loads(r["payload"]) if r["payload"] else {}
         details = details_by_txn.get(r["id"], {})
         number = (
-            details.get("card.number")
+            details.get("card.last4")
+            or details.get("card.number")
             or payload.get("card.number")
             or payload.get("Account #")
             or payload.get("Card Number")
@@ -524,7 +531,12 @@ def reattribute_cards(conn, *, statement_file_id: str | None = None) -> int:
         )
         digits = re.sub(r"\D", "", number)
         last4 = digits[-4:] if len(digits) >= 4 else ""
-        hint = payload.get("Card Member") or payload.get("Cardholder") or None
+        hint = (details.get("card.holder") or payload.get("Card Member")
+                or payload.get("Cardholder") or None)
+        if not last4 and not hint:
+            # Nothing stored to resolve from (PDF rows imported before the
+            # facts were kept): leave what ingest decided rather than clear it.
+            continue
         parsed = ParsedTxn(
             txn_date=date.fromisoformat(r["txn_date"]),
             booked=Money(amount=0, currency="XXX"),
