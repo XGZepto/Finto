@@ -77,7 +77,7 @@ def preflight(conn, result, *, parser_id: str, digest: str,
     accounts = dbm.load_accounts(conn)
     resolved = account_id or result.account_id
     routed: list[str | None] = [
-        a or resolved for a in statement_routes(conn, txns)]
+        a or resolved for a in statement_routes(conn, txns, result.account_number)]
     missing = sum(1 for a in routed if not a)
     if txns and missing:
         checks.append(_check(

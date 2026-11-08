@@ -1373,3 +1373,37 @@ def test_agent_adds_a_card_account_and_imports_its_statement(client, tmp_path):
 def test_agent_account_routes_need_a_key(client):
     assert client.get("/api/agent/accounts").status_code == 401
     assert client.post("/api/agent/accounts", json={}).status_code in (401, 422)
+
+
+def _amex_row(card_last4=None):
+    from fin.models import Money, ParsedTxn
+    return ParsedTxn(txn_date=datetime(2026, 11, 1).date(), posted_date=None,
+                     booked=Money(amount=-12800, currency="HKD"), description_raw="SPOTIFY",
+                     card_last4=card_last4, extra={"account_hint": "AMEX HK card"})
+
+
+def test_a_statement_number_routes_rows_that_name_no_account(conn):
+    from fin.ingest import account_for_number, statement_routes
+    from fin.models import Account
+
+    for account_id, masked in (("amex_hk_explorer", "****04242"), ("amex_hk_other", "****01111")):
+        dbm.upsert_account(conn, Account(
+            id=account_id, institution_id="amex_hk", display_name=account_id,
+            account_type="credit_card", primary_currency="HKD", masked_number=masked))
+    assert statement_routes(conn, [_amex_row()], "04242") == ["amex_hk_explorer"]
+    # A number printed beside the row still beats the statement's own.
+    assert statement_routes(conn, [_amex_row("01111")], "04242") == ["amex_hk_other"]
+    assert statement_routes(conn, [_amex_row()], "09999") == [None]
+    # An idle month has no rows to route; the file still finds its account.
+    assert account_for_number(conn, "04242") == "amex_hk_explorer"
+
+
+def test_card_numbers_match_on_their_last_four_digits(conn):
+    """AMEX registers five-digit card endings (03002); statements and masks vary."""
+    from fin.ingest import statement_routes
+    from fin.models import Card
+
+    dbm.upsert_card(conn, Card(id="amex_hk_main_primary", account_id="amex_hk_main",
+                               cardholder_name="ALEX SAMPLE", last4="04242"))
+    assert statement_routes(conn, [_amex_row()], "xxxx-xxxxxx-04242") == ["amex_hk_main"]
+    assert statement_routes(conn, [_amex_row("4242")]) == ["amex_hk_main"]

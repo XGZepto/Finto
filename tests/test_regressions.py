@@ -312,6 +312,24 @@ def test_ambiguous_substring_name_does_not_win():
     assert resolve_card(ambiguous, "A", cards) is None
 
 
+def test_statement_name_inside_the_registered_name_finds_its_card():
+    """The registry keeps an English name AMEX leaves off the statement."""
+    cards = [
+        Card(id="primary", account_id="A", cardholder_name="ALEX TAYLOR SAMPLE", last4="03002"),
+        Card(id="supp", account_id="A", cardholder_name="HO CHING LEUNG", last4="03010"),
+    ]
+
+    def hint(name):
+        return ParsedTxn(txn_date=date(2026, 11, 1), booked=Money(amount=-100, currency="HKD"),
+                         description_raw="X", cardholder_hint=name)
+
+    assert resolve_card(hint("TAYLOR SAMPLE"), "A", cards) == "primary"
+    assert resolve_card(hint("LEUNG HO CHING"), "A", cards) == "supp"
+    # Two cards that both contain the name: decline rather than guess.
+    twins = cards + [Card(id="twin", account_id="A", cardholder_name="TAYLOR SAMPLE JR")]
+    assert resolve_card(hint("TAYLOR SAMPLE"), "A", twins) is None
+
+
 def test_unknown_last4_produces_a_warning():
     """An unregistered card number must not fail attribution silently."""
     cards = [Card(id="old", account_id="amex_us_main",

@@ -2,7 +2,7 @@
   "template_id": "amex_hk_card",
   "institution_id": "amex_hk",
   "label": "American Express Hong Kong card statement",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "match_all": [
     "American Express",
     "STATEMENT PERIOD",
@@ -19,6 +19,7 @@
   },
   "statement_date": "Statement includes payments and charges received by\\s*(\\w+ \\d{1,2}, \\d{4})",
   "period": "STATEMENT PERIOD\\s+From\\s+(\\w+ \\d{1,2})\\s+to\\s*(\\w+ \\d{1,2}, \\d{4})",
+  "account_number": "\\b[x\\d]{4}-[x\\d]{6}-(\\d{5})\\b",
   "body_start": "(?-i:DETAILS)",
   "sections": [
     {

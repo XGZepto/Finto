@@ -120,35 +120,53 @@ def _format_of(path: Path) -> FileFormat:
         return FileFormat.CSV
 
 
-def statement_routes(conn, txns: list[ParsedTxn]) -> list[str | None]:
+def statement_routes(conn, txns: list[ParsedTxn],
+                     account_number: str | None = None) -> list[str | None]:
     """The account each parsed row names, before any account the person chose.
 
     A row's section hint goes through the alias registry first. A hint names
     an issuer's statement layout, not one card: every HSBC HK card prints as
-    "HSBC HK card". When it names nothing, the card number printed beside the
-    row does, if exactly one account ends in those four digits: its own
-    masked number (****3757) or a card registered on it.
-    Rows neither resolves stay None for the chosen or parsed account to fill.
+    "HSBC HK card" and every AMEX HK card as "AMEX HK card". When it names
+    nothing, a card number does, if exactly one account ends in its last four
+    digits (its own masked number, ****3757, or a card registered on it): the
+    number printed beside the row, else the [account_number] the statement
+    prints for itself. A per-row hint wins over the statement's number, so a
+    consolidated statement still splits by section.
+    Rows nothing resolves stay None for the chosen or parsed account to fill.
     """
     alias_index = dbm.load_account_alias_index(conn)
-    owners: dict[str, set[str]] = defaultdict(set)
-    for card in dbm.load_cards(conn):
-        if card.last4:
-            owners[card.last4].add(card.account_id)
-    for account in dbm.load_accounts(conn).values():
-        digits = re.sub(r"\D", "", account.masked_number or "")
-        if len(digits) >= 4:
-            owners[digits[-4:]].add(account.id)
-    by_last4 = {last4: next(iter(accts)) for last4, accts in owners.items()
-                if len(accts) == 1}
+    by_last4 = _accounts_by_last4(conn)
+    statement_account = by_last4.get(_last4(account_number) or "")
     routes: list[str | None] = []
     for p in txns:
         hint = (p.extra or {}).get("account_hint", "")
         account = alias_index.get(normalize_alias(hint)) if hint else None
         if account is None and p.card_last4:
-            account = by_last4.get(p.card_last4)
-        routes.append(account)
+            account = by_last4.get(_last4(p.card_last4) or "")
+        routes.append(account or statement_account)
     return routes
+
+
+def account_for_number(conn, number: str | None) -> str | None:
+    """The one account whose card or masked number ends like [number], if any."""
+    return _accounts_by_last4(conn).get(_last4(number) or "")
+
+
+def _last4(number: str | None) -> str | None:
+    digits = re.sub(r"\D", "", number or "")
+    return digits[-4:] if len(digits) >= 4 else None
+
+
+def _accounts_by_last4(conn) -> dict[str, str]:
+    """Last four digits -> account, for numbers exactly one account holds."""
+    owners: dict[str, set[str]] = defaultdict(set)
+    for card in dbm.load_cards(conn):
+        if key := _last4(card.last4):
+            owners[key].add(card.account_id)
+    for account in dbm.load_accounts(conn).values():
+        if key := _last4(account.masked_number):
+            owners[key].add(account.id)
+    return {key: next(iter(accts)) for key, accts in owners.items() if len(accts) == 1}
 
 
 def resolve_card(parsed: ParsedTxn, account_id: str, cards: list[Card]) -> str | None:
@@ -181,8 +199,9 @@ def resolve_card(parsed: ParsedTxn, account_id: str, cards: list[Card]) -> str |
                     return c.id
             joined = "".join(want)
             partial = [c for c, have in names
-                       if have and (joined in "".join(have) or "".join(have) in joined)]
-            # Only trust a substring match when it is unambiguous.
+                       if have and (joined in "".join(have) or "".join(have) in joined
+                                    or _names_nest(want, have))]
+            # Only trust a partial match when it is unambiguous.
             if len(partial) == 1:
                 return partial[0].id
     return None
@@ -195,6 +214,14 @@ def _name_key(name: str) -> tuple[str, ...]:
     on the statement, so the parts are compared as a set.
     """
     return tuple(sorted(re.findall(r"[a-z]+", name.lower())))
+
+
+def _names_nest(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
+    """One full name inside the other: the registry keeps "ZEPTO ZHOU
+    YIXIANG" where AMEX prints "ZHOU YIXIANG". Whole parts only, and at least
+    two of them, so a lone "JO" never claims "JOANNA CHAN" or "JO CHAN"."""
+    small, large = (set(a), set(b)) if len(a) <= len(b) else (set(b), set(a))
+    return len(small) >= 2 and small <= large
 
 
 def _card_active_on(card: Card, when) -> bool:
@@ -361,7 +388,7 @@ def ingest_file(
         return alias_index.get(normalize_alias(hint)) if hint else None
 
     accounts = dbm.load_accounts(conn)
-    routed = statement_routes(conn, result.txns)
+    routed = statement_routes(conn, result.txns, result.account_number)
     routed = [_settle_in_currency(accounts, a or resolved_account, p.booked.currency) or a
               for a, p in zip(routed, result.txns)]
     # Idle consolidated months have no rows but still carry per-account
@@ -374,6 +401,7 @@ def ingest_file(
         resolved_account
         or next((a for a in routed if a), None)
         or next((a for a in balance_routes if a), None)
+        or account_for_number(conn, result.account_number)
     )
     if sf_account is None:
         return {"path": str(path), "status": "error",
