@@ -20,12 +20,12 @@ from datetime import timedelta
 
 from ..enrich import extract_details
 from ..installments import parse_installment_marker
-from ..models import FileFormat, ParsedTxn
+from ..models import FileFormat, Money, ParsedTxn
 from ..pdf.extract import PdfTextLayerMissing, extract_document
 from ..pdf.registry import select_template
 from ..pdf.template import TemplateResult, apply_template
 from ..pdf.verify import verify_extraction
-from .base import ParseContext, ParseResult, StatementParser, register
+from .base import ParseContext, ParseResult, StatementParser, parse_date, register
 
 
 @register
@@ -248,3 +248,136 @@ def _try_llm_extract(doc, ctx: ParseContext, failed: TemplateResult | None = Non
         return ParseResult(
             txns=[], raw_rows=[], account_id=ctx.account_id,
             warnings=[f"LLM PDF fallback unavailable: {e}"])
+
+
+# ---------------------------------------------------------------------------
+# Wise
+# ---------------------------------------------------------------------------
+
+_WISE_ROW = re.compile(r"^(?P<desc>.+?) (?P<amount>-?[\d,]+\.\d{2}) (?P<balance>-?[\d,]+\.\d{2})$")
+_WISE_DATE = re.compile(
+    r"^(?P<date>\d{1,2} [A-Za-z]+ \d{4}) \| Transaction: (?P<id>\S+)"
+    r"(?: \| Reference: (?P<ref>.+))?$")
+_WISE_PERIOD = re.compile(
+    r"^(\d{1,2} [A-Za-z]+ \d{4}) \[GMT[^\]]*\] - (\d{1,2} [A-Za-z]+ \d{4}) \[GMT[^\]]*\]$")
+_WISE_COUNTERPARTY = re.compile(
+    r"^(?:Paid to|Sent money to|Received money from|Paid by|Card transaction of [\d.,]+ \w+ issued by) (.+)$")
+
+
+def _wise_lines(path) -> list[str]:
+    doc = extract_document(path)
+    return [s for s in (re.sub(r"\s+", " ", line).strip() for line in doc.layout.splitlines()) if s]
+
+
+def _minor(text: str) -> int:
+    return int(round(float(text.replace(",", "")) * 100))
+
+
+@register
+class WisePdfParser(StatementParser):
+    """Wise balance statement PDF, one currency per file.
+
+    Every row is two lines: the description with the amount and the running
+    balance, then the date with Wise's transaction ID. The date sits beneath
+    its figures, which the column templates do not read, so this is a parser
+    of its own. The running balances must chain from the first row to the
+    balance printed for the statement's last day, or nothing is imported.
+    Wise's IDs are the CSV export's, so a PDF and a CSV of the same days
+    dedupe exactly.
+    """
+
+    parser_id = "wise_pdf"
+    version = "0.1.0"
+    institution_id = "wise"
+    file_format = FileFormat.PDF
+    display_name = "Wise balance statement PDF"
+    institution_ids = ("wise",)
+    extensions = (".pdf",)
+
+    def sniff(self, ctx: ParseContext, sample: bytes) -> float:
+        if not sample.startswith(b"%PDF"):
+            return 0.0
+        try:
+            lines = _wise_lines(ctx.path)
+        except Exception:
+            return 0.0
+        head = lines[:12]
+        if (any(line.startswith("Wise ") for line in head)
+                and any(re.fullmatch(r"[A-Z]{3} statement", line) for line in head)
+                and any(_WISE_DATE.match(line) for line in lines)):
+            return 0.9
+        return 0.0
+
+    def parse(self, ctx: ParseContext) -> ParseResult:
+        lines = _wise_lines(ctx.path)
+        ccy = next((line.split()[0] for line in lines
+                    if re.fullmatch(r"[A-Z]{3} statement", line)), None)
+        if ccy is None:
+            return ParseResult(txns=[], raw_rows=[], warnings=["no currency heading found"])
+        hint = f"Wise {ccy}"
+        period = next((m for m in map(_WISE_PERIOD.match, lines) if m), None)
+        start = parse_date(period.group(1)) if period else None
+        end = parse_date(period.group(2)) if period else None
+        closing_re = re.compile(
+            rf"^{ccy} on (\d{{1,2}} [A-Za-z]+ \d{{4}}) \[GMT[^\]]*\] (-?[\d,]+\.\d{{2}}) {ccy}$")
+        closing = next((m for m in map(closing_re.match, lines) if m), None)
+
+        rows: list[dict] = []
+        pending: dict | None = None
+        for line in lines:
+            if (m := _WISE_ROW.match(line)) and not _WISE_DATE.match(line):
+                pending = {"desc": m.group("desc"), "amount": _minor(m.group("amount")),
+                           "balance": _minor(m.group("balance")), "text": line}
+            elif (m := _WISE_DATE.match(line)) and pending is not None:
+                pending.update(date=parse_date(m.group("date")), id=m.group("id"),
+                               reference=m.group("ref"))
+                rows.append(pending)
+                pending = None
+
+        # Wise lists newest first; each balance is the previous one plus the amount.
+        problems = []
+        for newer, older in zip(rows, rows[1:]):
+            if newer["balance"] - newer["amount"] != older["balance"]:
+                problems.append(f"balance after {older['id']} does not lead to {newer['id']}")
+        if closing and rows and _minor(closing.group(2)) != rows[0]["balance"]:
+            problems.append("last row's balance is not the statement's closing balance")
+        if problems:
+            return ParseResult(
+                txns=[], raw_rows=[{"line_no": i, "text": r["text"]} for i, r in enumerate(rows)],
+                warnings=["Wise balances do not chain, so rows were probably misread; "
+                          "refusing: " + "; ".join(problems[:3])])
+
+        txns: list[ParsedTxn] = []
+        balances: list[tuple] = []
+        for i, r in enumerate(reversed(rows)):
+            counterparty = _WISE_COUNTERPARTY.match(r["desc"])
+            txns.append(ParsedTxn(
+                txn_date=r["date"],
+                booked=Money(amount=r["amount"], currency=ccy),
+                description_raw=r["desc"],
+                counterparty=counterparty.group(1) if counterparty else None,
+                external_ref=r["id"],
+                details=extract_details(description=r["desc"]),
+                line_no=i,
+                extra={"account_hint": hint, "reference": r["reference"]},
+            ))
+            balances.append((r["date"], Money(amount=r["balance"], currency=ccy), hint, "running"))
+        if rows and start is not None:
+            first = rows[-1]
+            balances.insert(0, (start - timedelta(days=1),
+                                Money(amount=first["balance"] - first["amount"], currency=ccy),
+                                hint, "opening"))
+        if closing:
+            balances.append((parse_date(closing.group(1)),
+                             Money(amount=_minor(closing.group(2)), currency=ccy), hint, "closing"))
+
+        return ParseResult(
+            txns=txns,
+            raw_rows=[{"line_no": i, "text": r["text"], "id": r["id"]}
+                      for i, r in enumerate(reversed(rows))],
+            period_start=start, period_end=end, statement_date=end,
+            balances=balances,
+            # A statement whose printed balance stands alone, with no rows,
+            # proves an idle month rather than a misread one.
+            allow_empty=bool(closing) and not rows,
+        )

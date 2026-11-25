@@ -12,6 +12,12 @@
   the account may hold, replacing the declared list (the primary currency
   is always kept; editor access required). An HSBC One foreign-currency
   account holds EUR as well as CNY.
+- Wise balance statement PDFs import. Each row's date sits beneath its
+  figures, which the column templates do not read, so a `wise_pdf` parser
+  reads them: rows route to the Wise account for the statement's currency,
+  carry Wise's transaction IDs (the CSV export's, so a PDF and a CSV of the
+  same days dedupe exactly), and import only if the running balances chain
+  to the closing balance printed for the last day.
 
 ## 0.4.44 — 2026-11-08
 
