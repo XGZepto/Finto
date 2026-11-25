@@ -361,3 +361,18 @@ def test_amex_hk_reads_its_own_account_number_and_keeps_only_the_tail():
     ]))
     result = apply_template(doc, template("amex_hk_card"))
     assert result.account_number == "04242"
+
+
+def test_amex_us_reads_its_account_ending_for_rows_outside_a_card_section():
+    """Payments and statement credits print outside any "Card Ending" block."""
+    doc = make_document("\n".join([
+        row((10, "Platinum Card"), (100, "p. 1/9")),
+        row((10, "ALEX SAMPLE"), (80, "Customer Care: 1-800-000-0000")),
+        row((10, "Closing Date 11/17/26"), (80, "TTY: Use Relay 711")),
+        row((10, "Account Ending 6-04242"), (80, "Website: americanexpress.com")),
+        row((10, "American Express")),
+        row((10, "Total New Charges"), (90, "$0.00")),
+        row((10, "About Trailing Interest")),
+    ]))
+    result = apply_template(doc, template("amex_us_card"))
+    assert result.account_number == "04242"

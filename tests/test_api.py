@@ -1485,3 +1485,16 @@ def test_reattribution_gives_unattributed_rows_to_the_main_card_and_dry_runs(cli
     finally:
         conn.close()
     assert cards == {"hsbc_current_supp": 1, "hsbc_current_main": total - 1}
+
+
+def test_patch_account_declares_the_currencies_it_holds(client):
+    updated = client.patch("/api/accounts/amex_us_main", json={"settlement_currencies": ["eur", "USD", "EUR"]})
+    assert updated.status_code == 200, updated.text
+    # The primary currency stays, first; duplicates and case are folded.
+    assert updated.json()["settlement_currencies"] == ["USD", "EUR"]
+    listed = {a["id"]: a for a in client.get("/api/accounts").json()["accounts"]}
+    assert listed["amex_us_main"]["settlement_currencies"] == ["USD", "EUR"]
+
+    assert client.patch("/api/accounts/amex_us_main",
+                        json={"settlement_currencies": ["EURO"]}).status_code == 422
+    assert client.patch("/api/accounts/amex_us_main", json={}).status_code == 400
