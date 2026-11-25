@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.45 — 2026-11-25
+
+- AMEX US statements name their account from "Account Ending 6-62003", as
+  AMEX HK statements do since 0.4.43. Payments and statement credits print
+  outside any "Card Ending" block, so they carried no number and the import
+  asked for an account when it was left on "detect".
+
 ## 0.4.44 — 2026-11-08
 
 - A row that names no card belongs to the main card. Issuers print a

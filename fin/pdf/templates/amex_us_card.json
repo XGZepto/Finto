@@ -2,7 +2,7 @@
   "template_id": "amex_us_card",
   "institution_id": "amex_us",
   "label": "American Express US card statement (Platinum, Bonvoy Brilliant, Green)",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "match_all": [
     "American Express",
     "Closing\\s+Date\\s+\\d{2}/\\d{2}/\\d{2}",
@@ -21,6 +21,7 @@
   },
   "statement_date": "Closing\\s+Date\\s+(\\d{2}/\\d{2}/\\d{2})",
   "period": "",
+  "account_number": "Account\\s+Ending\\s+\\d-(\\d{5})\\b",
   "body_start": "Indicates\\s+posting\\s+date",
   "body_end": "About\\s+Trailing\\s+Interest|Fees\\s+and\\s+Interest\\s+Totals\\s+Year-to-Date|Interest\\s+Charge\\s+Calculation",
   "sections": [
