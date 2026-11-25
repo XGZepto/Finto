@@ -179,26 +179,50 @@ def delete_account(
 class AccountPatch(BaseModel):
     closed_on: date | None = None
     watch_statements: bool | None = None
+    #: Every currency the account may hold, replacing the declared list. The
+    #: primary currency is always kept.
+    settlement_currencies: list[str] | None = None
 
 
 @router.patch("/accounts/{account_id}")
 def patch_account(account_id: str, patch: AccountPatch, conn=Depends(get_conn)) -> dict:
-    """Mark an account closed or stop expecting monthly statements."""
+    """Mark an account closed, stop expecting monthly statements, or declare
+    the currencies it holds (an HSBC One foreign-currency account keeps EUR as
+    well as CNY)."""
     fields = patch.model_dump(exclude_unset=True)
-    if not fields:
+    currencies = fields.pop("settlement_currencies", None)
+    if not fields and currencies is None:
         raise HTTPException(400, "nothing to update")
-    row = conn.execute("SELECT id FROM account WHERE id=%s", (account_id,)).fetchone()
+    row = conn.execute("SELECT id, primary_currency FROM account WHERE id=%s",
+                       (account_id,)).fetchone()
     if row is None:
         raise HTTPException(404, "account not found")
-    sets = [f"{k}=%s" for k in fields]
-    params = [
-        int(v) if k == "watch_statements" else (str(v) if v is not None else None)
-        for k, v in fields.items()
-    ]
-    conn.execute(
-        f"UPDATE account SET {', '.join(sets)} WHERE id=%s",
-        [*params, account_id],
-    )
+    if fields:
+        sets = [f"{k}=%s" for k in fields]
+        params = [
+            int(v) if k == "watch_statements" else (str(v) if v is not None else None)
+            for k, v in fields.items()
+        ]
+        conn.execute(
+            f"UPDATE account SET {', '.join(sets)} WHERE id=%s",
+            [*params, account_id],
+        )
+    if currencies is not None:
+        codes = list(dict.fromkeys(c.strip().upper() for c in currencies))
+        if any(not re.fullmatch(r"[A-Z]{3}", c) for c in codes):
+            raise HTTPException(422, "currencies must be ISO-4217 codes")
+        primary = row["primary_currency"]
+        codes = [primary, *(c for c in codes if c != primary)]
+        # Row security lets a viewer see these rows; changing them takes an editor.
+        if not conn.execute("SELECT finto_account_access(%s, 'editor') AS ok",
+                            (account_id,)).fetchone()["ok"]:
+            raise HTTPException(403, "editing this account needs editor access")
+        conn.execute("DELETE FROM account_currency WHERE account_id=%s", (account_id,))
+        dbm.execute_many(
+            conn,
+            "INSERT INTO account_currency (account_id, currency, is_primary) VALUES (%s,%s,%s)",
+            [(account_id, c, int(c == primary)) for c in codes],
+        )
     conn.commit()
     updated = dbm.load_accounts(conn).get(account_id)
     if updated is None:

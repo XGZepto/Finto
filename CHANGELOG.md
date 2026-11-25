@@ -8,6 +8,10 @@
   AMEX HK statements do since 0.4.43. Payments and statement credits print
   outside any "Card Ending" block, so they carried no number and the import
   asked for an account when it was left on "detect".
+- `PATCH /api/accounts/{id}` takes `settlement_currencies`: every currency
+  the account may hold, replacing the declared list (the primary currency
+  is always kept; editor access required). An HSBC One foreign-currency
+  account holds EUR as well as CNY.
 
 ## 0.4.44 — 2026-11-08
 
